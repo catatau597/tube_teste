@@ -1,0 +1,11 @@
+# Carregado automaticamente em desenvolvimento.
+# Monta código como volume — edições no VS Code refletem imediatamente.
+services:
+  tubewranglerr:
+    volumes:
+      - .:/app        # código montado — sem rebuild a cada edição
+      - ./data:/data  # dados persistentes
+    command: sleep infinity   # container fica vivo para exec de comandos
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1

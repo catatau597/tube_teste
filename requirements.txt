@@ -1,0 +1,27 @@
+# Web framework
+python-fasthtml>=0.12.0
+
+# Banco de dados de configuração (substitui .env)
+fastlite>=0.0.9
+
+# YouTube Data API v3
+google-api-python-client>=2.0.0
+google-auth>=2.0.0
+google-auth-httplib2>=0.2.0
+
+# Fuso horário
+pytz>=2024.1
+
+# Streams ao vivo — usado por smart_player.py como subprocesso
+streamlink
+
+# VOD e download — usado por smart_player.py como subprocesso
+yt-dlp
+
+# Testes
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
+
+# NUNCA adicionar:
+# Flask, python-dotenv, Werkzeug

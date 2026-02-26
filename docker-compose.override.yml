@@ -1,0 +1,8 @@
+services:
+  tubewranglerr:
+    volumes:
+      - .:/app
+      - ./data:/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
