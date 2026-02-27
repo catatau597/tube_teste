@@ -244,16 +244,18 @@ class Scheduler:
                         use_playlists = self._config.get_bool(
                             "use_playlist_items"
                         )
-                        fetch_method = (
-                            self._scraper
-                            .fetch_all_streams_for_channels_using_playlists
-                            if use_playlists
-                            else self._scraper.fetch_all_streams_for_channels
-                        )
-                        new_streams = fetch_method(
-                            all_target_channels,
-                            published_after=published_after
-                        )
+                        if use_playlists:
+                            new_streams = self._scraper.fetch_all_streams_for_channels_using_playlists(
+                                all_target_channels,
+                                published_after=published_after,
+                                stale_hours=self._config.get_int("stale_hours"),
+                                max_schedule_hours=self._config.get_int("max_schedule_hours"),
+                            )
+                        else:
+                            new_streams = self._scraper.fetch_all_streams_for_channels(
+                                all_target_channels,
+                                published_after=published_after
+                            )
                         self._state.update_streams(new_streams)
 
                     except Exception as e:

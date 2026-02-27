@@ -4,6 +4,7 @@ Responsabilidade: Decisao de qual comando executar dado o status do stream.
 Sem subprocess direto, retorna List[str] de comando.
 """
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -97,9 +98,46 @@ def build_streamlink_cmd(watch_url: str, user_agent: str = "Mozilla/5.0") -> Lis
     ]
 
 
-def build_ytdlp_cmd(watch_url: str, user_agent: str = "Mozilla/5.0") -> List[str]:
+def _resolve_ytdlp_url(watch_url: str, user_agent: str = "Mozilla/5.0") -> str:
+    """Resolve URL CDN real via yt-dlp --get-url. Retorna vazio em falha."""
+    try:
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "-f", "b",
+                "--get-url",
+                "--no-playlist",
+                "--user-agent", user_agent,
+                watch_url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        url = result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
+        return url
+    except Exception:
+        return ""
+
+
+def build_ytdlp_ffmpeg_cmd(watch_url: str, user_agent: str = "Mozilla/5.0") -> List[str]:
+    """
+    Resolve URL real via yt-dlp e retorna ffmpeg para streaming progressivo.
+    Se falhar, cai para yt-dlp direto.
+    """
+    cdn_url = _resolve_ytdlp_url(watch_url, user_agent)
+    if cdn_url:
+        return [
+            "ffmpeg", "-loglevel", "error",
+            "-headers", f"User-Agent: {user_agent}\r\n",
+            "-i", cdn_url,
+            "-c", "copy",
+            "-f", "mpegts",
+            "pipe:1",
+        ]
     return [
-        "yt-dlp", "-f", "best", "-o", "-",
+        "yt-dlp", "-f", "b", "-o", "-",
+        "--no-playlist",
         "--user-agent", user_agent,
         watch_url,
     ]
@@ -117,7 +155,7 @@ def build_player_command(
     if status == "live":
         return build_streamlink_cmd(watch_url, user_agent), []
     if status == "none":
-        return build_ytdlp_cmd(watch_url, user_agent), []
+        return build_ytdlp_ffmpeg_cmd(watch_url, user_agent), []
     texts = _get_texts_from_cache(video_id, texts_cache_path) if texts_cache_path else {}
     return build_ffmpeg_placeholder_cmd(
         image_url=thumbnail_url,

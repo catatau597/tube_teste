@@ -61,7 +61,6 @@ _PLAYLIST_ROUTES = {
 _LEGACY_REDIRECTS = {
     "/playlist_live_direct.m3u8": "/playlist/live.m3u",
     "/playlist_live_proxy.m3u8": "/playlist/live-proxy.m3u",
-    "/playlist_upcoming_proxy.m3u8": "/playlist/upcoming-proxy.m3u",
     "/playlist_vod_direct.m3u8": "/playlist/vod.m3u",
     "/playlist_vod_proxy.m3u8": "/playlist/vod-proxy.m3u",
     "/youtube_epg.xml": "/epg.xml",
@@ -152,7 +151,23 @@ app, rt = fast_app(
 
 
 def _serialize_stream(s: dict) -> dict:
-    return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in s.items()}
+    data = {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in s.items()}
+    cat_id = str(s.get("categoryoriginal") or "")
+    cat_name = (_categories_db or {}).get(cat_id, "") if cat_id else ""
+    if not cat_name and _config is not None and cat_id:
+        cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
+    data["category_display"] = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "—")
+    return data
+
+
+def _nav():
+    return Div(
+        A("Dashboard", href="/", style="margin-right:12px;"),
+        A("Force Sync", href="/force-sync", style="margin-right:12px;"),
+        A("Config", href="/config", style="margin-right:12px;"),
+        A("Logs", href="/logs"),
+        style="padding:8px 0 16px 0; border-bottom: 1px solid #ccc; margin-bottom:16px;",
+    )
 
 
 def _serve_playlist_onthefly(mode: str, mode_type: str) -> Response:
@@ -210,13 +225,20 @@ def home():
 
     rows = []
     for s in streams:
-        vid = s.get("videoid", "")
-        url = s.get("watchurl") or f"https://www.youtube.com/watch?v={vid}"
+        vid      = s.get("videoid", "")
+        url      = s.get("watchurl") or f"https://www.youtube.com/watch?v={vid}"
+        cat_id   = str(s.get("categoryoriginal") or "")
+        cat_name = (_categories_db or {}).get(cat_id, "") if cat_id else ""
+        if not cat_name and _config is not None and cat_id:
+            cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
+        cat_cell = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "—")
         rows.append(
             Tr(
-                Td((s.get("title") or "")[:80]),
+                Td((s.get("channelname") or "")[:30]),
+                Td((s.get("title") or "")[:70]),
                 Td(s.get("status") or "none"),
-                Td(A("Abrir", href=url, target="_blank")),
+                Td(cat_cell),
+                Td(A("▶", href=url, target="_blank")),
             )
         )
 
@@ -224,17 +246,12 @@ def home():
 
     return Titled(
         "TubeWrangler",
-        Div(
-            A("Dashboard", href="/", style="margin-right:12px;"),
-            A("Force Sync", href="/force-sync", style="margin-right:12px;"),
-            A("Config", href="/config", style="margin-right:12px;"),
-            A("Logs", href="/logs"),
-        ),
+        _nav(),
         H2("Canais monitorados"),
         Ul(*channel_items) if channel_items else P("Nenhum canal."),
         H2(f"Streams ({len(streams)})"),
         Table(
-            Thead(Tr(Th("Evento"), Th("Status"), Th("Assistir"))),
+            Thead(Tr(Th("Canal"), Th("Evento"), Th("Status"), Th("Categoria"), Th(""))),
             Tbody(*rows),
         ),
     )
@@ -253,7 +270,11 @@ def config_page():
                     Input(name=f"{section}__{row['key']}", value=row["value"], type="text"),
                 )
             )
-    return Titled("Configuracoes", Form(*fields, Button("Salvar", type="submit"), method="post", action="/config"))
+    return Titled(
+        "Configuracoes",
+        _nav(),
+        Form(*fields, Button("Salvar", type="submit"), method="post", action="/config"),
+    )
 
 
 @app.post("/config")
@@ -348,10 +369,13 @@ def api_playlists_refresh():
 
 @app.get("/api/epg")
 def api_epg():
-    epg_path = Path(_config.get_str("xmltv_save_directory")) / _config.get_str("xmltv_filename")
-    if not epg_path.exists():
-        return JSONResponse({"error": "EPG nao gerado ainda"}, status_code=404)
-    return Response(epg_path.read_text(encoding="utf-8"), media_type="application/xml")
+    if _xmltv_generator is None or _state is None:
+        return JSONResponse({"error": "Servidor ainda inicializando"}, status_code=503)
+    channels = _state.get_all_channels()
+    streams = list(_state.get_all_streams())
+    cats = _categories_db if _categories_db else {}
+    content = _xmltv_generator.generate_xml(channels, streams, cats)
+    return Response(content, media_type="application/xml")
 
 
 async def api_player_stream(request):
@@ -428,29 +452,30 @@ def api_thumbnail(video_id: str):
 
 @app.get("/api/logs/stream")
 async def api_logs_stream():
-    async def event_generator():
-        if LOG_FILE_PATH.exists():
-            lines = LOG_FILE_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
-            for line in lines[-100:]:
-                yield f"data: {line}\\n\\n"
-
-        last_size = LOG_FILE_PATH.stat().st_size if LOG_FILE_PATH.exists() else 0
+    async def event_gen():
+        if not LOG_FILE_PATH.exists():
+            yield f"data: [arquivo de log não encontrado: {LOG_FILE_PATH}]\\n\\n"
+            return
+        lines = LOG_FILE_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
+        for line in lines[-200:]:
+            yield f"data: {line}\\n\\n"
+        last_size = LOG_FILE_PATH.stat().st_size
         while True:
-            await asyncio.sleep(1)
-            if not LOG_FILE_PATH.exists():
-                continue
-            current_size = LOG_FILE_PATH.stat().st_size
-            if current_size > last_size:
-                with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="replace") as f:
-                    f.seek(last_size)
-                    new_lines = f.read()
-                last_size = current_size
-                for line in new_lines.splitlines():
-                    if line.strip():
+            await asyncio.sleep(2)
+            try:
+                current_size = LOG_FILE_PATH.stat().st_size
+                if current_size > last_size:
+                    with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="replace") as f:
+                        f.seek(last_size)
+                        new_content = f.read()
+                    for line in new_content.splitlines():
                         yield f"data: {line}\\n\\n"
+                    last_size = current_size
+            except Exception as e:
+                yield f"data: [erro ao ler log: {e}]\\n\\n"
 
     return StreamingResponse(
-        event_generator(),
+        event_gen(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -458,34 +483,22 @@ async def api_logs_stream():
 
 @app.get("/logs")
 def logs_page():
-    return Html(
-        Head(
-            Title("TubeWrangler - Logs"),
-            Style(
-                "body{font-family:monospace;background:#0d1117;color:#c9d1d9;margin:1rem}"
-                "pre{background:#161b22;padding:1rem;height:80vh;overflow-y:auto;font-size:12px;border-radius:6px}"
-                "a{color:#58a6ff}"
-            ),
-        ),
-        Body(
-            H2("Logs em tempo real"),
-            A("Home", href="/"),
-            " | ",
-            A("Force Sync", href="/force-sync"),
-            Pre(id="log-output"),
-            Script(
-                """
-                const output = document.getElementById('log-output');
-                const es = new EventSource('/api/logs/stream');
-                es.onmessage = e => {
-                    output.textContent += e.data + '\\n';
-                    output.scrollTop = output.scrollHeight;
-                };
-                es.onerror = () => {
-                    output.textContent += '\\n[conexao perdida - reconectando...]\\n';
-                };
-                """
-            ),
+    return Titled(
+        "Logs",
+        _nav(),
+        Pre(id="log-output", style="height:80vh;overflow-y:auto;"),
+        Script(
+            """
+            const output = document.getElementById('log-output');
+            const es = new EventSource('/api/logs/stream');
+            es.onmessage = e => {
+                output.textContent += e.data + '\\n';
+                output.scrollTop = output.scrollHeight;
+            };
+            es.onerror = () => {
+                output.textContent += '\\n[conexao perdida - reconectando...]\\n';
+            };
+            """
         ),
     )
 

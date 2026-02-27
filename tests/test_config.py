@@ -7,7 +7,7 @@ def cfg(tmp_path):
     return AppConfig(db_path=tmp_path / "test.db")
 
 def test_total_de_chaves_retrofit(cfg):
-    assert len(DEFAULTS) == 47
+    assert len(DEFAULTS) == 38
 
 def test_todas_as_chaves_no_banco(cfg):
     for key in DEFAULTS:
@@ -24,10 +24,10 @@ def test_get_bool_false(cfg):
     assert cfg.get_bool("enable_scheduler_active_hours") is False
 
 def test_get_list(cfg):
-    assert "17" in cfg.get_list("allowed_category_ids")
+    assert "ao vivo" in cfg.get_list("title_filter_expressions")
 
 def test_get_mapping_sports(cfg):
-    assert cfg.get_mapping("category_mappings").get("Sports") == "ESPORTES"
+    assert cfg.get_mapping("category_mappings").get("17") == "ESPORTES"
 
 def test_update_persiste_entre_instancias(cfg, tmp_path):
     cfg.update("http_port", "9999")

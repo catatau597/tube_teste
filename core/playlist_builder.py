@@ -120,7 +120,8 @@ class ContentGenerator:
 
     def filter_streams(self, streams: list, mode: str) -> list:
         if self._config.get_bool("filter_by_category"):
-            allowed = set(self._config.get_list("allowed_category_ids"))
+            mappings = self._config.get_mapping("category_mappings")
+            allowed = set(mappings.keys())
             if allowed:
                 streams = [
                     s for s in streams
@@ -279,14 +280,26 @@ class XMLTVGenerator(ContentGenerator):
                 s.get("scheduledstarttimeutc")
                 or s.get("actualstarttimeutc")
             )
-            end_dt: Optional[datetime] = s.get("actualendtimeutc")
-
             if not start_dt:
                 continue
 
+            actual_end = s.get("actualendtimeutc")
+            if actual_end:
+                stop_dt = actual_end
+            else:
+                title_check = (s.get("title") or "").lower()
+                sport_keywords = (
+                    "jogo", "partida", "futebol", "basquete", "judô", "grand slam",
+                    "semifinal", "final", "copa", "campeonato", "ao vivo", "live",
+                )
+                if any(kw in title_check for kw in sport_keywords):
+                    stop_dt = start_dt + timedelta(hours=3)
+                else:
+                    stop_dt = start_dt + timedelta(hours=2)
+
             fmt       = "%Y%m%d%H%M%S %z"
             start_str = start_dt.strftime(fmt)
-            end_str   = end_dt.strftime(fmt) if end_dt else start_str
+            end_str   = stop_dt.strftime(fmt)
 
             prog = SubElement(root, "programme", attrib={
                 "start":   start_str,
