@@ -6,6 +6,7 @@ NÃO usa os.getenv() — toda config vem do AppConfig injetado.
 """
 import asyncio
 import logging
+import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
@@ -13,54 +14,20 @@ import pytz
 
 logger = logging.getLogger("TubeWrangler")
 
-def _save_files(state, config, m3u_gen, xmltv_gen, categories_db: dict):
-    """Gera e salva playlists M3U, EPG XML e textosepg.json em disco."""
-    import json
-    import pytz
-    from core.playlist_builder import M3UGenerator, XMLTVGenerator, ContentGenerator
-    from pathlib import Path
+def _save_files(state, config, categories_db: dict, thumbnail_manager=None):
+    """Gera apenas textosepg.json — M3U/EPG sao servidos on-the-fly via HTTP."""
+    from core.playlist_builder import ContentGenerator
+    all_streams = list(state.get_all_streams())
 
-    if m3u_gen is None:
-        m3u_gen = M3UGenerator(config)
-    if xmltv_gen is None:
-        xmltv_gen = XMLTVGenerator(config)
-
-    all_streams = state.get_all_streams()
-    playlist_live     = m3u_gen.generate_playlist(all_streams, categories_db, "live")
-    playlist_upcoming = m3u_gen.generate_playlist(all_streams, categories_db, "upcoming")
-    playlist_vod      = m3u_gen.generate_playlist(all_streams, categories_db, "vod")
-    epg               = xmltv_gen.generate_xml(
-        state.get_all_channels(), all_streams, categories_db
-    )
-
-    playlist_dir  = Path(config.get_str("playlist_save_directory"))
-    xmltv_dir     = Path(config.get_str("xmltv_save_directory"))
-    live_path     = playlist_dir / config.get_str("playlist_live_filename")
-    upcoming_path = playlist_dir / config.get_str("playlist_upcoming_filename")
-    vod_path      = playlist_dir / config.get_str("playlist_vod_filename")
-    xmltv_path    = xmltv_dir    / config.get_str("xmltv_filename")
-
-    try:
-        playlist_dir.mkdir(parents=True, exist_ok=True)
-        xmltv_dir.mkdir(parents=True, exist_ok=True)
-        live_path.write_text(playlist_live,         encoding="utf-8")
-        upcoming_path.write_text(playlist_upcoming, encoding="utf-8")
-        keep_vod = config.get_bool("keep_recorded_streams")
-        if keep_vod:
-            vod_path.write_text(playlist_vod, encoding="utf-8")
-        elif vod_path.exists():
-            vod_path.unlink()
-        xmltv_path.write_text(epg, encoding="utf-8")
-        logger.info(
-            f"Arquivos salvos: {live_path.name}, "
-            f"{upcoming_path.name}, {xmltv_path.name}"
-        )
-    except IOError as e:
-        logger.error(f"Erro ao salvar arquivos: {e}")
+    if thumbnail_manager:
+        for s in all_streams:
+            vid = s.get("videoid")
+            thumb = s.get("thumbnailurl")
+            if vid and thumb:
+                thumbnail_manager.ensure_cached(vid, thumb)
 
     # ── Gerar textosepg.json (countdown para smartplayer.py) ──
     try:
-        from datetime import timezone, timedelta
         local_tz = pytz.timezone(config.get_str("local_timezone"))
         now_utc  = datetime.now(timezone.utc)
         MESES    = ["Jan","Fev","Mar","Abr","Mai","Jun",
@@ -106,21 +73,6 @@ def _save_files(state, config, m3u_gen, xmltv_gen, categories_db: dict):
     except Exception as e:
         logger.error(f"Erro ao gerar textosepg.json: {e}")
 
-    try:
-        playlist_dir.mkdir(parents=True, exist_ok=True)
-        xmltv_dir.mkdir(parents=True, exist_ok=True)
-        live_path.write_text(playlist_live,     encoding="utf-8")
-        upcoming_path.write_text(playlist_upcoming, encoding="utf-8")
-        keep_vod = config.get_bool("keep_recorded_streams")
-        if keep_vod:
-            vod_path.write_text(playlist_vod, encoding="utf-8")
-        elif vod_path.exists():
-            vod_path.unlink()
-        xmltv_path.write_text(epg, encoding="utf-8")
-        logger.info(f"Arquivos salvos: {live_path.name}, {upcoming_path.name}, {xmltv_path.name}")
-    except IOError as e:
-        logger.error(f"Erro ao salvar arquivos: {e}")
-
 class Scheduler:
     """
     Loop assíncrono principal do TubeWrangler.
@@ -131,10 +83,12 @@ class Scheduler:
         self._config   = config
         self._scraper  = scraper
         self._state    = state
-        self._m3u_gen  = None
-        self._xmltv_gen = None
+        self.config = config
+        self.scraper = scraper
+        self.state = state
         self._categories_db: dict = {}
         self._force_event: Optional[asyncio.Event] = None
+        self._thumbnail_manager = None
 
         dt_min_utc = datetime.min.replace(tzinfo=timezone.utc)
 
@@ -160,14 +114,14 @@ class Scheduler:
 
     def reload_config(self, new_config) -> None:
         self._config = new_config
+        self.config = new_config
         logger.info("Scheduler: config recarregada.")
-
-    def set_generators(self, m3u_gen, xmltv_gen) -> None:
-        self._m3u_gen   = m3u_gen
-        self._xmltv_gen = xmltv_gen
 
     def set_categories_db(self, categories_db: dict) -> None:
         self._categories_db = categories_db
+
+    def set_thumbnail_manager(self, thumbnail_manager) -> None:
+        self._thumbnail_manager = thumbnail_manager
 
     def log_current_state(self, origin: str = ""):
         from core.playlist_builder import ContentGenerator
@@ -290,16 +244,18 @@ class Scheduler:
                         use_playlists = self._config.get_bool(
                             "use_playlist_items"
                         )
-                        fetch_method = (
-                            self._scraper
-                            .fetch_all_streams_for_channels_using_playlists
-                            if use_playlists
-                            else self._scraper.fetch_all_streams_for_channels
-                        )
-                        new_streams = fetch_method(
-                            all_target_channels,
-                            published_after=published_after
-                        )
+                        if use_playlists:
+                            new_streams = self._scraper.fetch_all_streams_for_channels_using_playlists(
+                                all_target_channels,
+                                published_after=published_after,
+                                stale_hours=self._config.get_int("stale_hours"),
+                                max_schedule_hours=self._config.get_int("max_schedule_hours"),
+                            )
+                        else:
+                            new_streams = self._scraper.fetch_all_streams_for_channels(
+                                all_target_channels,
+                                published_after=published_after
+                            )
                         self._state.update_streams(new_streams)
 
                     except Exception as e:
@@ -323,9 +279,8 @@ class Scheduler:
                 _save_files(
                     self._state,
                     self._config,
-                    self._m3u_gen,
-                    self._xmltv_gen,
-                    self._categories_db
+                    self._categories_db,
+                    thumbnail_manager=self._thumbnail_manager,
                 )
                 self._state.save_to_disk()
 
@@ -403,7 +358,12 @@ class Scheduler:
                         missing_data = [{"videoid": vid, "status": "none"} for vid in ids_to_mark]
                         self._state.update_streams(missing_data)
                     self.log_current_state("Verificação Alta Frequência")
-                    _save_files(self._state, self._config, self._m3u_gen, self._xmltv_gen, self._categories_db)
+                    _save_files(
+                        self._state,
+                        self._config,
+                        self._categories_db,
+                        thumbnail_manager=self._thumbnail_manager,
+                    )
                     self._state.save_to_disk()
                 except Exception as e:
                     logger.error(f"Scheduler: erro na verificação alta frequência: {e}", exc_info=True)

@@ -14,46 +14,22 @@ import os
 import logging
 from typing import Any, Dict, List, Optional, Set
 from core.config import AppConfig
+from core.player_router import build_player_command
 
 # --- Constantes e Caminhos ---
-SCRIPT_DIR = Path(__file__).resolve().parent
 _cfg = AppConfig()
 STATE_CACHE_PATH = Path("/data") / _cfg.get_str("state_cache_filename")
 TEXTS_CACHE_PATH = Path("/data") / "textosepg.json"
 
- # Removido: Carregamento manual de .env
+# Execucao standalone (CLI): garante logger basico no terminal.
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-# *** NOVO: Função helper para nível de log ***
-def get_logging_level(level_str: str) -> int:
-    """Converte string de nível de log para o objeto logging correspondente."""
-    return getattr(logging, level_str.upper(), logging.INFO)
-
-# *** NOVO: Carrega variáveis de Log ***
-SMART_PLAYER_LOG_LEVEL_STR = _cfg.get_str("smart_player_log_level")
-SMART_PLAYER_LOG_TO_FILE = _cfg.get_bool("smart_player_log_to_file")
-SMART_PLAYER_LOG_LEVEL = get_logging_level(SMART_PLAYER_LOG_LEVEL_STR)
-
-# *** MODIFICADO: Configuração de Logging dinâmica ***
-log_file_path = SCRIPT_DIR / "smart_player.log"
-log_config = {
-    "format": "%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    "datefmt": "%Y-%m-%d %H:%M:%S",
-    "level": SMART_PLAYER_LOG_LEVEL,
-    "force": True, # Para sobrescrever config anterior
-}
-
-if SMART_PLAYER_LOG_TO_FILE:
-    log_config['filename'] = log_file_path
-    log_config['filemode'] = 'a'
-else:
-    # Se não for para arquivo, loga no stderr (padrão do logging, capturado pelo ts_proxy)
-    log_config['stream'] = sys.stderr
-
-logging.basicConfig(**log_config) # Aplica a configuração
-
-logger = logging.getLogger("smart_player")
-logger.info(f"--- Nova execução. Nível: {SMART_PLAYER_LOG_LEVEL_STR}. Logando para: {'Arquivo' if SMART_PLAYER_LOG_TO_FILE else 'Console (stderr)'} ---")
-# --- Fim da Configuração de Log ---
+logger = logging.getLogger("TubeWrangler.smart_player")
 
 
 PLACEHOLDER_IMAGE_URL = _cfg.get_str("placeholder_image_url")
@@ -215,42 +191,32 @@ def main():
             status = stream_info.get("status")
             thumbnail_url = stream_info.get("thumbnailurl")
             logger.info(f"Cache status: '{status}'")
-            logger.debug(f"  -> Cache times: start={stream_info.get('actualstarttimeutc')}, end={stream_info.get('actualendtimeutc')}")
         else:
             logger.warning(f"Video ID {video_id} não encontrado no cache."); thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
-
-        def is_genuinely_live(stream_dict):
-            if not stream_dict:
-                return False
-            start = stream_dict.get("actualstarttimeutc")
-            end   = stream_dict.get("actualendtimeutc")
-            return (
-                stream_dict.get("status") == "live"
-                and isinstance(start, datetime)
-                and end is None
-            )
-
-        if status == "live" and is_genuinely_live(stream_info):
-            run_streamlink(url, user_agent=user_agent)
-        elif status == "none" or (status == "live" and not is_genuinely_live(stream_info)):
-            if status == "live":
-                logger.warning(f"Status '{status}' mas não parece live. Tratando como VOD.")
-            run_ytdlp(url, user_agent=user_agent)
-        elif status == "upcoming":
-            logger.warning(f"Vídeo {video_id} ('upcoming'). Exibindo thumbnail.")
-            texts = get_texts_from_cache(video_id)
-            thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
-            if thumb_to_use:
-                run_ffmpeg_placeholder(thumb_to_use, texts["line1"], texts["line2"], user_agent=user_agent)
-            else:
-                logger.error("Não há thumb/placeholder para vídeo upcoming.")
-        else:
-            logger.warning(f"Status '{status}' ou vídeo não encontrado/inválido. Fallback para thumb/placeholder.")
-            thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
-            if thumb_to_use:
-                run_ffmpeg_placeholder(thumb_to_use, user_agent=user_agent)
-            else:
-                logger.error("Não há thumb/placeholder para fallback.")
+        thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
+        cmd, temp_files = build_player_command(
+            video_id=video_id,
+            status=status,
+            watch_url=url,
+            thumbnail_url=thumb_to_use,
+            user_agent=user_agent,
+            texts_cache_path=TEXTS_CACHE_PATH,
+        )
+        logger.debug(f"Comando selecionado: {' '.join(cmd)}")
+        try:
+            process = subprocess.Popen(cmd, stdout=sys.stdout, stderr=subprocess.PIPE)
+            _, stderr_output = process.communicate()
+            for tf in temp_files:
+                try:
+                    os.unlink(tf)
+                except Exception:
+                    pass
+            if process.returncode != 0 and stderr_output:
+                logger.error(f"Stderr: {stderr_output.decode('utf-8', errors='ignore')}")
+        except FileNotFoundError as e:
+            logger.error(f"Comando não encontrado: {e}")
+        except Exception as e:
+            logger.error(f"Erro ao executar player command: {e}")
     else:
         logger.error(f"URL não reconhecida: {url}")
         if PLACEHOLDER_IMAGE_URL: run_ffmpeg_placeholder(PLACEHOLDER_IMAGE_URL, user_agent=user_agent)

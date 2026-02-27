@@ -19,6 +19,7 @@ logger = logging.getLogger("TubeWrangler")
 
 class YouTubeAPI:
     def __init__(self, api_key: str):
+        self.api_key = api_key
         self.youtube = build("youtube", "v3", developerKey=api_key)
         self.uploads_cache: dict = {}
 
@@ -144,7 +145,13 @@ class YouTubeAPI:
         logger.info(f"Busca [search.list] encontrou {len(ids)} IDs únicos. Buscando detalhes...")
         return self.fetch_streams_by_ids(list(ids), channels_dict)
 
-    def fetch_all_streams_for_channels_using_playlists(self, channels_dict: Dict[str, str], published_after: Optional[str] = None) -> List[Dict[str, Any]]:
+    def fetch_all_streams_for_channels_using_playlists(
+        self,
+        channels_dict: Dict[str, str],
+        published_after: Optional[str] = None,
+        stale_hours: int = 6,
+        max_schedule_hours: int = 72,
+    ) -> List[Dict[str, Any]]:
         ids = set()
         logger.info(f"Buscando streams [playlistItems] para {len(channels_dict)} canais (publishedAfter={published_after})...")
         published_after_dt = None
@@ -184,6 +191,10 @@ class YouTubeAPI:
                     res = self.youtube.playlistItems().list(**kwargs).execute()
                     items = res.get('items', [])
                     stop_pagination = False
+                    now_utc = datetime.now(timezone.utc)
+                    stale_cutoff = now_utc - timedelta(hours=stale_hours)
+                    future_cutoff = now_utc + timedelta(hours=max_schedule_hours)
+                    all_too_old = True
                     for it in items:
                         snip = it.get('snippet', {})
                         resource = snip.get('resourceId', {})
@@ -192,6 +203,8 @@ class YouTubeAPI:
                         if published_after_dt and publishedAt:
                             try:
                                 pa_dt = datetime.fromisoformat(publishedAt.replace('Z', '+00:00'))
+                                if stale_cutoff <= pa_dt <= future_cutoff:
+                                    all_too_old = False
                                 if pa_dt <= published_after_dt:
                                     stop_pagination = True
                                     stopped_early = True
@@ -199,9 +212,18 @@ class YouTubeAPI:
                                     break
                             except Exception as e:
                                 logger.warning(f"Erro ao parsear publishedAt '{publishedAt}' para video {vid}: {e}")
+                                all_too_old = False
+                        else:
+                            all_too_old = False
                         if vid:
                             ids.add(vid)
                     if stop_pagination:
+                        break
+                    if items and all_too_old:
+                        logger.debug(
+                            f"Early-stop paginação {playlist_id}: todos os itens da página "
+                            f"anteriores ao stale_cutoff"
+                        )
                         break
                     page_token = res.get('nextPageToken')
                     if not page_token:

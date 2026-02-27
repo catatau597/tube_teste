@@ -154,9 +154,6 @@ class TestFix1ForceSyncBypassHoraio:
         scraper = MockScraper()
         scheduler = Scheduler(config, scraper, state)
         
-        m3u_gen = Mock()
-        xmltv_gen = Mock()
-        scheduler.set_generators(m3u_gen, xmltv_gen)
         scheduler.set_categories_db({})
         dt_min = datetime.min.replace(tzinfo=timezone.utc)
         scheduler.last_main_run = dt_min

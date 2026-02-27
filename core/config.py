@@ -15,6 +15,21 @@ from fastlite import database
 
 DB_PATH = Path("/data/config.db")
 
+_OBSOLETE_KEYS = [
+    "playlist_save_directory",
+    "playlist_live_filename",
+    "playlist_upcoming_filename",
+    "playlist_vod_filename",
+    "xmltv_save_directory",
+    "xmltv_filename",
+    "generate_direct_playlists",
+    "generate_proxy_playlists",
+    "allowed_category_ids",
+    "log_to_file",
+    "smart_player_log_level",
+    "smart_player_log_to_file",
+]
+
 # Todas as 43 variáveis do file.env original
 # Formato: "chave": ("default", "seção", "descrição", "tipo")
 # tipos: "str" | "int" | "bool" | "list" | "mapping"
@@ -43,27 +58,21 @@ DEFAULTS: dict = {
                                       "filters", "Expressões a remover dos títulos (vírgula)", "list"),
     "prefix_title_with_channel_name":("true","filters", "Prefixar título com nome do canal", "bool"),
     "prefix_title_with_status":      ("true","filters", "Prefixar título com status [Ao Vivo] etc", "bool"),
-    "category_mappings":             ("Sports|ESPORTES,Gaming|JOGOS,People & Blogs|ESPORTES,News & Politics|NOTICIAS",
+    "category_mappings":             ("17|ESPORTES,20|JOGOS,22|ESPORTES,25|NOTICIAS",
                                       "filters", "Mapeamento categorias API|Exibição (vírgula)", "mapping"),
     "channel_name_mappings":         ("FAF TV | @fafalagoas|FAF TV,Canal GOAT|GOAT,Federação de Futebol de Mato Grosso do Sul|FFMS,Federação Paranaense de Futebol|FPF TV,Federação Catarinense de Futebol|FCF TV,Jovem Pan Esportes|J. Pan Esportes,TNT Sports Brasil|TNT Sports",
                                       "filters", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
     "epg_description_cleanup":       ("true","filters", "Manter apenas primeiro parágrafo da descrição EPG", "bool"),
     "filter_by_category":            ("true","filters", "Filtrar streams por categoria da API", "bool"),
-    "allowed_category_ids":          ("17",  "filters", "IDs de categoria permitidos (vírgula). 17=Sports", "list"),
     "keep_recorded_streams":         ("true","filters", "Manter streams gravados (ex-live) no cache", "bool"),
     "max_recorded_per_channel":      ("2",   "filters", "Máximo de gravações mantidas por canal", "int"),
     "recorded_retention_days":       ("2",   "filters", "Dias de retenção de streams gravados", "int"),
 
-    # --- Saída (8) ---
-    "playlist_save_directory":       ("/data/m3us",          "output", "Diretório para salvar playlists M3U", "str"),
-    "playlist_live_filename":        ("playlist_live.m3u8",  "output", "Nome do arquivo M3U de lives", "str"),
-    "playlist_upcoming_filename":    ("playlist_upcoming.m3u8","output","Nome do arquivo M3U de agendados", "str"),
-    "playlist_vod_filename":         ("playlist_vod.m3u8",   "output", "Nome do arquivo M3U de gravados", "str"),
-    "xmltv_save_directory":          ("/data/epgs",          "output", "Diretório para salvar EPG XML", "str"),
-    "xmltv_filename":                ("youtube_epg.xml",     "output", "Nome do arquivo EPG XMLTV", "str"),
+    # --- Saída ---
     "placeholder_image_url":         ("https://i.ibb.co/9kZStw28/placeholder-sports.png",
                                       "output", "URL da imagem placeholder para streams sem thumb", "str"),
     "use_invisible_placeholder":     ("true", "output", "Usar placeholder invisível no M3U", "bool"),
+    "thumbnail_cache_directory":     ("/data/thumbnails", "output", "Diretório de cache de thumbnails", "str"),
 
     # --- Técnico (5) ---
     "http_port":                     ("8888",             "technical", "Porta HTTP do servidor web", "int"),
@@ -71,12 +80,10 @@ DEFAULTS: dict = {
     "stale_hours":                   ("6",                "technical", "Horas para considerar stream stale", "int"),
     "use_playlist_items":            ("true",             "technical", "Usar playlistItems API (vs search.list)", "bool"),
     "local_timezone":                ("America/Sao_Paulo","technical", "Fuso horário local (pytz)", "str"),
+    "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
-    # --- Logs (4) ---
+    # --- Logs (1) ---
     "log_level":                     ("INFO", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
-    "log_to_file":                   ("true", "logging", "Salvar log do core em arquivo", "bool"),
-    "smart_player_log_level":        ("INFO", "logging", "Nível de log do smart_player", "str"),
-    "smart_player_log_to_file":      ("true", "logging", "Salvar log do smart_player em arquivo", "bool"),
 }
 
 
@@ -91,6 +98,7 @@ class AppConfig:
     def __init__(self, db_path: Path = DB_PATH):
         self._db = database(db_path)
         self._ensure_table()
+        self._cleanup_obsolete_keys()
         self._cache: dict = {}
         self.reload()
 
@@ -111,6 +119,14 @@ class AppConfig:
                     "description": desc,
                     "value_type": vtype,
                 })
+
+    def _cleanup_obsolete_keys(self):
+        """Remove configs obsoletos do SQLite se existirem."""
+        for key in _OBSOLETE_KEYS:
+            try:
+                self._db.t.config.delete_where("key = ?", [key])
+            except Exception:
+                pass
 
     def reload(self):
         """Recarrega todas as configs do banco. Chamar após POST /config."""
@@ -161,6 +177,20 @@ class AppConfig:
         for row in self._cache.values():
             sections.setdefault(row["section"], []).append(row)
         return sections
+
+    def get_all(self) -> dict:
+        result = {}
+        for row in self._db.t.config.rows:
+            result[row["key"]] = row["value"]
+        return result
+
+    def set(self, key: str, value: str) -> None:
+        existing = list(self._db.t.config.rows_where("key = ?", [key]))
+        if existing:
+            self._db.t.config.update({"key": key, "value": value})
+        else:
+            self._db.t.config.insert({"key": key, "value": value})
+        self.reload()
 
     def import_from_env_file(self, env_path: Path):
         """
