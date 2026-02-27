@@ -14,8 +14,12 @@ import pytz
 logger = logging.getLogger("TubeWrangler")
 
 def _save_files(state, config, m3u_gen, xmltv_gen, categories_db: dict):
-    """Gera e salva playlists M3U e EPG XML em disco."""
-    from core.playlist_builder import M3UGenerator, XMLTVGenerator
+    """Gera e salva playlists M3U, EPG XML e textosepg.json em disco."""
+    import json
+    import pytz
+    from core.playlist_builder import M3UGenerator, XMLTVGenerator, ContentGenerator
+    from pathlib import Path
+
     if m3u_gen is None:
         m3u_gen = M3UGenerator(config)
     if xmltv_gen is None:
@@ -25,14 +29,82 @@ def _save_files(state, config, m3u_gen, xmltv_gen, categories_db: dict):
     playlist_live     = m3u_gen.generate_playlist(all_streams, categories_db, "live")
     playlist_upcoming = m3u_gen.generate_playlist(all_streams, categories_db, "upcoming")
     playlist_vod      = m3u_gen.generate_playlist(all_streams, categories_db, "vod")
-    epg               = xmltv_gen.generate_xml(state.get_all_channels(), all_streams, categories_db)
+    epg               = xmltv_gen.generate_xml(
+        state.get_all_channels(), all_streams, categories_db
+    )
 
-    playlist_dir = Path(config.get_str("playlist_save_directory"))
-    xmltv_dir    = Path(config.get_str("xmltv_save_directory"))
+    playlist_dir  = Path(config.get_str("playlist_save_directory"))
+    xmltv_dir     = Path(config.get_str("xmltv_save_directory"))
     live_path     = playlist_dir / config.get_str("playlist_live_filename")
     upcoming_path = playlist_dir / config.get_str("playlist_upcoming_filename")
     vod_path      = playlist_dir / config.get_str("playlist_vod_filename")
     xmltv_path    = xmltv_dir    / config.get_str("xmltv_filename")
+
+    try:
+        playlist_dir.mkdir(parents=True, exist_ok=True)
+        xmltv_dir.mkdir(parents=True, exist_ok=True)
+        live_path.write_text(playlist_live,         encoding="utf-8")
+        upcoming_path.write_text(playlist_upcoming, encoding="utf-8")
+        keep_vod = config.get_bool("keep_recorded_streams")
+        if keep_vod:
+            vod_path.write_text(playlist_vod, encoding="utf-8")
+        elif vod_path.exists():
+            vod_path.unlink()
+        xmltv_path.write_text(epg, encoding="utf-8")
+        logger.info(
+            f"Arquivos salvos: {live_path.name}, "
+            f"{upcoming_path.name}, {xmltv_path.name}"
+        )
+    except IOError as e:
+        logger.error(f"Erro ao salvar arquivos: {e}")
+
+    # ── Gerar textosepg.json (countdown para smartplayer.py) ──
+    try:
+        from datetime import timezone, timedelta
+        local_tz = pytz.timezone(config.get_str("local_timezone"))
+        now_utc  = datetime.now(timezone.utc)
+        MESES    = ["Jan","Fev","Mar","Abr","Mai","Jun",
+                    "Jul","Ago","Set","Out","Nov","Dez"]
+        texts_cache = {}
+        for s in all_streams:
+            if s.get("status") != "upcoming":
+                continue
+            vid   = s.get("videoid", "")
+            start = ContentGenerator.get_sortable_time(s)
+            if not isinstance(start, datetime):
+                continue
+            try:
+                start_local = start.astimezone(local_tz)
+                total_secs  = (start - now_utc).total_seconds()
+                if total_secs < 0:
+                    line1 = "Ao vivo em instantes"
+                else:
+                    days, rem  = divmod(int(total_secs), 86400)
+                    hours, rem = divmod(rem, 3600)
+                    minutes, _ = divmod(rem, 60)
+                    if days >= 1:
+                        line1 = f"Ao vivo em {days}d {hours}h"
+                    elif hours > 0:
+                        line1 = f"Ao vivo em {hours}h {minutes}m"
+                    else:
+                        line1 = f"Ao vivo em {minutes}m" if minutes > 0 else "Ao vivo em instantes"
+                line2 = (
+                    f"{start_local.day} "
+                    f"{MESES[start_local.month - 1]} "
+                    f"{start_local.strftime('%H:%M')}"
+                )
+                texts_cache[vid] = {"line1": line1, "line2": line2}
+            except Exception:
+                pass
+
+        texts_path = Path("/data/textosepg.json")
+        texts_path.write_text(
+            json.dumps(texts_cache, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+        logger.debug(f"textosepg.json: {len(texts_cache)} entradas geradas")
+    except Exception as e:
+        logger.error(f"Erro ao gerar textosepg.json: {e}")
 
     try:
         playlist_dir.mkdir(parents=True, exist_ok=True)
@@ -100,7 +172,7 @@ class Scheduler:
     def log_current_state(self, origin: str = ""):
         from core.playlist_builder import ContentGenerator
         all_streams   = self._state.get_all_streams()
-        live_count     = sum(1 for s in all_streams if ContentGenerator.is_live(None, s))
+        live_count     = sum(1 for s in all_streams if ContentGenerator.is_live(s))
         upcoming_count = sum(1 for s in all_streams if s.get("status") == "upcoming")
         none_count     = len(all_streams) - live_count - upcoming_count
         logger.info(
@@ -294,7 +366,7 @@ class Scheduler:
                 from core.playlist_builder import ContentGenerator
                 post_event_ids = {
                     s["videoid"] for s in streams_in_memory
-                    if ContentGenerator.is_live(None, s)
+                    if ContentGenerator.is_live(s)
                 }
                 if post_event_ids:
                     logger.info(f"--- Scheduler: {len(post_event_ids)} live PÓS-EVENTO ---")
@@ -343,10 +415,6 @@ class Scheduler:
                         asyncio.shield(self._force_event.wait()),
                         timeout=60
                     )
-                    if self._force_event.is_set():
-                        self._force_event.clear()
-                        self.last_main_run = datetime.min.replace(tzinfo=timezone.utc)
-                        logger.info("Scheduler: executando sync forçado na próxima iteração.")
                 else:
                     await asyncio.sleep(60)
             except asyncio.TimeoutError:

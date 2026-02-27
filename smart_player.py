@@ -72,19 +72,39 @@ def escape_ffmpeg_text(text: str) -> str:
 def get_stream_status_from_cache(video_id: str) -> Optional[Dict[str, Any]]:
     try:
         if STATE_CACHE_PATH.exists():
-            with open(STATE_CACHE_PATH, "r", encoding="utf-8") as f: cache_data = json.load(f)
-            stream_info = cache_data.get("streams", {}).get(video_id)
-            if stream_info:
-                for key in ('scheduled_start_time_utc', 'actual_start_time_utc', 'actual_end_time_utc', 'fetch_time', 'last_seen'):
-                     if key in stream_info and isinstance(stream_info[key], str):
-                         try: stream_info[key] = datetime.fromisoformat(stream_info[key].replace('Z', '+00:00'))
-                         except (ValueError, TypeError): stream_info[key] = None
-                     elif key in stream_info and not isinstance(stream_info[key], datetime): stream_info[key] = None
-                return stream_info
-            else: logger.debug(f"Video ID {video_id} não encontrado no cache.")
-        else: logger.warning(f"Arquivo state_cache.json não encontrado em {STATE_CACHE_PATH}")
-    except json.JSONDecodeError as e: logger.error(f"Erro ao decodificar JSON de {STATE_CACHE_PATH}: {e}")
-    except Exception as e: logger.error(f"Erro ao ler/processar state_cache.json para {video_id}: {e}")
+            with open(STATE_CACHE_PATH, "r", encoding="utf-8") as f:
+                cache_data = json.load(f)
+
+            # Estrutura atual: {videoid: stream_dict} — sem chave "streams"
+            stream_info = cache_data.get(video_id)
+            if not stream_info:
+                logger.debug(f"Video ID {video_id} não encontrado no cache.")
+                return None
+
+            # Campos datetime no novo formato (sem underscore)
+            DATETIME_FIELDS = [
+                "scheduledstarttimeutc",
+                "actualstarttimeutc",
+                "actualendtimeutc",
+                "fetchtime",
+            ]
+            for key in DATETIME_FIELDS:
+                val = stream_info.get(key)
+                if isinstance(val, str):
+                    try:
+                        stream_info[key] = datetime.fromisoformat(
+                            val.replace("Z", "+00:00")
+                        )
+                    except (ValueError, TypeError):
+                        stream_info[key] = None
+
+            return stream_info
+        else:
+            logger.warning(f"Cache não encontrado em {STATE_CACHE_PATH}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Erro ao decodificar JSON de {STATE_CACHE_PATH}: {e}")
+    except Exception as e:
+        logger.error(f"Erro ao ler cache para {video_id}: {e}")
     return None
 
 def get_texts_from_cache(video_id: str) -> Dict[str, str]:
@@ -192,31 +212,45 @@ def main():
         logger.info(f"Video ID: {video_id}")
         stream_info = get_stream_status_from_cache(video_id); status = None; thumbnail_url = None
         if stream_info:
-            status = stream_info.get('status'); thumbnail_url = stream_info.get('thumbnail_url')
+            status = stream_info.get("status")
+            thumbnail_url = stream_info.get("thumbnailurl")
             logger.info(f"Cache status: '{status}'")
-            logger.debug(f"  -> Cache times: start={stream_info.get('actual_start_time_utc')}, end={stream_info.get('actual_end_time_utc')}")
+            logger.debug(f"  -> Cache times: start={stream_info.get('actualstarttimeutc')}, end={stream_info.get('actualendtimeutc')}")
         else:
             logger.warning(f"Video ID {video_id} não encontrado no cache."); thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
 
         def is_genuinely_live(stream_dict):
-            if not stream_dict: return False
-            start = stream_dict.get('actual_start_time_utc'); end = stream_dict.get('actual_end_time_utc')
-            return stream_dict.get('status') == 'live' and isinstance(start, datetime) and not isinstance(end, datetime)
+            if not stream_dict:
+                return False
+            start = stream_dict.get("actualstarttimeutc")
+            end   = stream_dict.get("actualendtimeutc")
+            return (
+                stream_dict.get("status") == "live"
+                and isinstance(start, datetime)
+                and end is None
+            )
 
-        if status == 'live' and is_genuinely_live(stream_info): run_streamlink(url, user_agent=user_agent)
-        elif status == 'none' or (status == 'live' and not is_genuinely_live(stream_info)):
-            if status == 'live': logger.warning(f"Status '{status}' mas não parece live. Tratando como VOD.")
+        if status == "live" and is_genuinely_live(stream_info):
+            run_streamlink(url, user_agent=user_agent)
+        elif status == "none" or (status == "live" and not is_genuinely_live(stream_info)):
+            if status == "live":
+                logger.warning(f"Status '{status}' mas não parece live. Tratando como VOD.")
             run_ytdlp(url, user_agent=user_agent)
-        elif status == 'upcoming':
-            logger.warning(f"Vídeo {video_id} ('upcoming'). Exibindo thumbnail."); texts = get_texts_from_cache(video_id)
+        elif status == "upcoming":
+            logger.warning(f"Vídeo {video_id} ('upcoming'). Exibindo thumbnail.")
+            texts = get_texts_from_cache(video_id)
             thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
-            if thumb_to_use: run_ffmpeg_placeholder(thumb_to_use, texts["line1"], texts["line2"], user_agent=user_agent)
-            else: logger.error("Não há thumb/placeholder para vídeo upcoming.")
+            if thumb_to_use:
+                run_ffmpeg_placeholder(thumb_to_use, texts["line1"], texts["line2"], user_agent=user_agent)
+            else:
+                logger.error("Não há thumb/placeholder para vídeo upcoming.")
         else:
             logger.warning(f"Status '{status}' ou vídeo não encontrado/inválido. Fallback para thumb/placeholder.")
             thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
-            if thumb_to_use: run_ffmpeg_placeholder(thumb_to_use, user_agent=user_agent)
-            else: logger.error("Não há thumb/placeholder para fallback.")
+            if thumb_to_use:
+                run_ffmpeg_placeholder(thumb_to_use, user_agent=user_agent)
+            else:
+                logger.error("Não há thumb/placeholder para fallback.")
     else:
         logger.error(f"URL não reconhecida: {url}")
         if PLACEHOLDER_IMAGE_URL: run_ffmpeg_placeholder(PLACEHOLDER_IMAGE_URL, user_agent=user_agent)

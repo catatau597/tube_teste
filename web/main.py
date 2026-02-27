@@ -91,17 +91,28 @@ async def lifespan(app):
     logger.info("=== TubeWrangler encerrado ===")
 
 async def _playlist_live(req: _SReq):
-    return _SR("#EXTM3U\n", media_type="application/vnd.apple.mpegurl")
+    from pathlib import Path
+    path = Path(_config.get_str("playlist_save_directory")) / _config.get_str("playlist_live_filename")
+    content = path.read_text(encoding="utf-8") if path.exists() else "#EXTM3U\n"
+    return _SR(content, media_type="application/vnd.apple.mpegurl")
 
 async def _playlist_upcoming(req: _SReq):
-    return _SR("#EXTM3U\n", media_type="application/vnd.apple.mpegurl")
+    from pathlib import Path
+    path = Path(_config.get_str("playlist_save_directory")) / _config.get_str("playlist_upcoming_filename")
+    content = path.read_text(encoding="utf-8") if path.exists() else "#EXTM3U\n"
+    return _SR(content, media_type="application/vnd.apple.mpegurl")
 
 async def _playlist_vod(req: _SReq):
-    return _SR("#EXTM3U\n", media_type="application/vnd.apple.mpegurl")
+    from pathlib import Path
+    path = Path(_config.get_str("playlist_save_directory")) / _config.get_str("playlist_vod_filename")
+    content = path.read_text(encoding="utf-8") if path.exists() else "#EXTM3U\n"
+    return _SR(content, media_type="application/vnd.apple.mpegurl")
 
 async def _epg_xml(req: _SReq):
-    xml = '<?xml version="1.0" encoding="UTF-8"?><tv></tv>'
-    return _SR(xml, media_type="application/xml")
+    from pathlib import Path
+    path = Path(_config.get_str("xmltv_save_directory")) / _config.get_str("xmltv_filename")
+    content = path.read_text(encoding="utf-8") if path.exists() else '<?xml version="1.0"?><tv></tv>'
+    return _SR(content, media_type="application/xml")
 
 app, rt = fast_app(
     lifespan=lifespan,
@@ -116,19 +127,114 @@ app.router.routes.insert(0, Route("/youtube_epg.xml",        _epg_xml))
 
 @app.get("/")
 def home():
+    from core.playlist_builder import ContentGenerator
+
     streams  = _state.get_all_streams()  if _state else []
-    channels = _state.get_all_channels() if _state else []
-    return Titled("TubeWrangler",
-        Main(
-            H2("Canais monitorados"),
-            Ul(*[Li(c) for c in channels]) if channels else P("Nenhum canal configurado."),
-            H2("Streams ativos"),
-            Ul(*[Li(str(s)) for s in streams]) if streams else P("Nenhum stream encontrado."),
-        ),
-        Footer(
-            A("Configuracoes", href="/config"), " | ",
-            A("Forcar sync",   href="/force-sync")
+    channels = _state.get_all_channels() if _state else {}
+
+    def truncate(text, n=60):
+        text = text or ""
+        return text[:n] + ("..." if len(text) > n else "")
+
+    def get_tipo(s):
+        if ContentGenerator.is_live(s):
+            return "live"
+        elif s.get("status") == "upcoming":
+            return "upcoming"
+        else:
+            return "none"
+
+    def sort_key(s):
+        tipo = get_tipo(s)
+        if tipo == "live":
+            return (0, 0)
+        elif tipo == "upcoming":
+            t = s.get("scheduledstarttimeutc")
+            return (1, t.timestamp() if t else 0)
+        else:
+            t = s.get("fetchtime")
+            return (2, -(t.timestamp() if t else 0))
+
+    from core.playlist_builder import ContentGenerator
+    from datetime import datetime, timezone, timedelta
+    from collections import defaultdict
+
+    # Aplicar filtros de VOD conforme configuração
+    keep_vod      = _config.get_bool("keep_recorded_streams")
+    max_per_ch    = _config.get_int("max_recorded_per_channel")
+    retention     = _config.get_int("recorded_retention_days")
+    cutoff        = datetime.now(timezone.utc) - timedelta(days=retention)
+
+    live_streams     = [s for s in streams if ContentGenerator.is_live(s)]
+    upcoming_streams = [s for s in streams if s.get("status") == "upcoming"]
+
+    if keep_vod:
+        vod_candidates = [
+            s for s in streams
+            if ContentGenerator.is_vod(s)
+            and isinstance(s.get("fetchtime"), datetime)
+            and s["fetchtime"] >= cutoff
+        ]
+        per_channel = defaultdict(list)
+        for s in vod_candidates:
+            per_channel[s.get("channelid", "")].append(s)
+        vod_streams = []
+        for ch_streams in per_channel.values():
+            ch_streams.sort(
+                key=lambda x: x.get("fetchtime") or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True
+            )
+            vod_streams.extend(ch_streams[:max_per_ch])
+    else:
+        vod_streams = []
+
+    display_streams = live_streams + upcoming_streams + vod_streams
+    sorted_streams  = sorted(display_streams, key=sort_key)
+
+    BADGE = {
+        "live":     ("🔴 LIVE",     "background:#d32f2f;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"),
+        "upcoming": ("🕐 Agendado", "background:#1976d2;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"),
+        "none":     ("📹 VOD",      "background:#757575;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"),
+    }
+
+    rows = []
+    for s in sorted_streams:
+        tipo = get_tipo(s)
+        label, badge_style = BADGE.get(tipo, BADGE["none"])
+        vid = s.get("videoid", "")
+        url = s.get("watchurl") or f"https://www.youtube.com/watch?v={vid}"
+        rows.append(
+            Tr(
+                Td(truncate(s.get("title", "—"))),
+                Td(Span(label, style=badge_style)),
+                Td(A("▶ Abrir", href=url, target="_blank")),
+            )
         )
+
+    canais_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
+
+    return Titled("TubeWrangler",
+                Div(
+                        A("🏠 Dashboard", href="/",
+                            style="margin-right:16px;padding:6px 14px;background:#388e3c;color:#fff;border-radius:4px;text-decoration:none;font-weight:bold;"),
+                        A("🔄 Force Sync", href="/force-sync",
+                            style="margin-right:16px;padding:6px 14px;background:#1976d2;color:#fff;border-radius:4px;text-decoration:none;font-weight:bold;"),
+                        A("⚙️ Configurações", href="/config",
+                            style="padding:6px 14px;background:#555;color:#fff;border-radius:4px;text-decoration:none;font-weight:bold;"),
+                        style="margin-bottom:20px;"
+                ),
+        H2("Canais monitorados"),
+        Ul(*canais_items),
+        H2(f"Streams ({len(sorted_streams)})"),
+        Table(
+            Thead(Tr(
+                Th("Evento"),
+                Th("Tipo",    style="text-align:center;"),
+                Th("Assistir",style="text-align:center;"),
+            )),
+            Tbody(*rows),
+            style="width:100%;border-collapse:collapse;font-family:sans-serif;",
+        ),
     )
 
 @app.get("/config")

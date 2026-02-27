@@ -234,21 +234,22 @@ class YouTubeAPI:
             except (ValueError, TypeError):
                 return None
         return {
-            "video_id": vid,
-            "channel_id": cid,
-            "channel_name": channels_dict.get(cid, snippet.get("channelTitle", "Desconhecido")),
-            "title_original": snippet.get("title"),
+            "videoid": vid,
+            "channelid": cid,
+            "channelname": channels_dict.get(cid, snippet.get("channelTitle", "Desconhecido")),
+            "title": snippet.get("title"),
             "description": snippet.get("description"),
             "tags": snippet.get("tags", []),
-            "category_original": snippet.get("categoryId"),
-            "watch_url": f"https://www.youtube.com/watch?v={vid}",
-            "thumbnail_url": thumb_url,
+            "categoryoriginal": snippet.get("categoryId"),
+            "watchurl": f"https://www.youtube.com/watch?v={vid}",
+            "thumbnailurl": thumb_url,
             "status": snippet.get("liveBroadcastContent", "none"),
-            "scheduled_start_time_utc": parse_time(live.get("scheduledStartTime")),
-            "actual_start_time_utc": parse_time(live.get("actualStartTime")),
-            "actual_end_time_utc": parse_time(live.get("actualEndTime")),
-            "duration_iso": content.get("duration"),
-            "content_rating": content.get("contentRating", {})
+            "scheduledstarttimeutc": parse_time(live.get("scheduledStartTime")),
+            "actualstarttimeutc": parse_time(live.get("actualStartTime")),
+            "actualendtimeutc": parse_time(live.get("actualEndTime")),
+            "durationiso": content.get("duration"),
+            "contentrating": content.get("contentRating", {}),
+            "fetchtime": datetime.now(timezone.utc),
         }
 
     def format_stream_data(self, item: dict, channels_dict: dict) -> dict:

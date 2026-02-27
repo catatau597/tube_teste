@@ -18,20 +18,9 @@ from core.config import AppConfig
 class StateManager:
     def get_all_streams(self) -> list:
         """Retorna todos os streams do estado em memória."""
-        if not hasattr(self, 'streams') or self.streams is None:
+        if not hasattr(self, 'streams') or not self.streams:
             return []
-        streams = self.streams
-        if isinstance(streams, dict):
-            result = []
-            for channel_id, data in streams.items():
-                if isinstance(data, dict) and 'streams' in data:
-                    result.extend(data['streams'])
-                elif isinstance(data, list):
-                    result.extend(data)
-            return result
-        if isinstance(streams, list):
-            return streams
-        return []
+        return list(self.streams.values())
 
     def get_all_channels(self) -> dict:
         """Retorna lista de canais monitorados."""
@@ -62,26 +51,85 @@ class StateManager:
         """Carrega estado do arquivo JSON em /data/."""
         import json
         from pathlib import Path
+        from datetime import datetime
+        DATETIME_FIELDS = {
+            "scheduledstarttimeutc",
+            "actualstarttimeutc",
+            "actualendtimeutc",
+            "fetchtime",
+        }
+        def parse_stream(stream: dict) -> dict:
+            for field in DATETIME_FIELDS:
+                val = stream.get(field)
+                if isinstance(val, str):
+                    try:
+                        stream[field] = datetime.fromisoformat(val)
+                    except (ValueError, TypeError):
+                        stream[field] = None
+            return stream
         cache_file = Path("/data") / self._config.get_str("state_cache_filename")
-        if cache_file.exists():
-            try:
-                with open(cache_file, encoding="utf-8") as f:
-                    self.streams = json.load(f)
-            except (json.JSONDecodeError, OSError):
+        import logging
+        logger = logging.getLogger("TubeWrangler")
+        try:
+            if cache_file.exists():
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                self.streams = {
+                    vid: parse_stream(s)
+                    for vid, s in raw.items()
+                    if isinstance(s, dict)
+                }
+                logger.info(
+                    f"Cache carregado do disco: "
+                    f"{cache_file.name} | streams={len(self.streams)}"
+                )
+            else:
                 self.streams = {}
-        else:
+        except (IOError, json.JSONDecodeError) as e:
+            logger.error(f"StateManager: erro ao carregar cache: {e}")
             self.streams = {}
 
     def save_to_disk(self):
         """Persiste estado no arquivo JSON em /data/."""
         import json
         from pathlib import Path
+        from datetime import datetime
         cache_file = Path("/data") / self._config.get_str("state_cache_filename")
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(self.streams, f, ensure_ascii=False, indent=2)
+        def default_serializer(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Tipo não serializável: {type(obj)}")
+        try:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    self.streams,
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                    default=default_serializer
+                )
+        except IOError as e:
+            logger.error(f"StateManager: erro ao salvar cache: {e}")
 
     def update_channels(self, channels_data: dict):
         for cid, title in channels_data.items():
             if cid and title:
                 self.channels[cid] = title
+
+    def update_streams(self, new_streams: list):
+        added = 0
+        updated = 0
+        for stream in new_streams:
+            vid = stream.get("videoid")
+            if not vid:
+                continue
+            if vid in self.streams:
+                self.streams[vid].update(stream)
+                updated += 1
+            else:
+                self.streams[vid] = stream
+                added += 1
+        import logging
+        logger = logging.getLogger("TubeWrangler")
+        logger.info(f"Update Streams: Adicionados {added}, Atualizados {updated}")
