@@ -20,7 +20,12 @@ logger = logging.getLogger("TubeWrangler")
 class YouTubeAPI:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.youtube = build("youtube", "v3", developerKey=api_key)
+        self.youtube = build(
+            "youtube", 
+            "v3", 
+            developerKey=api_key,
+            static_discovery=False,  # ← dentro dos parênteses do build()
+        )
         self.uploads_cache: dict = {}
 
     def resolve_channel_handles_to_ids(self, handles: List[str], state) -> Dict[str, str]:
