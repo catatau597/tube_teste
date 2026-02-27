@@ -1,10 +1,24 @@
 # REFACTORING_TUBEWRANGLERR.md
 
-> **Versão:** 3.4
+> **Versão:** 3.5.1
 > **Projeto:** TubeWranglerr
 > **Destino:** Agente autônomo GitHub Copilot
 > **Objetivo:** Refatoração completa para stack FastHTML + SQLite em container standalone
 > **Abordagem:** Container-First Development
+>
+> **Changelog v3.5.1:** Incorpora fluxo Git (branches dev/main):
+> - Nova seção 0.9: Git — branches, fluxo e regras de merge
+> - Etapa 4 reformulada: de "build limpo" para "Portão de Merge → main"
+> - Etapa 4 não exige mais remover .:/app nem build limpo em dev
+> - Regra adicionada: NUNCA push direto na main
+>
+> **Changelog v3.5:** Validação de cobertura funcional completa contra scripts originais:
+> - Nova seção 4.5: ContentGenerator como classe base obrigatória
+> - Nova seção 4.6: textosepg.json — onde gerar (Scheduler) e onde consumir (smart_player)
+> - Nova seção 4.7: categories_db — busca no lifespan e passagem para geradores
+> - Nova seção 7.3: Cadeia completa smart_player.py documentada
+> - Seção 5.4 (web/main.py): adicionado categories_db no lifespan
+> - title_filter_expressions default alinhado com .env original
 >
 > **Changelog v3.3:** Incorpora lições da execução real da Etapa 2 — AttributeErrors em cadeia:
 > - `docker-compose.override.yml` com volume `.:/app` é **obrigatório** no desenvolvimento
@@ -45,6 +59,8 @@ Este documento é a **única fonte de verdade** para o agente. Toda decisão dev
 7. Erros do Pylance sobre `fasthtml.common` são **falsos positivos** — não bloquear execução por causa deles
 8. Em caso de dúvida, registrar em DECISIONS.md e aguardar — nunca assumir silenciosamente
 9. **Sem volume `.:/app` no `docker-compose.override.yml`, NÃO iniciar desenvolvimento**
+10. `textosepg.json` é gerado pelo `Scheduler` e consumido pelo `smart_player.py` — nunca hardcodar caminhos
+11. Branch de desenvolvimento é `dev` — `main` só recebe merge com checklist 100% completo
 
 ---
 
@@ -56,7 +72,7 @@ Este documento é a **única fonte de verdade** para o agente. Toda decisão dev
 3. [Etapa 1 — core/config.py](#3-etapa-1--coreconfigpy)
 4. [Etapa 2 — Separação de Módulos](#4-etapa-2--separação-de-módulos)
 5. [Etapa 3 — Interface FastHTML](#5-etapa-3--interface-fasthtml)
-6. [Etapa 4 — Container de Produção](#6-etapa-4--container-de-produção)
+6. [Etapa 4 — Portão de Merge → main](#6-etapa-4--portão-de-merge--main)
 7. [Etapa 5 — smart_player.py](#7-etapa-5--smart_playerpy)
 8. [Testes entre Etapas](#8-testes-entre-etapas)
 9. [Revisão Final de Migração](#9-revisão-final-de-migração)
@@ -246,6 +262,41 @@ docker compose exec tubewranglerr ls -la /data
 [ ] DECISIONS.md criado
 ```
 
+
+### 0.9 Git — Branches e fluxo de trabalho
+
+O projeto usa duas branches permanentes:
+
+| Branch | Papel | Docker |
+|---|---|---|
+| `dev` | Desenvolvimento ativo — onde todas as etapas são executadas | `docker-compose.yml` + `override.yml` (com `.:/app`) |
+| `main` | Produção estável — só recebe merge com checklist 100% | `docker-compose.yml` apenas (sem `.:/app`) |
+
+**Regras obrigatórias:**
+```
+PROIBIDO: push direto na main
+PROIBIDO: merge para main sem todos os testes passando
+PROIBIDO: merge para main sem DECISIONS.md atualizado
+OBRIGATÓRIO: todo desenvolvimento acontece na branch dev
+OBRIGATÓRIO: merge para main apenas ao concluir checklist completo da etapa
+```
+
+**Fluxo obrigatório:**
+```
+dev (desenvolve + testa) → checklist 100% → merge → main → deploy
+```
+
+**Comandos de merge (executar no host, não no container):**
+```bash
+git checkout main
+git merge dev --no-ff -m "feat: etapa X completa — <descrição>"
+git push origin main
+git checkout dev
+```
+
+**O agente NUNCA executa `git checkout main` sozinho.**
+Merge para `main` é uma ação humana explícita após validação completa.
+
 ---
 
 ## 1. Regras Absolutas do Agente
@@ -266,6 +317,8 @@ PROIBIDO: Bloquear execução por erros do Pylance sobre fasthtml.common
 PROIBIDO: Apagar arquivos originais antes da Etapa 9
 PROIBIDO: Duplicar entradas no DECISIONS.md
 PROIBIDO: Iniciar desenvolvimento sem o volume .:/app no docker-compose.override.yml
+PROIBIDO: Push direto na branch main
+PROIBIDO: Merge para main sem checklist 100% completo e testes passando
 ```
 
 ### ✅ OBRIGAÇÕES
@@ -675,6 +728,163 @@ Se retornar `AttributeError`, o método está fora da classe.
 
 ---
 
+### 4.5 ContentGenerator — classe base obrigatória
+
+**Por que é necessário:**
+No `get_streams.py` original, `M3UGenerator` e `XMLTVGenerator` herdam de `ContentGenerator`.
+Métodos como `is_live()`, `filter_streams()`, `get_display_title()` e `get_display_category()`
+são compartilhados. Se o agente não implementar a herança, vai duplicar código ou gerar
+inconsistências entre playlist M3U e EPG XML.
+
+**Assinaturas obrigatórias:**
+```python
+class ContentGenerator:
+    def is_live(self, stream: dict) -> bool: ...
+    @staticmethod
+    def get_sortable_time(stream: dict): ...
+    def filter_streams(self, streams: list, mode: str) -> list: ...
+    def get_display_title(self, stream: dict) -> str: ...
+    def get_display_category(self, cat_id: str | None, db: dict) -> str: ...
+
+class M3UGenerator(ContentGenerator):
+    def __init__(self, config: AppConfig): ...
+    def generate_playlist(self, streams: list, db: dict, mode: str) -> str: ...
+
+class XMLTVGenerator(ContentGenerator):
+    def __init__(self, config: AppConfig): ...
+    def generate_xml(self, channels: dict, streams: list, db: dict) -> str: ...
+    def clean_text_for_xml(self, text: str | None) -> str: ...
+    def parse_iso8601_duration(self, duration_str: str | None): ...
+```
+
+**Regra:** `filter_streams` e `get_display_title` vivem **exclusivamente** em `ContentGenerator`.
+Nunca reimplementar em `M3UGenerator` ou `XMLTVGenerator`.
+
+---
+
+### 4.6 textosepg.json — geração e consumo
+
+**O que é:**
+Arquivo JSON em `/data/textosepg.json` com textos de countdown para streams `upcoming`.
+Gerado pelo `Scheduler.save_files()` e consumido pelo `smart_player.py` para overlay via FFmpeg.
+
+**Formato:**
+```json
+{
+  "VIDEO_ID_1": {"line1": "Ao vivo em 2h30m", "line2": "26 Fev 21:00"},
+  "VIDEO_ID_2": {"line1": "Ao vivo em instantes", "line2": "26 Fev 20:45"}
+}
+```
+
+**Onde gerar — `Scheduler.save_files(categories_db)`:**
+```python
+def save_files(self, categories_db: dict):
+    import json, pytz
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    config      = self._config
+    state       = self._state
+    m3u         = M3UGenerator(config)
+    xmltv       = XMLTVGenerator(config)
+    all_streams = state.get_all_streams()
+    local_tz    = pytz.timezone(config.get_str("local_timezone"))
+    now_utc     = datetime.now(timezone.utc)
+    meses       = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+
+    # Salvar playlists M3U
+    for mode, fname_key, dir_key in [
+        ("live",     "playlist_live_filename",      "playlist_save_directory"),
+        ("upcoming", "playlist_upcoming_filename",   "playlist_save_directory"),
+        ("vod",      "playlist_vod_filename",        "playlist_save_directory"),
+    ]:
+        content = m3u.generate_playlist(all_streams, categories_db, mode)
+        path = Path(config.get_str(dir_key)) / config.get_str(fname_key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    # Salvar EPG XML
+    xml_path = Path(config.get_str("xmltv_save_directory")) / config.get_str("xmltv_filename")
+    xml_path.parent.mkdir(parents=True, exist_ok=True)
+    xml_path.write_text(
+        xmltv.generate_xml(state.get_all_channels(), all_streams, categories_db),
+        encoding="utf-8"
+    )
+
+    # Salvar textosepg.json — countdown para upcoming
+    texts_cache = {}
+    for s in all_streams:
+        if s.get("status") != "upcoming" or s.get("video_id","").startswith("PLACEHOLDER"):
+            continue
+        video_id = s.get("video_id")
+        start    = ContentGenerator.get_sortable_time(s)
+        if not isinstance(start, datetime):
+            continue
+        try:
+            start_local = start.astimezone(local_tz)
+            total_secs  = (start - now_utc).total_seconds()
+            if total_secs > 0:
+                days, rem  = divmod(int(total_secs), 86400)
+                hours, rem = divmod(rem, 3600)
+                minutes, _ = divmod(rem, 60)
+                if days > 1:   line1 = f"Ao vivo em {days}d {hours}h"
+                elif days == 1: line1 = f"Ao vivo em 1d {hours}h"
+                elif hours > 0: line1 = f"Ao vivo em {hours}h {minutes}m"
+                else:           line1 = f"Ao vivo em {minutes}m" if minutes > 0 else "Ao vivo em instantes"
+                line2 = f"{start_local.day} {meses[start_local.month-1]} {start_local.strftime('%H:%M')}"
+                texts_cache[video_id] = {"line1": line1, "line2": line2}
+        except Exception:
+            pass
+
+    texts_path = Path("/data") / "textosepg.json"
+    texts_path.write_text(json.dumps(texts_cache, ensure_ascii=False, indent=2), encoding="utf-8")
+```
+
+**Onde consumir — `smart_player.py`:**
+```python
+TEXTS_CACHE_PATH = Path("/data") / "textosepg.json"
+
+def get_texts_from_cache(video_id: str) -> dict:
+    # Retorna {"line1": "...", "line2": "..."} ou {"line1": "", "line2": ""}
+    ...
+```
+
+---
+
+### 4.7 categories_db — busca no lifespan e passagem aos geradores
+
+**O que é:**
+Dicionário `{category_id: category_name}` obtido via `videoCategories.list`.
+Usado por `M3UGenerator` e `XMLTVGenerator` para traduzir IDs em nomes legíveis.
+
+**Onde buscar — `lifespan` em `web/main.py`:**
+```python
+_categories_db: dict = {}
+
+# Dentro do lifespan, após criar o scraper:
+try:
+    cats = scraper.youtube.videoCategories().list(part="snippet", regionCode="BR").execute()
+    _categories_db = {item["id"]: item["snippet"]["title"] for item in cats.get("items", [])}
+except Exception as e:
+    logger.warning(f"Falha ao carregar categorias: {e}. Usando dict vazio.")
+```
+
+**Como passar:**
+```python
+# Rotas de playlist e EPG
+content = _m3u.generate_playlist(_state.get_all_streams(), _categories_db, "live")
+content = _xmltv.generate_xml(_state.get_all_channels(), _state.get_all_streams(), _categories_db)
+
+# Scheduler ao salvar arquivos
+_scheduler.save_files(_categories_db)
+```
+
+**Fallback obrigatório:** Se `videoCategories.list` falhar, usar `{}`.
+Os geradores devem funcionar com dict vazio — `category_mappings` do config é o fallback.
+
+
+---
+
 ## 5. Etapa 3 — Interface FastHTML
 
 **Pré-requisito:** Checklist da Etapa 2 completo (incluindo validação de métodos).
@@ -797,6 +1007,7 @@ from core.playlist_builder import M3UGenerator, XMLTVGenerator
 _config: AppConfig | None     = None
 _state: StateManager | None   = None
 _scheduler: Scheduler | None  = None
+_categories_db: dict          = {}
 _m3u: M3UGenerator | None     = None
 _xmltv: XMLTVGenerator | None = None
 
@@ -807,6 +1018,15 @@ async def lifespan(app):
     _state     = StateManager(_config)
     _state.load_from_disk()
     scraper    = YouTubeAPI(_config.get_str("youtube_api_key"))
+
+    # Carrega categorias — necessário para M3U e EPG corretos
+    _categories_db = {}
+    try:
+        cats = scraper.youtube.videoCategories().list(part="snippet", regionCode="BR").execute()
+        _categories_db = {item["id"]: item["snippet"]["title"] for item in cats.get("items", [])}
+    except Exception as e:
+        pass  # Fallback: dict vazio — geradores funcionam sem categorias
+
     _scheduler = Scheduler(_config, scraper, _state)
     _m3u       = M3UGenerator(_config)
     _xmltv     = XMLTVGenerator(_config)
@@ -825,20 +1045,20 @@ async def lifespan(app):
 # ══════════════════════════════════════════════════════════════════
 
 async def _playlist_live(req: StarletteRequest):
-    content = _m3u.generate_playlist(_state.get_all_streams(), {}, "live") if _m3u and _state else "#EXTM3U\n"
+    content = _m3u.generate_playlist(_state.get_all_streams(), _categories_db, "live") if _m3u and _state else "#EXTM3U\n"
     return StarletteResponse(content, media_type="application/vnd.apple.mpegurl")
 
 async def _playlist_upcoming(req: StarletteRequest):
-    content = _m3u.generate_playlist(_state.get_all_streams(), {}, "upcoming") if _m3u and _state else "#EXTM3U\n"
+    content = _m3u.generate_playlist(_state.get_all_streams(), _categories_db, "upcoming") if _m3u and _state else "#EXTM3U\n"
     return StarletteResponse(content, media_type="application/vnd.apple.mpegurl")
 
 async def _playlist_vod(req: StarletteRequest):
-    content = _m3u.generate_playlist(_state.get_all_streams(), {}, "vod") if _m3u and _state else "#EXTM3U\n"
+    content = _m3u.generate_playlist(_state.get_all_streams(), _categories_db, "vod") if _m3u and _state else "#EXTM3U\n"
     return StarletteResponse(content, media_type="application/vnd.apple.mpegurl")
 
 async def _epg_xml(req: StarletteRequest):
     if _xmltv and _state:
-        content = _xmltv.generate_xml(_state.get_all_channels(), _state.get_all_streams(), {})
+        content = _xmltv.generate_xml(_state.get_all_channels(), _state.get_all_streams(), _categories_db)
     else:
         content = '<?xml version="1.0" encoding="UTF-8"?><tv></tv>'
     return StarletteResponse(content, media_type="application/xml")
@@ -1014,32 +1234,79 @@ print('✅ Todas as rotas OK' if ok else '❌ Há falhas — NÃO avançar')
 
 ---
 
-## 6. Etapa 4 — Container de Produção
+## 6. Etapa 4 — Portão de Merge → main
 
 **Pré-requisito:** Checklist da Etapa 3 completo.
 
+Esta etapa **não exige alterações de código**. O ambiente `dev` continua com `.:/app`.
+O objetivo é garantir que o código está pronto para merge na `main`, onde o build
+limpo (sem override) acontece naturalmente.
+
+### 6.1 Validação final na dev antes do merge
+
 ```bash
+# 1. Todos os testes passando
+docker compose exec tubewranglerr pytest -v
+# Esperado: todos os testes green
+
+# 2. Todas as rotas respondendo
+docker compose exec tubewranglerr python3 -c "
+import urllib.request
+rotas = ['/', '/config', '/channels', '/logs',
+         '/playlist_live.m3u8', '/playlist_upcoming.m3u8',
+         '/playlist_vod.m3u8', '/youtube_epg.xml']
+ok = True
+for r in rotas:
+    try:
+        resp = urllib.request.urlopen(f'http://localhost:8888{r}')
+        print(f'OK  {r} → {resp.status}')
+    except Exception as e:
+        print(f'ERR {r} → {e}')
+        ok = False
+print()
+print('✅ Pronto para merge' if ok else '❌ Corrigir antes do merge')
+"
+
+# 3. Sem regressões de imports
+docker compose exec tubewranglerr python3 -c "
+from core.config import AppConfig
+from core.state_manager import StateManager
+from core.youtube_api import YouTubeAPI
+from core.playlist_builder import ContentGenerator, M3UGenerator, XMLTVGenerator
+from core.scheduler import Scheduler
+print('OK — todos os imports resolvidos')
+"
+```
+
+### 6.2 Merge para main (ação humana — NUNCA executar pelo agente)
+
+```bash
+# No host (fora do container)
+git checkout main
+git merge dev --no-ff -m "feat: etapas 0-3 completas — FastHTML + SQLite + rotas validadas"
+git push origin main
+git checkout dev
+
+# Validar build de produção na main
 docker compose -f docker-compose.yml up --build -d
 sleep 30
 docker inspect tubewranglerr --format="{{.State.Health.Status}}"
 # Esperado: healthy
-
-# Verificar persistência após restart
-docker compose restart
-sleep 15
 curl http://localhost:8888/
 ```
 
-### 6.1 Checklist Etapa 4
+### 6.3 Checklist Etapa 4
 
 ```
-[ ] Build de produção (sem override) sem erro
-[ ] Health: healthy
-[ ] http://localhost:8888/ acessível
-[ ] /data persiste após restart
-[ ] config.db em ./data/ após primeiro boot
-[ ] streamlink e yt-dlp disponíveis no container de produção
-[ ] DECISIONS.md atualizado
+[ ] pytest -v → 100% passando na dev
+[ ] Todas as 9 rotas respondendo OK na dev
+[ ] Todos os imports resolvidos sem erro
+[ ] DECISIONS.md atualizado com a etapa
+[ ] Merge para main executado pelo humano
+[ ] Build de produção na main: Health: healthy
+[ ] http://localhost:8888/ acessível após build de produção
+[ ] /data persiste após restart na main
+[ ] git checkout dev — retornou para dev para continuar desenvolvimento
 ```
 
 ---
@@ -1080,6 +1347,63 @@ TEXTS_CACHE_PATH = Path("/data") / "textosepg.json"
 [ ] python3 smart_player.py --help executa sem erro no container
 [ ] DECISIONS.md atualizado
 ```
+
+### 7.3 Cadeia completa de dependências do smart_player.py
+
+Esta é a cadeia que o agente DEVE garantir funcionando end-to-end:
+
+```
+[Scheduler.save_files(categories_db)]
+    ├── M3UGenerator.generate_playlist() → /data/m3us/playlist_live.m3u8
+    │                                    → /data/m3us/playlist_upcoming.m3u8
+    │                                    → /data/m3us/playlist_vod.m3u8
+    ├── XMLTVGenerator.generate_xml()    → /data/epgs/youtube_epg.xml
+    └── texts_cache loop (upcoming)      → /data/textosepg.json
+            {"VIDEO_ID": {"line1": "Ao vivo em 2h", "line2": "26 Fev 21:00"}}
+
+[IPTV Player → smart_player.py -i <URL>]
+    ├── URL = PLACEHOLDER_IMAGE_URL
+    │       → run_ffmpeg_placeholder(url) — sem texto
+    │
+    ├── URL = ytimg.com/vi/<ID>/...  (thumbnail upcoming)
+    │       → get_texts_from_cache(video_id)  ← lê /data/textosepg.json
+    │       → run_ffmpeg_placeholder(url, line1, line2)
+    │               └── FFmpeg drawtext overlay → mpegts stdout
+    │
+    ├── URL = youtube.com/watch?v=<ID>  + status "live"
+    │       → run_streamlink(url) → mpegts stdout
+    │
+    ├── URL = youtube.com/watch?v=<ID>  + status "none" (VOD/gravado)
+    │       → run_yt_dlp(url) → mpegts stdout
+    │
+    └── URL = youtube.com/watch?v=<ID>  + status "upcoming"
+            → get_texts_from_cache(video_id)
+            → run_ffmpeg_placeholder(thumbnail_url, line1, line2)
+```
+
+**Validação end-to-end antes de fechar Etapa 5:**
+```bash
+docker compose exec tubewranglerr ls -la /data/textosepg.json
+
+docker compose exec tubewranglerr python3 -c "
+import json
+from pathlib import Path
+path = Path('/data/textosepg.json')
+if path.exists():
+    data = json.loads(path.read_text())
+    print(f'textosepg.json OK — {len(data)} entradas')
+else:
+    print('AVISO: textosepg.json ainda não existe — aguardar primeiro sync')
+"
+
+docker compose exec tubewranglerr python3 -c "
+from pathlib import Path
+font = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
+assert font.exists(), f'Fonte não encontrada: {font}'
+print('FFmpeg + DejaVuSans-Bold.ttf OK')
+"
+```
+
 
 ---
 
@@ -1294,4 +1618,4 @@ o método está fora da classe.
 
 ---
 
-*Versão 3.4 — Incorpora lições da Etapa 2: volume `.:/app` obrigatório, validação de métodos antes de avançar, implementações mínimas de StateManager e Scheduler, armadilha de indentação.*
+*Versão 3.3 — Incorpora lições da Etapa 2: volume `.:/app` obrigatório, validação de métodos antes de avançar, implementações mínimas de StateManager e Scheduler, armadilha de indentação.*

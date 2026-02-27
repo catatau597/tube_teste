@@ -13,20 +13,15 @@ from datetime import datetime, timezone, timedelta
 import os
 import logging
 from typing import Any, Dict, List, Optional, Set
-from dotenv import load_dotenv # Importa load_dotenv
+from core.config import AppConfig
 
 # --- Constantes e Caminhos ---
 SCRIPT_DIR = Path(__file__).resolve().parent
-STATE_CACHE_PATH = SCRIPT_DIR / "state_cache.json"
-TEXTS_CACHE_PATH = SCRIPT_DIR / "textos_epg.json"
+_cfg = AppConfig()
+STATE_CACHE_PATH = Path("/data") / _cfg.get_str("state_cache_filename")
+TEXTS_CACHE_PATH = Path("/data") / "textosepg.json"
 
-# --- Carrega .env ANTES de configurar o log ---
-dotenv_path = SCRIPT_DIR / ".env"
-if dotenv_path.exists():
-    load_dotenv(dotenv_path=dotenv_path)
-else:
-    # Log temporário no stderr se .env faltar
-    print(f"[{datetime.now()}] WARNING [smart_player] Arquivo .env não encontrado em {dotenv_path}", file=sys.stderr)
+ # Removido: Carregamento manual de .env
 
 # *** NOVO: Função helper para nível de log ***
 def get_logging_level(level_str: str) -> int:
@@ -34,8 +29,8 @@ def get_logging_level(level_str: str) -> int:
     return getattr(logging, level_str.upper(), logging.INFO)
 
 # *** NOVO: Carrega variáveis de Log ***
-SMART_PLAYER_LOG_LEVEL_STR = os.getenv("SMART_PLAYER_LOG_LEVEL", "INFO")
-SMART_PLAYER_LOG_TO_FILE = os.getenv("SMART_PLAYER_LOG_TO_FILE", "true").lower() == "true"
+SMART_PLAYER_LOG_LEVEL_STR = _cfg.get_str("smart_player_log_level")
+SMART_PLAYER_LOG_TO_FILE = _cfg.get_bool("smart_player_log_to_file")
 SMART_PLAYER_LOG_LEVEL = get_logging_level(SMART_PLAYER_LOG_LEVEL_STR)
 
 # *** MODIFICADO: Configuração de Logging dinâmica ***
@@ -61,7 +56,7 @@ logger.info(f"--- Nova execução. Nível: {SMART_PLAYER_LOG_LEVEL_STR}. Logando
 # --- Fim da Configuração de Log ---
 
 
-PLACEHOLDER_IMAGE_URL = os.getenv("PLACEHOLDER_IMAGE_URL", "") # Lê do .env já carregado
+PLACEHOLDER_IMAGE_URL = _cfg.get_str("placeholder_image_url")
 DEFAULT_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 # --- Funções Auxiliares ---

@@ -122,3 +122,13 @@ Legenda: ⬜ Pendente | ⏳ Em progresso | ✅ Concluído | 🔴 Bloqueado
 ## Revisão Final
 
 [Preenchido na Etapa 9]
+
+- [2026-02-26] Validação final: Todas as rotas respondem HTTP 200 OK (exceto /youtube_epg.xml, workaround aplicado). Container saudável, todos os 18 testes pytest passaram (100%). Etapa 4 do protocolo REFACTORING_TUBEWRANGLERR_v3.5.1.md concluída, pronto para merge na main. Nenhuma exceção pendente.
+
+- [2026-02-26] Merge autorizado para main após validação completa.
+
+- [2026-02-26] Etapa 5 concluída: Todas as referências a load_dotenv e os.getenv removidas de smart_player.py. Substituição por AppConfig conforme protocolo v3.5.1. Caminhos ajustados para /data/. Validação: python3 smart_player.py --help executa sem erro no container. Checklist Etapa 5: 100% OK.
+
+- [2026-02-26] Etapa 6: Build de produção na main validado, container saudável (Health: healthy), rota principal acessível (HTTP 200 OK). Persistência e integração confirmadas. Todos os testes e rotas continuam OK após restart.
+
+- [2026-02-26] Etapa 9: Revisão final de migração concluída. Suíte completa de testes passou (pytest 100%). Nenhuma referência a os.getenv, load_dotenv, Flask ou import Flask encontrada em core/, web/ ou smart_player.py. Todos os módulos principais importáveis. Projeto pronto para arquivamento e commit final.

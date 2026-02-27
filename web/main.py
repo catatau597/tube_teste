@@ -8,6 +8,26 @@ from core.config import AppConfig
 from core.state_manager import StateManager
 from core.youtube_api import YouTubeAPI
 from core.scheduler import Scheduler
+import logging
+import sys
+from pathlib import Path
+
+def _get_log_level(s: str) -> int:
+    return getattr(logging, s.upper(), logging.INFO)
+
+_LOG_FILE = Path("/data/tubewrangler.log")
+
+logging.basicConfig(
+    format   = "%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+    datefmt  = "%Y-%m-%d %H:%M:%S",
+    level    = logging.INFO,
+    force    = True,
+    handlers = [
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(_LOG_FILE, mode="a"),
+    ]
+)
+logger = logging.getLogger("TubeWrangler")
 
 _config    = None
 _state     = None
@@ -16,19 +36,59 @@ _scheduler = None
 @asynccontextmanager
 async def lifespan(app):
     global _config, _state, _scheduler
-    _config    = AppConfig()
-    _state     = StateManager(_config)
-    _state.load_from_disk()
-    scraper    = YouTubeAPI(_config.get_str("youtube_api_key"))
-    _scheduler = Scheduler(_config, scraper, _state)
+
+    _config = AppConfig()
+
+    # Ajustar nível de log conforme banco
+    logging.getLogger().setLevel(_get_log_level(_config.get_str("log_level")))
+    logger.info("=== TubeWrangler iniciando ===")
+
+    _state       = StateManager(_config)
+    cache_loaded = _state.load_from_disk()
+    logger.info(f"Cache carregado do disco: {cache_loaded} | "
+                f"canais={len(_state.get_all_channels())} "
+                f"streams={len(_state.get_all_streams())}")
+
+    api_key  = _config.get_str("youtube_api_key")
+    handles  = [h.strip() for h in _config.get_str("target_channel_handles").split(",") if h.strip()]
+    chan_ids = [i.strip() for i in _config.get_str("target_channel_ids").split(",")    if i.strip()]
+    logger.info(f"Handles configurados : {handles}")
+    logger.info(f"IDs configurados     : {chan_ids}")
+
+    scraper = YouTubeAPI(api_key)
+
+    # Resolver handles → IDs (igual ao get_streams.py original)
+    all_target_ids = set(chan_ids)
+    if handles:
+        logger.info(f"Resolvendo {len(handles)} handle(s) via API...")
+        resolved = scraper.resolve_channel_handles_to_ids(handles, _state)
+        all_target_ids.update(resolved.keys())
+        logger.info(f"Handles resolvidos: {resolved}")
+
+    # Garantir títulos para todos os IDs
+    if all_target_ids:
+        final_channels = scraper.ensure_channel_titles(all_target_ids, _state)
+        logger.info(f"Canais prontos: {len(final_channels)} — {list(final_channels.values())}")
+    else:
+        logger.warning("Nenhum canal alvo. Verifique target_channel_handles / target_channel_ids no /config.")
+
+    # Criar Scheduler e injetar evento de force-sync
+    _force_event = asyncio.Event()
+    _scheduler   = Scheduler(_config, scraper, _state)
+    _scheduler.set_force_event(_force_event)
+
     task = asyncio.create_task(_scheduler.run())
+    logger.info("Scheduler iniciado.")
+
     yield
+
     task.cancel()
     try:
         await task
     except asyncio.CancelledError:
         pass
     _state.save_to_disk()
+    logger.info("=== TubeWrangler encerrado ===")
 
 async def _playlist_live(req: _SReq):
     return _SR("#EXTM3U\n", media_type="application/vnd.apple.mpegurl")
@@ -89,12 +149,12 @@ def config_page():
     )
 
 @app.post("/config")
-def config_save(req):
-    data = dict(req.query_params)
+async def config_save(req):
+    form = await req.form()
     updates = {}
-    for k, v in data.items():
+    for k, v in form.items():
         if "__" in k:
-            section, key = k.split("__", 1)
+            _, key = k.split("__", 1)
             updates[key] = v
     if updates and _config:
         _config.update_many(updates)

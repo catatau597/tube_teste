@@ -33,27 +33,36 @@ class StateManager:
             return streams
         return []
 
-    def get_all_channels(self) -> list:
+    def get_all_channels(self) -> dict:
         """Retorna lista de canais monitorados."""
         if not hasattr(self, 'streams') or self.streams is None:
-            return []
+            return {}
         if isinstance(self.streams, dict):
-            return list(self.streams.keys())
-        return []
+            return self.channels          # dict {id: title} — NÃO lista
+        return {}
     def __init__(self, config: AppConfig, cache_path: Path | None = None):
         # Se cache_path for None:
         # cache_path = Path("/data") / config.get_str("state_cache_filename")
-        self.config = config
-        self.cache_path = cache_path or (Path("/data") / config.get_str("state_cache_filename"))
-        self.streams = {}
-        self.channels = {}
+        self._config   = config
+        self.streams   = {}
+        self.channels  = {}          # {channel_id: channel_title}
+        self.meta      = {           # metadados do scheduler
+            "lastmainrun":      None,
+            "lastfullsync":     None,
+            "resolvedhandles":  {},
+        }
+        if cache_path:
+            self.cache_path = cache_path
+        else:
+            self.cache_path = Path("/data") / config.get_str("state_cache_filename")
+
     # Métodos reais implementados na etapa posterior
 
     def load_from_disk(self):
         """Carrega estado do arquivo JSON em /data/."""
         import json
         from pathlib import Path
-        cache_file = Path("/data") / self.config.get_str("state_cache_filename")
+        cache_file = Path("/data") / self._config.get_str("state_cache_filename")
         if cache_file.exists():
             try:
                 with open(cache_file, encoding="utf-8") as f:
@@ -67,7 +76,12 @@ class StateManager:
         """Persiste estado no arquivo JSON em /data/."""
         import json
         from pathlib import Path
-        cache_file = Path("/data") / self.config.get_str("state_cache_filename")
+        cache_file = Path("/data") / self._config.get_str("state_cache_filename")
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(self.streams, f, ensure_ascii=False, indent=2)
+
+    def update_channels(self, channels_data: dict):
+        for cid, title in channels_data.items():
+            if cid and title:
+                self.channels[cid] = title
