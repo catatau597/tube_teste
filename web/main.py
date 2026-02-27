@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 import asyncio
+import collections
 import logging
 import os
 import re
-import sys
 from pathlib import Path
 
 from fasthtml.common import *
@@ -19,26 +19,60 @@ from core.state_manager import StateManager
 from core.thumbnail_manager import ThumbnailManager
 from core.youtube_api import YouTubeAPI
 
-
-def _get_log_level(s: str) -> int:
-    return getattr(logging, s.upper(), logging.INFO)
-
-
-_LOG_FILE = Path("/data/tubewrangler.log")
-LOG_FILE_PATH = Path("/data/logs/tubewrangler.log")
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-logging.basicConfig(
-    format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    level=logging.INFO,
-    force=True,
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(_LOG_FILE, mode="a"),
-    ],
+# Buffer circular em memoria para /api/logs/stream
+_LOG_BUFFER: collections.deque[tuple[int, str]] = collections.deque(maxlen=1000)
+_LOG_SEQ = 0
+
+
+class _BufferHandler(logging.Handler):
+    """Handler que escreve entradas de log no buffer circular."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        global _LOG_SEQ
+        try:
+            _LOG_SEQ += 1
+            _LOG_BUFFER.append(( _LOG_SEQ, self.format(record)))
+        except Exception:
+            pass
+
+
+_buffer_handler = _BufferHandler()
+_buffer_handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 )
+
+
+def _setup_logging(level_str: str = "INFO") -> None:
+    """Configura logging global para usar buffer em memoria e console."""
+    level = getattr(logging, level_str.upper(), logging.INFO)
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    for h in root.handlers[:]:
+        if isinstance(h, (logging.FileHandler, logging.StreamHandler)):
+            root.removeHandler(h)
+
+    console = logging.StreamHandler()
+    console.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    root.addHandler(_buffer_handler)
+    root.addHandler(console)
+
+    access = logging.getLogger("uvicorn.access")
+    access.handlers = [_buffer_handler, console]
+    access.setLevel(level)
+    access.propagate = False
+
 logger = logging.getLogger("TubeWrangler")
 
 _config = None
@@ -73,18 +107,7 @@ async def lifespan(app):
     global _m3u_generator, _xmltv_generator, _categories_db
 
     _config = AppConfig()
-
-    logging.getLogger().setLevel(_get_log_level(_config.get_str("log_level")))
-
-    LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(LOG_FILE_PATH, encoding="utf-8")
-    file_handler.setFormatter(
-        logging.Formatter(
-            "%(asctime)s %(levelname)-8s %(name)s %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-    )
-    logging.getLogger("TubeWrangler").addHandler(file_handler)
+    _setup_logging(_config.get_str("log_level") or "INFO")
 
     logger.info("=== TubeWrangler iniciando ===")
 
@@ -407,9 +430,21 @@ async def api_player_stream(request):
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
             limit=1024 * 1024,
         )
+        proc_logger = logging.getLogger("TubeWrangler.player")
+
+        async def _log_stderr():
+            try:
+                async for line in proc.stderr:
+                    text = line.decode("utf-8", errors="replace").rstrip()
+                    if text:
+                        proc_logger.info(f"[{video_id}] {text}")
+            except Exception:
+                pass
+
+        stderr_task = asyncio.create_task(_log_stderr())
         try:
             while True:
                 chunk = await proc.stdout.read(65536)
@@ -422,6 +457,13 @@ async def api_player_stream(request):
             try:
                 proc.kill()
                 await proc.wait()
+            except Exception:
+                pass
+            stderr_task.cancel()
+            try:
+                await stderr_task
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass
             for tf in temp_files:
@@ -453,26 +495,17 @@ def api_thumbnail(video_id: str):
 @app.get("/api/logs/stream")
 async def api_logs_stream():
     async def event_gen():
-        if not LOG_FILE_PATH.exists():
-            yield f"data: [arquivo de log não encontrado: {LOG_FILE_PATH}]\\n\\n"
-            return
-        lines = LOG_FILE_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
-        for line in lines[-200:]:
-            yield f"data: {line}\\n\\n"
-        last_size = LOG_FILE_PATH.stat().st_size
+        snapshot = list(_LOG_BUFFER)
+        for _, line in snapshot:
+            yield f"data: {line}\n\n"
+        last_seq = snapshot[-1][0] if snapshot else 0
         while True:
-            await asyncio.sleep(2)
-            try:
-                current_size = LOG_FILE_PATH.stat().st_size
-                if current_size > last_size:
-                    with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="replace") as f:
-                        f.seek(last_size)
-                        new_content = f.read()
-                    for line in new_content.splitlines():
-                        yield f"data: {line}\\n\\n"
-                    last_size = current_size
-            except Exception as e:
-                yield f"data: [erro ao ler log: {e}]\\n\\n"
+            await asyncio.sleep(1)
+            current = list(_LOG_BUFFER)
+            new_entries = [(seq, line) for seq, line in current if seq > last_seq]
+            for seq, line in new_entries:
+                yield f"data: {line}\n\n"
+                last_seq = seq
 
     return StreamingResponse(
         event_gen(),
@@ -486,17 +519,76 @@ def logs_page():
     return Titled(
         "Logs",
         _nav(),
-        Pre(id="log-output", style="height:80vh;overflow-y:auto;"),
+        Div(
+            Select(
+                Option("DEBUG", value="DEBUG"),
+                Option("INFO", value="INFO", selected=True),
+                Option("WARNING", value="WARNING"),
+                Option("ERROR", value="ERROR"),
+                id="log-level-filter",
+                style="margin-right:8px;",
+            ),
+            Button("Limpar", id="btn-clear", type="button", style="margin-right:8px;"),
+            Label(
+                Input(type="checkbox", id="auto-scroll", checked=True, style="margin-right:4px;"),
+                "Auto-scroll",
+            ),
+            style="margin-bottom:8px;",
+        ),
+        Pre(
+            id="log-output",
+            style="height:80vh;overflow-y:auto;background:#111;color:#eee;font-size:0.78rem;padding:8px;",
+        ),
+        Style(
+            """
+            .log-DEBUG   { color: #888; }
+            .log-INFO    { color: #eee; }
+            .log-WARNING { color: #f90; }
+            .log-ERROR   { color: #f44; font-weight:bold; }
+            """
+        ),
         Script(
             """
             const output = document.getElementById('log-output');
+            const filter = document.getElementById('log-level-filter');
+            const autoScroll = document.getElementById('auto-scroll');
+            const btnClear = document.getElementById('btn-clear');
+            btnClear.onclick = () => { output.innerHTML = ''; };
+
+            const LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
+
+            function levelOf(line) {
+                for (const lv of LEVELS) {
+                    if (line.includes(' ' + lv + ' ') || line.includes(' ' + lv + '\\t')) return lv;
+                }
+                return 'INFO';
+            }
+
+            function applyVisibility(span) {
+                const minLevel = filter.value;
+                const lv = span.dataset.level || 'INFO';
+                span.style.display = LEVELS.indexOf(lv) >= LEVELS.indexOf(minLevel) ? '' : 'none';
+            }
+
+            function appendLine(line) {
+                const span = document.createElement('span');
+                const lv = levelOf(line);
+                span.className = 'log-' + lv;
+                span.dataset.level = lv;
+                span.textContent = line + '\\n';
+                output.appendChild(span);
+                applyVisibility(span);
+                if (autoScroll.checked) output.scrollTop = output.scrollHeight;
+            }
+
             const es = new EventSource('/api/logs/stream');
-            es.onmessage = e => {
-                output.textContent += e.data + '\\n';
-                output.scrollTop = output.scrollHeight;
-            };
+            es.onmessage = e => appendLine(e.data);
             es.onerror = () => {
-                output.textContent += '\\n[conexao perdida - reconectando...]\\n';
+                appendLine('[conexao perdida - reconectando...]');
+            };
+
+            filter.onchange = () => {
+                output.querySelectorAll('span').forEach(applyVisibility);
             };
             """
         ),

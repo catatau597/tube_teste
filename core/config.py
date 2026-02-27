@@ -25,6 +25,9 @@ _OBSOLETE_KEYS = [
     "generate_direct_playlists",
     "generate_proxy_playlists",
     "allowed_category_ids",
+    "log_to_file",
+    "smart_player_log_level",
+    "smart_player_log_to_file",
 ]
 
 # Todas as 43 variáveis do file.env original
@@ -79,11 +82,8 @@ DEFAULTS: dict = {
     "local_timezone":                ("America/Sao_Paulo","technical", "Fuso horário local (pytz)", "str"),
     "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
-    # --- Logs (4) ---
+    # --- Logs (1) ---
     "log_level":                     ("INFO", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
-    "log_to_file":                   ("true", "logging", "Salvar log do core em arquivo", "bool"),
-    "smart_player_log_level":        ("INFO", "logging", "Nível de log do smart_player", "str"),
-    "smart_player_log_to_file":      ("true", "logging", "Salvar log do smart_player em arquivo", "bool"),
 }
 
 

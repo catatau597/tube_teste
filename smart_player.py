@@ -17,44 +17,19 @@ from core.config import AppConfig
 from core.player_router import build_player_command
 
 # --- Constantes e Caminhos ---
-SCRIPT_DIR = Path(__file__).resolve().parent
 _cfg = AppConfig()
 STATE_CACHE_PATH = Path("/data") / _cfg.get_str("state_cache_filename")
 TEXTS_CACHE_PATH = Path("/data") / "textosepg.json"
 
- # Removido: Carregamento manual de .env
+# Execucao standalone (CLI): garante logger basico no terminal.
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-# *** NOVO: Função helper para nível de log ***
-def get_logging_level(level_str: str) -> int:
-    """Converte string de nível de log para o objeto logging correspondente."""
-    return getattr(logging, level_str.upper(), logging.INFO)
-
-# *** NOVO: Carrega variáveis de Log ***
-SMART_PLAYER_LOG_LEVEL_STR = _cfg.get_str("smart_player_log_level")
-SMART_PLAYER_LOG_TO_FILE = _cfg.get_bool("smart_player_log_to_file")
-SMART_PLAYER_LOG_LEVEL = get_logging_level(SMART_PLAYER_LOG_LEVEL_STR)
-
-# *** MODIFICADO: Configuração de Logging dinâmica ***
-log_file_path = SCRIPT_DIR / "smart_player.log"
-log_config = {
-    "format": "%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    "datefmt": "%Y-%m-%d %H:%M:%S",
-    "level": SMART_PLAYER_LOG_LEVEL,
-    "force": True, # Para sobrescrever config anterior
-}
-
-if SMART_PLAYER_LOG_TO_FILE:
-    log_config['filename'] = log_file_path
-    log_config['filemode'] = 'a'
-else:
-    # Se não for para arquivo, loga no stderr (padrão do logging, capturado pelo ts_proxy)
-    log_config['stream'] = sys.stderr
-
-logging.basicConfig(**log_config) # Aplica a configuração
-
-logger = logging.getLogger("smart_player")
-logger.info(f"--- Nova execução. Nível: {SMART_PLAYER_LOG_LEVEL_STR}. Logando para: {'Arquivo' if SMART_PLAYER_LOG_TO_FILE else 'Console (stderr)'} ---")
-# --- Fim da Configuração de Log ---
+logger = logging.getLogger("TubeWrangler.smart_player")
 
 
 PLACEHOLDER_IMAGE_URL = _cfg.get_str("placeholder_image_url")
