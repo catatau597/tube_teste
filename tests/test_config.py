@@ -6,8 +6,8 @@ from pathlib import Path
 def cfg(tmp_path):
     return AppConfig(db_path=tmp_path / "test.db")
 
-def test_total_de_chaves_e_43(cfg):
-    assert len(DEFAULTS) == 43
+def test_total_de_chaves_retrofit(cfg):
+    assert len(DEFAULTS) == 47
 
 def test_todas_as_chaves_no_banco(cfg):
     for key in DEFAULTS:

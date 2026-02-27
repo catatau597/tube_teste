@@ -1,63 +1,114 @@
 from contextlib import asynccontextmanager
-from fasthtml.common import *
-from starlette.routing import Route
-from starlette.requests import Request as _SReq
-from starlette.responses import Response as _SR
 import asyncio
-from core.config import AppConfig
-from core.state_manager import StateManager
-from core.youtube_api import YouTubeAPI
-from core.scheduler import Scheduler
 import logging
+import os
+import re
 import sys
 from pathlib import Path
+
+from fasthtml.common import *
+from starlette.routing import Route
+from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
+
+from core.playlist_builder import M3UGenerator, XMLTVGenerator, _resolve_proxy_base_url
+
+from core.config import AppConfig
+from core.player_router import build_player_command
+from core.scheduler import Scheduler
+from core.state_manager import StateManager
+from core.thumbnail_manager import ThumbnailManager
+from core.youtube_api import YouTubeAPI
+
 
 def _get_log_level(s: str) -> int:
     return getattr(logging, s.upper(), logging.INFO)
 
+
 _LOG_FILE = Path("/data/tubewrangler.log")
+LOG_FILE_PATH = Path("/data/logs/tubewrangler.log")
+TEXTS_CACHE_PATH = Path("/data/textosepg.json")
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 logging.basicConfig(
-    format   = "%(asctime)s %(levelname)-8s %(name)s  %(message)s",
-    datefmt  = "%Y-%m-%d %H:%M:%S",
-    level    = logging.INFO,
-    force    = True,
-    handlers = [
+    format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.INFO,
+    force=True,
+    handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler(_LOG_FILE, mode="a"),
-    ]
+    ],
 )
 logger = logging.getLogger("TubeWrangler")
 
-_config    = None
-_state     = None
+_config = None
+_state = None
 _scheduler = None
+_thumbnail_manager = None
+_m3u_generator = None
+_xmltv_generator = None
+_categories_db = {}
+
+# Mapeamento: nome da rota -> (mode, mode_type)
+_PLAYLIST_ROUTES = {
+    "live.m3u": ("live", "direct"),
+    "live-proxy.m3u": ("live", "proxy"),
+    "upcoming-proxy.m3u": ("upcoming", "proxy"),
+    "vod.m3u": ("vod", "direct"),
+    "vod-proxy.m3u": ("vod", "proxy"),
+}
+
+_LEGACY_REDIRECTS = {
+    "/playlist_live_direct.m3u8": "/playlist/live.m3u",
+    "/playlist_live_proxy.m3u8": "/playlist/live-proxy.m3u",
+    "/playlist_upcoming_proxy.m3u8": "/playlist/upcoming-proxy.m3u",
+    "/playlist_vod_direct.m3u8": "/playlist/vod.m3u",
+    "/playlist_vod_proxy.m3u8": "/playlist/vod-proxy.m3u",
+    "/youtube_epg.xml": "/epg.xml",
+}
+
 
 @asynccontextmanager
 async def lifespan(app):
-    global _config, _state, _scheduler
+    global _config, _state, _scheduler, _thumbnail_manager
+    global _m3u_generator, _xmltv_generator, _categories_db
 
     _config = AppConfig()
 
-    # Ajustar nível de log conforme banco
     logging.getLogger().setLevel(_get_log_level(_config.get_str("log_level")))
+
+    LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(LOG_FILE_PATH, encoding="utf-8")
+    file_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)-8s %(name)s %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    logging.getLogger("TubeWrangler").addHandler(file_handler)
+
     logger.info("=== TubeWrangler iniciando ===")
 
-    _state       = StateManager(_config)
+    _state = StateManager(_config)
     cache_loaded = _state.load_from_disk()
-    logger.info(f"Cache carregado do disco: {cache_loaded} | "
-                f"canais={len(_state.get_all_channels())} "
-                f"streams={len(_state.get_all_streams())}")
+    logger.info(
+        f"Cache carregado do disco: {cache_loaded} | "
+        f"canais={len(_state.get_all_channels())} "
+        f"streams={len(_state.get_all_streams())}"
+    )
 
-    api_key  = _config.get_str("youtube_api_key")
-    handles  = [h.strip() for h in _config.get_str("target_channel_handles").split(",") if h.strip()]
-    chan_ids = [i.strip() for i in _config.get_str("target_channel_ids").split(",")    if i.strip()]
+    thumb_dir = _config.get_str("thumbnail_cache_directory")
+    _thumbnail_manager = ThumbnailManager(thumb_dir)
+    _state.set_thumbnail_manager(_thumbnail_manager)
+
+    api_key = _config.get_str("youtube_api_key")
+    handles = [h.strip() for h in _config.get_str("target_channel_handles").split(",") if h.strip()]
+    chan_ids = [i.strip() for i in _config.get_str("target_channel_ids").split(",") if i.strip()]
     logger.info(f"Handles configurados : {handles}")
     logger.info(f"IDs configurados     : {chan_ids}")
 
     scraper = YouTubeAPI(api_key)
 
-    # Resolver handles → IDs (igual ao get_streams.py original)
     all_target_ids = set(chan_ids)
     if handles:
         logger.info(f"Resolvendo {len(handles)} handle(s) via API...")
@@ -65,194 +116,145 @@ async def lifespan(app):
         all_target_ids.update(resolved.keys())
         logger.info(f"Handles resolvidos: {resolved}")
 
-    # Garantir títulos para todos os IDs
     if all_target_ids:
         final_channels = scraper.ensure_channel_titles(all_target_ids, _state)
-        logger.info(f"Canais prontos: {len(final_channels)} — {list(final_channels.values())}")
+        logger.info(f"Canais prontos: {len(final_channels)}")
     else:
         logger.warning("Nenhum canal alvo. Verifique target_channel_handles / target_channel_ids no /config.")
 
-    # Criar Scheduler e injetar evento de force-sync
     _force_event = asyncio.Event()
-    _scheduler   = Scheduler(_config, scraper, _state)
+    _scheduler = Scheduler(_config, scraper, _state)
     _scheduler.set_force_event(_force_event)
-
+    _scheduler.set_thumbnail_manager(_thumbnail_manager)
+    _m3u_generator = M3UGenerator(_config)
+    _xmltv_generator = XMLTVGenerator(_config)
+    _categories_db = {}
+    _scheduler.set_categories_db(_categories_db)
     task = asyncio.create_task(_scheduler.run())
     logger.info("Scheduler iniciado.")
 
-    yield
-
-    task.cancel()
     try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    _state.save_to_disk()
-    logger.info("=== TubeWrangler encerrado ===")
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        _state.save_to_disk()
+        logger.info("=== TubeWrangler encerrado ===")
 
-async def _playlist_live(req: _SReq):
-    from pathlib import Path
-    path = Path(_config.get_str("playlist_save_directory")) / _config.get_str("playlist_live_filename")
-    content = path.read_text(encoding="utf-8") if path.exists() else "#EXTM3U\n"
-    return _SR(content, media_type="application/vnd.apple.mpegurl")
-
-async def _playlist_upcoming(req: _SReq):
-    from pathlib import Path
-    path = Path(_config.get_str("playlist_save_directory")) / _config.get_str("playlist_upcoming_filename")
-    content = path.read_text(encoding="utf-8") if path.exists() else "#EXTM3U\n"
-    return _SR(content, media_type="application/vnd.apple.mpegurl")
-
-async def _playlist_vod(req: _SReq):
-    from pathlib import Path
-    path = Path(_config.get_str("playlist_save_directory")) / _config.get_str("playlist_vod_filename")
-    content = path.read_text(encoding="utf-8") if path.exists() else "#EXTM3U\n"
-    return _SR(content, media_type="application/vnd.apple.mpegurl")
-
-async def _epg_xml(req: _SReq):
-    from pathlib import Path
-    path = Path(_config.get_str("xmltv_save_directory")) / _config.get_str("xmltv_filename")
-    content = path.read_text(encoding="utf-8") if path.exists() else '<?xml version="1.0"?><tv></tv>'
-    return _SR(content, media_type="application/xml")
 
 app, rt = fast_app(
     lifespan=lifespan,
-    hdrs=[Link(rel="stylesheet",
-               href="https://cdn.jsdelivr.net/npm/pico.css@2/css/pico.min.css")]
+    hdrs=[Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/pico.css@2/css/pico.min.css")],
 )
 
-app.router.routes.insert(0, Route("/playlist_live.m3u8",     _playlist_live))
-app.router.routes.insert(0, Route("/playlist_upcoming.m3u8", _playlist_upcoming))
-app.router.routes.insert(0, Route("/playlist_vod.m3u8",      _playlist_vod))
-app.router.routes.insert(0, Route("/youtube_epg.xml",        _epg_xml))
+
+def _serialize_stream(s: dict) -> dict:
+    return {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in s.items()}
+
+
+def _serve_playlist_onthefly(mode: str, mode_type: str) -> Response:
+    if _m3u_generator is None or _state is None:
+        return Response("Servidor ainda inicializando", status_code=503)
+    streams = list(_state.get_all_streams())
+    cats = _categories_db if _categories_db else {}
+    proxy_base = _resolve_proxy_base_url(_config) if mode_type == "proxy" else ""
+    content = _m3u_generator.generate_playlist(
+        streams, cats, mode=mode, mode_type=mode_type, proxy_base_url=proxy_base
+    )
+    return Response(content, media_type="audio/x-mpegurl")
+
+
+for _playlist_name, (_mode, _mode_type) in _PLAYLIST_ROUTES.items():
+    def _make_playlist_route(mode=_mode, mode_type=_mode_type, playlist_name=_playlist_name):
+        @app.get(f"/playlist/{playlist_name}")
+        def _playlist_route():
+            return _serve_playlist_onthefly(mode, mode_type)
+
+    _make_playlist_route()
+
+
+@app.get("/epg.xml")
+def serve_epg_onthefly():
+    if _xmltv_generator is None or _state is None:
+        return Response("Servidor ainda inicializando", status_code=503)
+    channels = _state.get_all_channels()
+    streams = list(_state.get_all_streams())
+    cats = _categories_db if _categories_db else {}
+    content = _xmltv_generator.generate_xml(channels, streams, cats)
+    return Response(content, media_type="application/xml")
+
+
+async def _epg_route(request):
+    return serve_epg_onthefly()
+
+
+app.router.routes.insert(0, Route("/epg.xml", endpoint=_epg_route))
+
+
+for _old, _new in _LEGACY_REDIRECTS.items():
+    def _make_redirect(old=_old, new=_new):
+        @app.get(old)
+        def _redirect():
+            return RedirectResponse(url=new, status_code=301)
+
+    _make_redirect()
+
 
 @app.get("/")
 def home():
-    from core.playlist_builder import ContentGenerator
-
-    streams  = _state.get_all_streams()  if _state else []
+    streams = _state.get_all_streams() if _state else []
     channels = _state.get_all_channels() if _state else {}
 
-    def truncate(text, n=60):
-        text = text or ""
-        return text[:n] + ("..." if len(text) > n else "")
-
-    def get_tipo(s):
-        if ContentGenerator.is_live(s):
-            return "live"
-        elif s.get("status") == "upcoming":
-            return "upcoming"
-        else:
-            return "none"
-
-    def sort_key(s):
-        tipo = get_tipo(s)
-        if tipo == "live":
-            return (0, 0)
-        elif tipo == "upcoming":
-            t = s.get("scheduledstarttimeutc")
-            return (1, t.timestamp() if t else 0)
-        else:
-            t = s.get("fetchtime")
-            return (2, -(t.timestamp() if t else 0))
-
-    from core.playlist_builder import ContentGenerator
-    from datetime import datetime, timezone, timedelta
-    from collections import defaultdict
-
-    # Aplicar filtros de VOD conforme configuração
-    keep_vod      = _config.get_bool("keep_recorded_streams")
-    max_per_ch    = _config.get_int("max_recorded_per_channel")
-    retention     = _config.get_int("recorded_retention_days")
-    cutoff        = datetime.now(timezone.utc) - timedelta(days=retention)
-
-    live_streams     = [s for s in streams if ContentGenerator.is_live(s)]
-    upcoming_streams = [s for s in streams if s.get("status") == "upcoming"]
-
-    if keep_vod:
-        vod_candidates = [
-            s for s in streams
-            if ContentGenerator.is_vod(s)
-            and isinstance(s.get("fetchtime"), datetime)
-            and s["fetchtime"] >= cutoff
-        ]
-        per_channel = defaultdict(list)
-        for s in vod_candidates:
-            per_channel[s.get("channelid", "")].append(s)
-        vod_streams = []
-        for ch_streams in per_channel.values():
-            ch_streams.sort(
-                key=lambda x: x.get("fetchtime") or datetime.min.replace(tzinfo=timezone.utc),
-                reverse=True
-            )
-            vod_streams.extend(ch_streams[:max_per_ch])
-    else:
-        vod_streams = []
-
-    display_streams = live_streams + upcoming_streams + vod_streams
-    sorted_streams  = sorted(display_streams, key=sort_key)
-
-    BADGE = {
-        "live":     ("🔴 LIVE",     "background:#d32f2f;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"),
-        "upcoming": ("🕐 Agendado", "background:#1976d2;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"),
-        "none":     ("📹 VOD",      "background:#757575;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"),
-    }
-
     rows = []
-    for s in sorted_streams:
-        tipo = get_tipo(s)
-        label, badge_style = BADGE.get(tipo, BADGE["none"])
+    for s in streams:
         vid = s.get("videoid", "")
         url = s.get("watchurl") or f"https://www.youtube.com/watch?v={vid}"
         rows.append(
             Tr(
-                Td(truncate(s.get("title", "—"))),
-                Td(Span(label, style=badge_style)),
-                Td(A("▶ Abrir", href=url, target="_blank")),
+                Td((s.get("title") or "")[:80]),
+                Td(s.get("status") or "none"),
+                Td(A("Abrir", href=url, target="_blank")),
             )
         )
 
-    canais_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
+    channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
 
-    return Titled("TubeWrangler",
-                Div(
-                        A("🏠 Dashboard", href="/",
-                            style="margin-right:16px;padding:6px 14px;background:#388e3c;color:#fff;border-radius:4px;text-decoration:none;font-weight:bold;"),
-                        A("🔄 Force Sync", href="/force-sync",
-                            style="margin-right:16px;padding:6px 14px;background:#1976d2;color:#fff;border-radius:4px;text-decoration:none;font-weight:bold;"),
-                        A("⚙️ Configurações", href="/config",
-                            style="padding:6px 14px;background:#555;color:#fff;border-radius:4px;text-decoration:none;font-weight:bold;"),
-                        style="margin-bottom:20px;"
-                ),
+    return Titled(
+        "TubeWrangler",
+        Div(
+            A("Dashboard", href="/", style="margin-right:12px;"),
+            A("Force Sync", href="/force-sync", style="margin-right:12px;"),
+            A("Config", href="/config", style="margin-right:12px;"),
+            A("Logs", href="/logs"),
+        ),
         H2("Canais monitorados"),
-        Ul(*canais_items),
-        H2(f"Streams ({len(sorted_streams)})"),
+        Ul(*channel_items) if channel_items else P("Nenhum canal."),
+        H2(f"Streams ({len(streams)})"),
         Table(
-            Thead(Tr(
-                Th("Evento"),
-                Th("Tipo",    style="text-align:center;"),
-                Th("Assistir",style="text-align:center;"),
-            )),
+            Thead(Tr(Th("Evento"), Th("Status"), Th("Assistir"))),
             Tbody(*rows),
-            style="width:100%;border-collapse:collapse;font-family:sans-serif;",
         ),
     )
+
 
 @app.get("/config")
 def config_page():
     sections = _config.get_all_by_section() if _config else {}
-    fields   = []
+    fields = []
     for section, rows in sections.items():
         fields.append(H3(section))
         for row in rows:
             fields.append(
-                Label(row["key"],
-                    Input(name=f"{section}__{row['key']}",
-                          value=row["value"],
-                          type="text"))
+                Label(
+                    row["key"],
+                    Input(name=f"{section}__{row['key']}", value=row["value"], type="text"),
+                )
             )
-    return Titled("Configuracoes",
-        Form(*fields, Button("Salvar", type="submit"), method="post", action="/config")
-    )
+    return Titled("Configuracoes", Form(*fields, Button("Salvar", type="submit"), method="post", action="/config"))
+
 
 @app.post("/config")
 async def config_save(req):
@@ -264,33 +266,229 @@ async def config_save(req):
             updates[key] = v
     if updates and _config:
         _config.update_many(updates)
-    from starlette.responses import RedirectResponse
     return RedirectResponse("/config", status_code=303)
+
 
 @app.get("/channels")
 def channels_page():
-    channels = _state.get_all_channels() if _state else []
-    return Titled("Canais",
-        Ul(*[Li(c) for c in channels]) if channels else P("Nenhum canal.")
-    )
+    channels = _state.get_all_channels() if _state else {}
+    return Titled("Canais", Ul(*[Li(f"{cid}: {title}") for cid, title in channels.items()]) if channels else P("Nenhum canal."))
 
-@app.get("/logs")
-def logs_page():
-    return Titled("Logs",
-        Pre("Aguardando logs...", id="log-output"),
-        Script("""
-            const pre = document.getElementById('log-output');
-            const es  = new EventSource('/logs-stream');
-            es.onmessage = e => {
-                pre.textContent += e.data + '\\n';
-                pre.scrollTop = pre.scrollHeight;
-            };
-        """)
-    )
 
 @app.get("/force-sync")
 def force_sync():
     if _scheduler:
         _scheduler.trigger_now()
-    from starlette.responses import RedirectResponse
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/api/channels")
+def api_channels_list():
+    return JSONResponse([{"id": k, "title": v} for k, v in _state.get_all_channels().items()])
+
+
+@app.post("/api/channels")
+async def api_channels_create(req):
+    body = await req.json()
+    cid = body.get("id", "").strip()
+    title = body.get("title", "").strip()
+    if not cid or not title:
+        return JSONResponse({"error": "id e title obrigatorios"}, status_code=400)
+    _state.channels[cid] = title
+    _state.save_to_disk()
+    return JSONResponse({"ok": True, "id": cid})
+
+
+@app.delete("/api/channels/{channel_id}")
+def api_channels_delete(channel_id: str):
+    if channel_id not in _state.channels:
+        return JSONResponse({"error": "nao encontrado"}, status_code=404)
+    del _state.channels[channel_id]
+    _state.save_to_disk()
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/streams")
+def api_streams_list(status: str = ""):
+    streams = _state.get_all_streams()
+    if status:
+        streams = [s for s in streams if s.get("status") == status]
+    return JSONResponse([_serialize_stream(s) for s in streams])
+
+
+@app.get("/api/streams/{video_id}")
+def api_streams_detail(video_id: str):
+    stream = _state.streams.get(video_id)
+    if not stream:
+        return JSONResponse({"error": "nao encontrado"}, status_code=404)
+    return JSONResponse(_serialize_stream(stream))
+
+
+@app.get("/api/config")
+def api_config_get():
+    return JSONResponse(_config.get_all())
+
+
+@app.put("/api/config")
+async def api_config_put(req):
+    body = await req.json()
+    key = body.get("key", "").strip()
+    value = str(body.get("value", "")).strip()
+    if not key:
+        return JSONResponse({"error": "key obrigatorio"}, status_code=400)
+    _config.update(key, value)
+    return JSONResponse({"ok": True, "key": key, "value": value})
+
+
+@app.put("/api/playlists/refresh")
+def api_playlists_refresh():
+    _scheduler.trigger_now()
+    return JSONResponse({"ok": True, "message": "sync agendado"})
+
+
+@app.get("/api/epg")
+def api_epg():
+    epg_path = Path(_config.get_str("xmltv_save_directory")) / _config.get_str("xmltv_filename")
+    if not epg_path.exists():
+        return JSONResponse({"error": "EPG nao gerado ainda"}, status_code=404)
+    return Response(epg_path.read_text(encoding="utf-8"), media_type="application/xml")
+
+
+async def api_player_stream(request):
+    video_id = request.path_params["video_id"]
+    user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
+
+    stream_info = _state.streams.get(video_id)
+    status = stream_info.get("status") if stream_info else None
+    thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    placeholder = _config.get_str("placeholder_image_url")
+    thumb_for_ph = thumbnail_url or placeholder
+
+    local_thumb = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
+    if local_thumb.exists():
+        thumb_for_ph = str(local_thumb) 
+
+    cmd, temp_files = build_player_command(
+        video_id=video_id,
+        status=status,
+        watch_url=watch_url,
+        thumbnail_url=thumb_for_ph,
+        user_agent=user_agent,
+        font_path=FONT_PATH,
+        texts_cache_path=TEXTS_CACHE_PATH,
+    )
+
+    async def stream_gen():
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            limit=1024 * 1024,
+        )
+        try:
+            while True:
+                chunk = await proc.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        except asyncio.CancelledError:
+            pass
+        finally:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+            for tf in temp_files:
+                try:
+                    os.unlink(tf)
+                except Exception:
+                    pass
+
+    return StreamingResponse(
+        stream_gen(),
+        media_type="video/mp2t",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/thumbnail/{video_id}")
+def api_thumbnail(video_id: str):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", video_id):
+        return JSONResponse({"error": "video_id invalido"}, status_code=400)
+    data = _thumbnail_manager.serve(video_id)
+    if data:
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
+    return RedirectResponse(
+        f"https://i.ytimg.com/vi/{video_id}/maxresdefault_live.jpg",
+        status_code=302,
+    )
+
+
+@app.get("/api/logs/stream")
+async def api_logs_stream():
+    async def event_generator():
+        if LOG_FILE_PATH.exists():
+            lines = LOG_FILE_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
+            for line in lines[-100:]:
+                yield f"data: {line}\\n\\n"
+
+        last_size = LOG_FILE_PATH.stat().st_size if LOG_FILE_PATH.exists() else 0
+        while True:
+            await asyncio.sleep(1)
+            if not LOG_FILE_PATH.exists():
+                continue
+            current_size = LOG_FILE_PATH.stat().st_size
+            if current_size > last_size:
+                with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="replace") as f:
+                    f.seek(last_size)
+                    new_lines = f.read()
+                last_size = current_size
+                for line in new_lines.splitlines():
+                    if line.strip():
+                        yield f"data: {line}\\n\\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/logs")
+def logs_page():
+    return Html(
+        Head(
+            Title("TubeWrangler - Logs"),
+            Style(
+                "body{font-family:monospace;background:#0d1117;color:#c9d1d9;margin:1rem}"
+                "pre{background:#161b22;padding:1rem;height:80vh;overflow-y:auto;font-size:12px;border-radius:6px}"
+                "a{color:#58a6ff}"
+            ),
+        ),
+        Body(
+            H2("Logs em tempo real"),
+            A("Home", href="/"),
+            " | ",
+            A("Force Sync", href="/force-sync"),
+            Pre(id="log-output"),
+            Script(
+                """
+                const output = document.getElementById('log-output');
+                const es = new EventSource('/api/logs/stream');
+                es.onmessage = e => {
+                    output.textContent += e.data + '\\n';
+                    output.scrollTop = output.scrollHeight;
+                };
+                es.onerror = () => {
+                    output.textContent += '\\n[conexao perdida - reconectando...]\\n';
+                };
+                """
+            ),
+        ),
+    )
+
+
+# Registrar rota de streaming diretamente no Starlette (contorna wrapper FastHTML)
+app.routes.append(Route("/api/player/{video_id}", endpoint=api_player_stream))

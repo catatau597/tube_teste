@@ -64,6 +64,9 @@ DEFAULTS: dict = {
     "placeholder_image_url":         ("https://i.ibb.co/9kZStw28/placeholder-sports.png",
                                       "output", "URL da imagem placeholder para streams sem thumb", "str"),
     "use_invisible_placeholder":     ("true", "output", "Usar placeholder invisível no M3U", "bool"),
+    "generate_direct_playlists":     ("true", "output", "Gerar playlists direct", "bool"),
+    "generate_proxy_playlists":      ("true", "output", "Gerar playlists proxy", "bool"),
+    "thumbnail_cache_directory":     ("/data/thumbnails", "output", "Diretório de cache de thumbnails", "str"),
 
     # --- Técnico (5) ---
     "http_port":                     ("8888",             "technical", "Porta HTTP do servidor web", "int"),
@@ -71,6 +74,7 @@ DEFAULTS: dict = {
     "stale_hours":                   ("6",                "technical", "Horas para considerar stream stale", "int"),
     "use_playlist_items":            ("true",             "technical", "Usar playlistItems API (vs search.list)", "bool"),
     "local_timezone":                ("America/Sao_Paulo","technical", "Fuso horário local (pytz)", "str"),
+    "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
     # --- Logs (4) ---
     "log_level":                     ("INFO", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
@@ -161,6 +165,20 @@ class AppConfig:
         for row in self._cache.values():
             sections.setdefault(row["section"], []).append(row)
         return sections
+
+    def get_all(self) -> dict:
+        result = {}
+        for row in self._db.t.config.rows:
+            result[row["key"]] = row["value"]
+        return result
+
+    def set(self, key: str, value: str) -> None:
+        existing = list(self._db.t.config.rows_where("key = ?", [key]))
+        if existing:
+            self._db.t.config.update({"key": key, "value": value})
+        else:
+            self._db.t.config.insert({"key": key, "value": value})
+        self.reload()
 
     def import_from_env_file(self, env_path: Path):
         """

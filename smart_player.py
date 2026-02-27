@@ -14,6 +14,7 @@ import os
 import logging
 from typing import Any, Dict, List, Optional, Set
 from core.config import AppConfig
+from core.player_router import build_player_command
 
 # --- Constantes e Caminhos ---
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -215,42 +216,32 @@ def main():
             status = stream_info.get("status")
             thumbnail_url = stream_info.get("thumbnailurl")
             logger.info(f"Cache status: '{status}'")
-            logger.debug(f"  -> Cache times: start={stream_info.get('actualstarttimeutc')}, end={stream_info.get('actualendtimeutc')}")
         else:
             logger.warning(f"Video ID {video_id} não encontrado no cache."); thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
-
-        def is_genuinely_live(stream_dict):
-            if not stream_dict:
-                return False
-            start = stream_dict.get("actualstarttimeutc")
-            end   = stream_dict.get("actualendtimeutc")
-            return (
-                stream_dict.get("status") == "live"
-                and isinstance(start, datetime)
-                and end is None
-            )
-
-        if status == "live" and is_genuinely_live(stream_info):
-            run_streamlink(url, user_agent=user_agent)
-        elif status == "none" or (status == "live" and not is_genuinely_live(stream_info)):
-            if status == "live":
-                logger.warning(f"Status '{status}' mas não parece live. Tratando como VOD.")
-            run_ytdlp(url, user_agent=user_agent)
-        elif status == "upcoming":
-            logger.warning(f"Vídeo {video_id} ('upcoming'). Exibindo thumbnail.")
-            texts = get_texts_from_cache(video_id)
-            thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
-            if thumb_to_use:
-                run_ffmpeg_placeholder(thumb_to_use, texts["line1"], texts["line2"], user_agent=user_agent)
-            else:
-                logger.error("Não há thumb/placeholder para vídeo upcoming.")
-        else:
-            logger.warning(f"Status '{status}' ou vídeo não encontrado/inválido. Fallback para thumb/placeholder.")
-            thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
-            if thumb_to_use:
-                run_ffmpeg_placeholder(thumb_to_use, user_agent=user_agent)
-            else:
-                logger.error("Não há thumb/placeholder para fallback.")
+        thumb_to_use = thumbnail_url or PLACEHOLDER_IMAGE_URL
+        cmd, temp_files = build_player_command(
+            video_id=video_id,
+            status=status,
+            watch_url=url,
+            thumbnail_url=thumb_to_use,
+            user_agent=user_agent,
+            texts_cache_path=TEXTS_CACHE_PATH,
+        )
+        logger.debug(f"Comando selecionado: {' '.join(cmd)}")
+        try:
+            process = subprocess.Popen(cmd, stdout=sys.stdout, stderr=subprocess.PIPE)
+            _, stderr_output = process.communicate()
+            for tf in temp_files:
+                try:
+                    os.unlink(tf)
+                except Exception:
+                    pass
+            if process.returncode != 0 and stderr_output:
+                logger.error(f"Stderr: {stderr_output.decode('utf-8', errors='ignore')}")
+        except FileNotFoundError as e:
+            logger.error(f"Comando não encontrado: {e}")
+        except Exception as e:
+            logger.error(f"Erro ao executar player command: {e}")
     else:
         logger.error(f"URL não reconhecida: {url}")
         if PLACEHOLDER_IMAGE_URL: run_ffmpeg_placeholder(PLACEHOLDER_IMAGE_URL, user_agent=user_agent)

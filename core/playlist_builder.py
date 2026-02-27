@@ -16,14 +16,31 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 from typing import Optional
 import logging
+import socket
 
 logger = logging.getLogger("TubeWrangler")
+
+
+def _resolve_proxy_base_url(config) -> str:
+    """Resolve PROXY_BASE_URL. Se vazio, auto-detecta IP do host."""
+    configured = config.get_str("proxy_base_url").strip()
+    if configured:
+        return configured.rstrip("/")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        port = config.get_int("http_port")
+        return f"http://{ip}:{port}"
+    except Exception:
+        return f"http://localhost:{config.get_int('http_port')}"
 
 
 class ContentGenerator:
 
     def __init__(self, config: AppConfig = None):
         self._config = config
+        self.config = config
 
     @staticmethod
     def is_live(stream: dict) -> bool:
@@ -140,7 +157,13 @@ class M3UGenerator(ContentGenerator):
         super().__init__(config)
 
     def generate_playlist(
-        self, streams: list, categories_db: dict, playlist_type: str
+        self,
+        streams: list,
+        categories_db: dict,
+        mode: str,
+        mode_type: str = "direct",
+        thumbnail_manager=None,
+        proxy_base_url: str = "",
     ) -> str:
         # LÓGICA DO VOD:
         # Streams VOD não são buscados diretamente.
@@ -148,13 +171,16 @@ class M3UGenerator(ContentGenerator):
         # A playlist VOD filtra streams já em memória com actualendtimeutc.
         # NÃO buscar VOD na API — apenas filtrar os existentes.
 
-        if playlist_type == "live":
+        if mode == "upcoming" and mode_type == "direct":
+            raise ValueError("upcoming nunca pode ser modo direct")
+
+        if mode == "live":
             filtered = [s for s in streams if ContentGenerator.is_live(s)]
 
-        elif playlist_type == "upcoming":
+        elif mode == "upcoming":
             filtered = self.filter_streams(streams, "upcoming")
 
-        elif playlist_type == "vod":
+        elif mode == "vod":
             keep = self._config.get_bool("keep_recorded_streams")
             if not keep:
                 logger.debug("M3U [vod]: keep_recorded_streams=false, pulando")
@@ -183,21 +209,41 @@ class M3UGenerator(ContentGenerator):
             filtered = streams
 
         lines = ["#EXTM3U"]
+        base_url = proxy_base_url.rstrip("/") if proxy_base_url else ""
+
         for s in filtered:
             vid      = s.get("videoid", "")
             title    = self.get_display_title(s)
-            channel  = s.get("channelname", "")
             thumb    = s.get("thumbnailurl", "")
             cat_id   = s.get("categoryoriginal", "")
-            category = self.get_display_category(str(cat_id), categories_db)
-            url      = s.get("watchurl") or f"https://www.youtube.com/watch?v={vid}"
+            category = self.get_display_category(cat_id, categories_db)
+
+            if mode_type == "proxy":
+                url = f"{base_url}/api/player/{vid}" if base_url else f"/api/player/{vid}"
+                logo = (
+                    thumbnail_manager.get_url(vid, base_url)
+                    if thumbnail_manager and base_url
+                    else (f"{base_url}/api/thumbnail/{vid}" if base_url else f"/api/thumbnail/{vid}")
+                )
+            else:
+                url = s.get("watchurl") or f"https://youtube.com/watch?v={vid}"
+                logo = thumb
+
             lines.append(
                 f'#EXTINF:-1 tvg-id="{vid}" tvg-name="{title}" '
-                f'tvg-logo="{thumb}" group-title="{channel}",{title}'
+                f'tvg-logo="{logo}" group-title="{category}",{title}'
             )
             lines.append(url)
 
-        logger.debug(f"M3U [{playlist_type}]: {len(filtered)} entradas geradas")
+        if not filtered and self._config.get_bool("use_invisible_placeholder"):
+            placeholder_id = f"PLACEHOLDER_{mode.upper()}"
+            placeholder_url = "https://placeholder_url"
+            lines.append(
+                f'#EXTINF:-1 tvg-id="{placeholder_id}" tvg-name="" tvg-logo="" group-title="",'
+            )
+            lines.append(placeholder_url)
+
+        logger.debug(f"M3U [{mode}/{mode_type}]: {len(filtered)} entradas geradas")
         return "\n".join(lines)
 
 

@@ -132,3 +132,5 @@ Legenda: ⬜ Pendente | ⏳ Em progresso | ✅ Concluído | 🔴 Bloqueado
 - [2026-02-26] Etapa 6: Build de produção na main validado, container saudável (Health: healthy), rota principal acessível (HTTP 200 OK). Persistência e integração confirmadas. Todos os testes e rotas continuam OK após restart.
 
 - [2026-02-26] Etapa 9: Revisão final de migração concluída. Suíte completa de testes passou (pytest 100%). Nenhuma referência a os.getenv, load_dotenv, Flask ou import Flask encontrada em core/, web/ ou smart_player.py. Todos os módulos principais importáveis. Projeto pronto para arquivamento e commit final.
+
+- [2026-02-27] RETROFIT v1.0 (proxy auto-detect): `_resolve_proxy_base_url` validado no container com resultado `http://172.18.0.2:8888`. Decisão: manter `PROXY_BASE_URL` vazio para auto-detect neste ambiente.
