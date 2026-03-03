@@ -1,0 +1,13 @@
+.git
+.github
+__pycache__/
+**/__pycache__/
+
+data/
+DOC/
+core/DOC/
+*.db
+*.log
+*.log.*
+.env
+.sesskey

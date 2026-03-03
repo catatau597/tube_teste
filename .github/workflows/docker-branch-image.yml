@@ -18,6 +18,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Block DOC folder on main
+        if: github.ref_name == 'main'
+        shell: bash
+        run: |
+          if [ -d "DOC" ] || [ -d "core/DOC" ]; then
+            echo "Erro: pasta DOC deve existir apenas na branch dev."
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
