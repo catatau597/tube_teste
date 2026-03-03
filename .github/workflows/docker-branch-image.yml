@@ -43,11 +43,9 @@ jobs:
         run: |
           REPO_LC="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           BRANCH="${GITHUB_REF_NAME}"
-          SHA_SHORT="${GITHUB_SHA::7}"
 
           echo "image=ghcr.io/${REPO_LC}" >> "$GITHUB_OUTPUT"
           echo "tag_branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "tag_branch_sha=${BRANCH}-${SHA_SHORT}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -56,4 +54,3 @@ jobs:
           push: true
           tags: |
             ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.tag_branch }}
-            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.tag_branch_sha }}
