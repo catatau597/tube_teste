@@ -134,3 +134,7 @@ Legenda: ⬜ Pendente | ⏳ Em progresso | ✅ Concluído | 🔴 Bloqueado
 - [2026-02-26] Etapa 9: Revisão final de migração concluída. Suíte completa de testes passou (pytest 100%). Nenhuma referência a os.getenv, load_dotenv, Flask ou import Flask encontrada em core/, web/ ou smart_player.py. Todos os módulos principais importáveis. Projeto pronto para arquivamento e commit final.
 
 - [2026-02-27] RETROFIT v1.0 (proxy auto-detect): `_resolve_proxy_base_url` validado no container com resultado `http://172.18.0.2:8888`. Decisão: manter `PROXY_BASE_URL` vazio para auto-detect neste ambiente.
+
+- [2026-02-28] SmartPlayer/Player Fase 1 (implementação cirúrgica em `web/main.py`): removido bloqueio síncrono de resolução VOD no caminho da rota `/api/player/{video_id}` para status `none`. A resolução de URL (`yt-dlp --get-url`) agora é assíncrona com timeout de 20s, sem travar o event loop. Em falha/timeout da resolução, aplicado fallback garantido em MPEG-TS via pipeline `yt-dlp | ffmpeg -c copy -f mpegts pipe:1` (mantendo `media_type=video/mp2t`). Não houve alteração estrutural em outros módulos de player nesta fase.
+
+- [2026-02-28] Validação de testes após Fase 1 (container, sem dependência de porta): `docker compose run --rm tubewranglerr pytest -q` → **31 passed in 1.87s**.

@@ -4,6 +4,7 @@ import collections
 import logging
 import os
 import re
+import shlex
 from pathlib import Path
 
 from fasthtml.common import *
@@ -416,24 +417,82 @@ async def api_player_stream(request):
     if local_thumb.exists():
         thumb_for_ph = str(local_thumb) 
 
-    cmd, temp_files = build_player_command(
-        video_id=video_id,
-        status=status,
-        watch_url=watch_url,
-        thumbnail_url=thumb_for_ph,
-        user_agent=user_agent,
-        font_path=FONT_PATH,
-        texts_cache_path=TEXTS_CACHE_PATH,
-    )
-
     async def stream_gen():
+        proc_logger = logging.getLogger("TubeWrangler.player")
+        temp_files = []
+
+        async def _resolve_vod_url() -> str:
+            try:
+                resolve_proc = await asyncio.create_subprocess_exec(
+                    "yt-dlp",
+                    "-f", "b",
+                    "--get-url",
+                    "--no-playlist",
+                    "--user-agent", user_agent,
+                    watch_url,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                out, err = await asyncio.wait_for(resolve_proc.communicate(), timeout=20)
+                if resolve_proc.returncode != 0:
+                    if err:
+                        proc_logger.warning(
+                            f"[{video_id}] yt-dlp --get-url falhou rc={resolve_proc.returncode}: "
+                            f"{err.decode('utf-8', errors='replace').strip()}"
+                        )
+                    return ""
+                text = out.decode("utf-8", errors="replace").strip()
+                return text.splitlines()[0] if text else ""
+            except asyncio.TimeoutError:
+                try:
+                    resolve_proc.kill()
+                    await resolve_proc.wait()
+                except Exception:
+                    pass
+                proc_logger.warning(f"[{video_id}] yt-dlp --get-url timeout (20s)")
+                return ""
+            except Exception as e:
+                proc_logger.warning(f"[{video_id}] erro resolvendo URL VOD: {e}")
+                return ""
+
+        if status == "none":
+            cdn_url = await _resolve_vod_url()
+            if cdn_url:
+                cmd = [
+                    "ffmpeg", "-loglevel", "error",
+                    "-headers", f"User-Agent: {user_agent}\r\n",
+                    "-i", cdn_url,
+                    "-c", "copy",
+                    "-f", "mpegts",
+                    "pipe:1",
+                ]
+            else:
+                q_ua = shlex.quote(user_agent)
+                q_url = shlex.quote(watch_url)
+                fallback_cmd = (
+                    "set -o pipefail; "
+                    f"yt-dlp -f b -o - --no-playlist --user-agent {q_ua} {q_url} "
+                    "| ffmpeg -loglevel error -i pipe:0 -c copy -f mpegts pipe:1"
+                )
+                cmd = ["bash", "-lc", fallback_cmd]
+                proc_logger.info(f"[{video_id}] usando fallback yt-dlp|ffmpeg")
+        else:
+            cmd, temp_files = build_player_command(
+                video_id=video_id,
+                status=status,
+                watch_url=watch_url,
+                thumbnail_url=thumb_for_ph,
+                user_agent=user_agent,
+                font_path=FONT_PATH,
+                texts_cache_path=TEXTS_CACHE_PATH,
+            )
+
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             limit=1024 * 1024,
         )
-        proc_logger = logging.getLogger("TubeWrangler.player")
 
         async def _log_stderr():
             try:

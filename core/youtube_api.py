@@ -19,16 +19,18 @@ logger = logging.getLogger("TubeWrangler")
 
 class YouTubeAPI:
     def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.youtube = build(
-            "youtube", 
-            "v3", 
-            developerKey=api_key,
-            static_discovery=False,  # ← dentro dos parênteses do build()
-        )
+        self.api_key = (api_key or "").strip()
+        self.youtube = None
+        if self.api_key:
+            self.youtube = build("youtube", "v3", developerKey=self.api_key)
+        else:
+            logger.warning("YouTube API key ausente. API desativada ate configuracao no /config.")
         self.uploads_cache: dict = {}
 
     def resolve_channel_handles_to_ids(self, handles: List[str], state) -> Dict[str, str]:
+        if not self.youtube:
+            logger.warning("resolve_channel_handles_to_ids ignorado: YouTube API desativada (sem key).")
+            return {}
         resolved_this_run = {}
         logger.info(f"Resolvendo {len(handles)} handles de canais para IDs... (usando cache quando possível)")
         now = datetime.now(timezone.utc)
@@ -69,6 +71,9 @@ class YouTubeAPI:
         return resolved_this_run
 
     def ensure_channel_titles(self, target_channel_ids: Set[str], state) -> Dict[str, str]:
+        if not self.youtube:
+            logger.warning("ensure_channel_titles ignorado: YouTube API desativada (sem key).")
+            return {cid: state.channels.get(cid, "Título não encontrado") for cid in target_channel_ids if cid in state.channels}
         ids_without_title = {cid for cid in target_channel_ids if cid not in state.channels or not state.channels[cid]}
         if not ids_without_title:
             logger.debug("Todos os IDs de canal alvo já possuem títulos no estado.")
@@ -103,6 +108,9 @@ class YouTubeAPI:
         return final_channels_dict
 
     def fetch_streams_by_ids(self, video_ids: List[str], channels_dict: Dict[str, str]) -> List[Dict[str, Any]]:
+        if not self.youtube:
+            logger.warning("fetch_streams_by_ids ignorado: YouTube API desativada (sem key).")
+            return []
         if not video_ids:
             return []
         data = []
@@ -120,6 +128,9 @@ class YouTubeAPI:
         return data
 
     def fetch_all_streams_for_channels(self, channels_dict: Dict[str, str], published_after: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not self.youtube:
+            logger.warning("fetch_all_streams_for_channels ignorado: YouTube API desativada (sem key).")
+            return []
         ids = set()
         logger.info(f"Buscando streams [search.list] para {len(channels_dict)} canais (publishedAfter={published_after})...")
         for cid in channels_dict.keys():
@@ -157,6 +168,9 @@ class YouTubeAPI:
         stale_hours: int = 6,
         max_schedule_hours: int = 72,
     ) -> List[Dict[str, Any]]:
+        if not self.youtube:
+            logger.warning("fetch_all_streams_for_channels_using_playlists ignorado: YouTube API desativada (sem key).")
+            return []
         ids = set()
         logger.info(f"Buscando streams [playlistItems] para {len(channels_dict)} canais (publishedAfter={published_after})...")
         published_after_dt = None
