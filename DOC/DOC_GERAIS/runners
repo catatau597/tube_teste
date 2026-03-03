@@ -1,0 +1,108 @@
+
+O SmartPlayer é o único ponto de entrada
+text
+HTTP /stream/:videoId → SmartPlayer.serveVideo()
+  → resolveProfile() (streamlink + yt-dlp + ffmpeg separados)
+  → readStateCache() → decide qual runner usar
+  → await runX() → BLOQUEIA até processo morrer
+await runX() bloqueia a função inteira — cada cliente tem sua própria Promise nunca compartilhada. Com o tee do registry, isso muda fundamentalmente.
+
+Bugs identificados nos 3 runners
+Bug universal — detached: true + process.kill(-pid):
+
+ts
+// Todos os 3 runners fazem isso:
+spawn('ffmpeg', args, { detached: true })
+
+// E killam assim:
+process.kill(-proc.pid, 'SIGTERM')  // ← kill do process GROUP
+// Em Docker sem PID namespace = EPERM silencioso
+// proc.killed não é atualizado → setTimeout do SIGKILL sempre dispara
+Bug yt-dlp — Python ignora SIGPIPE:
+
+ts
+ytDlpProc.stdout.pipe(ffmpegProc.stdin)
+// Quando ffmpeg fecha stdin → Python recebe SIGPIPE
+// Python tem signal.SIG_IGN para SIGPIPE por padrão
+// yt-dlp continua logando infinitamente
+Bug streamlink/ffmpeg-placeholder — sem watchdog:
+
+text
+Cliente fecha VLC → response.close → cleanup() → SIGTERM enviado
+↓ se SIGTERM falha silenciosamente (Docker) → processo órfão eterno
+↓ sem nenhum watchdog para detectar "ninguém está lendo"
+Arquitetura Proposta
+5 arquivos, 2 novos:
+text
+src/player/
+  ├── process-manager.ts    ← NOVO: ManagedProcess (kill limpo)
+  ├── stream-registry.ts    ← NOVO: registry + tee + watchdog
+  ├── smart-player.ts       ← REFACTOR: usa registry + coalescência
+  ├── ffmpeg-runner.ts      ← REWRITE: só cria processo, sem client mgmt
+  ├── streamlink-runner.ts  ← REWRITE: idem
+  └── ytdlp-runner.ts       ← REWRITE: resolve URL → retorna string[]
+process-manager.ts — kill sem detached
+text
+proc.kill('SIGTERM')          ← direto no processo, não no grupo
+await proc 'close' por 3s    ← aguarda com Promise.race
+se não morreu → proc.kill('SIGKILL')
+Sem detached: true → proc.kill() funciona garantido em qualquer container.
+
+stream-registry.ts — tee + watchdog
+text
+Map<videoId, StreamSession>
+
+StreamSession {
+  clients: Set<Response>
+  kill: () => Promise<void>
+  watchdog: Timer (30s)
+}
+
+broadcast(videoId, chunk):
+  → escreve para todos os clients
+  → remove os mortos automaticamente
+  → se clients.size === 0 → killSession()
+  → se > 0 → feedWatchdog() (reseta os 30s)
+smart-player.ts — coalescência de promises
+O problema do yt-dlp (resolução de URL é ~2s assíncrono): dois clientes chegando ao mesmo tempo → dois processos. Solução:
+
+text
+Map<videoId, Promise<void>>   ← "está sendo iniciado"
+Map<videoId, StreamSession>   ← "está ativo"
+
+serveVideo(videoId, res):
+  1. se ativo → addClient(res) → return  ← junta no stream existente
+  2. se iniciando → aguarda promise → addClient(res) → return  ← fila
+  3. se novo → cria Promise, registra em "iniciando"
+               → resolve URL (yt-dlp) ou spawn direto
+               → move para "ativo", adiciona todos os clientes em fila
+ytdlp-runner.ts — yt-dlp resolve URL, ffmpeg entrega
+Fluxo novo:
+
+text
+Fase 1: yt-dlp --print "%(url)s" -f "bestvideo+bestaudio/best" URL
+         ↑ processo vive ~2s e morre naturalmente ✅
+         ↓ retorna: ["https://video_url", "https://audio_url"]  ← 2 URLs (VOD)
+         ou         ["https://manifest.m3u8"]                   ← 1 URL (live/HLS)
+
+Fase 2: ffmpeg -i url1 [-i url2] -c copy -f mpegts pipe:1
+         ↑ ÚNICO processo vivo durante o stream ✅
+         ↓ stdout → broadcast → todos os clientes
+Sobre --print "%(url)s":
+
+1 linha = HLS manifest (live ou VOD com HLS) → ffmpeg -i url1
+
+2 linhas = video URL + audio URL separados (VOD mp4+m4a) → ffmpeg -i url1 -i url2 -c copy
+
+Ambos funcionam perfeitamente com ffmpeg
+
+Timeout de resolução: se yt-dlp travar na resolução (URL inválida, sem internet) → AbortController com 30s → mata o processo de resolução e retorna erro ao cliente.
+
+
+Resumo dos arquivos modificados
+text
+NOVOS:      process-manager.ts  stream-registry.ts
+REWRITE:    ffmpeg-runner.ts    streamlink-runner.ts  ytdlp-runner.ts
+REFACTOR:   smart-player.ts
+SEM TOQUE:  tool-profile-manager.ts  credentials-manager.ts
+            player.ts (rota HTTP)
