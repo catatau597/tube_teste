@@ -9,6 +9,7 @@ Exibe:
 
 from fasthtml.common import *
 from starlette.responses import Response
+from web.layout import _page_shell
 
 
 def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Response:
@@ -20,22 +21,13 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
         playlist_routes:  dict { nome: (mode, mode_type) }
         base_url:         URL base detectada pelo IP do browser (ex: http://192.168.1.10:8000)
     """
-    nav = Div(
-        A("Dashboard",      href="/",       style="margin-right:12px;"),
-        A("Proxy",          href="/proxy",  style="margin-right:12px; font-weight:bold;"),
-        A("Force Sync",     href="/force-sync", style="margin-right:12px;"),
-        A("Config",         href="/config", style="margin-right:12px;"),
-        A("Logs",           href="/logs"),
-        style="padding:8px 0 16px 0; border-bottom: 1px solid #ccc; margin-bottom:16px;",
-    )
 
     # -----------------------------------------------------------------------
-    # Secão 1: Tabela de playlists
+    # Seção 1: Tabela de playlists
     # -----------------------------------------------------------------------
     playlist_rows = []
     for name, (mode, mode_type) in playlist_routes.items():
         url = f"{base_url}/playlist/{name}"
-        proxy_url = f"{base_url}/api/proxy/" + "{video_id}"  # template informativo
         playlist_rows.append(Tr(
             Td(name, style="white-space:nowrap;"),
             Td(mode),
@@ -49,10 +41,10 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
     playlist_table = Div(
         H2("Playlists"),
         P(
-            f"IP detectado: ",
+            "IP detectado: ",
             Strong(base_url),
             " — Use esses links no seu player IPTV.",
-            style="font-size:0.9em;color:#888;",
+            cls="text-muted",
         ),
         Table(
             Thead(Tr(
@@ -62,32 +54,30 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
                 Th("Link"),
             )),
             Tbody(*playlist_rows),
-            style="font-size:0.9em;",
         ),
         style="margin-bottom:32px;",
     )
 
     # -----------------------------------------------------------------------
-    # Secão 2: Link do stream proxy por video_id
+    # Seção 2: Info do proxy
     # -----------------------------------------------------------------------
     proxy_info = Div(
         H2("Streaming Proxy"),
         P(
             "Para assistir um stream via proxy use:",
             Br(),
-            Code(f"{base_url}/api/proxy/", Strong("VIDEO_ID")),
-            style="font-size:0.9em;",
+            Code(f"{base_url}/api/proxy/"), Strong("VIDEO_ID"),
         ),
         P(
             "O proxy inicia o processo automaticamente na primeira conexão "
             "e para o processo 30s após o último cliente sair.",
-            style="font-size:0.85em;color:#888;",
+            cls="text-muted",
         ),
         style="margin-bottom:32px;",
     )
 
     # -----------------------------------------------------------------------
-    # Secão 3: Tabela de streams ativos (polling JS)
+    # Seção 3: Tabela de streams ativos (polling JS)
     # -----------------------------------------------------------------------
     active_streams = Div(
         H2("Streams Proxy Ativos"),
@@ -96,9 +86,10 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
                 "Atualizar",
                 id="btn-refresh",
                 type="button",
+                cls="btn-secondary",
                 style="margin-right:8px;font-size:0.85em;",
             ),
-            Span(id="last-update", style="font-size:0.8em;color:#888;"),
+            Span(id="last-update", style="font-size:0.8em;color:#8b949e;"),
             style="margin-bottom:8px;",
         ),
         Div(
@@ -113,9 +104,8 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
                     Th("Ação"),
                 )),
                 Tbody(id="proxy-table-body"),
-                style="font-size:0.88em;",
             ),
-            P("Nenhum stream proxy ativo.", id="no-streams-msg", style="color:#888;"),
+            P("Nenhum stream proxy ativo.", id="no-streams-msg", cls="text-muted"),
             id="proxy-table-wrapper",
         ),
         style="margin-bottom:32px;",
@@ -127,8 +117,8 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
     js = Script("""
         function statusBadge(alive) {
             const s = document.createElement('span');
+            s.className = alive ? 'badge badge-live' : 'badge badge-none';
             s.textContent = alive ? '\u2705 ativo' : '\u274c parado';
-            s.style.color = alive ? '#4c4' : '#f44';
             return s.outerHTML;
         }
 
@@ -150,7 +140,7 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
                     <td>${s.buffer_index} (${s.buffer_chunks} no deque)</td>
                     <td>${s.buffer_mb}</td>
                     <td>${s.clients}</td>
-                    <td>${s.process_pid || '—'}</td>
+                    <td>${s.process_pid || '\u2014'}</td>
                     <td>${statusBadge(s.process_alive)}</td>
                     <td>
                         <button onclick="stopStream('${s.video_id}')"
@@ -185,15 +175,12 @@ def proxy_dashboard_page(request, playlist_routes: dict, base_url: str) -> Respo
         }
 
         document.getElementById('btn-refresh').onclick = fetchStatus;
-
-        // Polling a cada 2s
         fetchStatus();
         setInterval(fetchStatus, 2000);
     """)
 
-    return Titled(
-        "Proxy Dashboard — TubeWrangler",
-        nav,
+    return _page_shell(
+        "Proxy Dashboard", "proxy",
         playlist_table,
         proxy_info,
         active_streams,
