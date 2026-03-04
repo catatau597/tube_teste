@@ -24,6 +24,7 @@ from core.scheduler import Scheduler
 from core.state_manager import StateManager
 from core.thumbnail_manager import ThumbnailManager
 from core.youtube_api import YouTubeAPI
+from web.routes.proxy_dashboard import proxy_dashboard_page
 
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -205,9 +206,17 @@ def _serialize_stream(s: dict) -> dict:
     return data
 
 
+def _get_base_url(request) -> str:
+    """Detecta URL base usando o IP do browser (respeita X-Forwarded-For)."""
+    client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
+    port      = request.url.port or 8000
+    return f"http://{client_ip}:{port}"
+
+
 def _nav():
     return Div(
         A("Dashboard",  href="/",           style="margin-right:12px;"),
+        A("Proxy",      href="/proxy",      style="margin-right:12px;"),
         A("Force Sync", href="/force-sync", style="margin-right:12px;"),
         A("Config",     href="/config",     style="margin-right:12px;"),
         A("Logs",       href="/logs"),
@@ -275,11 +284,6 @@ def home(request: Request):
     streams  = _state.get_all_streams() if _state else []
     channels = _state.get_all_channels() if _state else {}
 
-    # Detecta IP do cliente (browser que esta acessando)
-    client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
-    port      = request.url.port or 8000
-    base_url  = f"http://{client_ip}:{port}"
-
     rows = []
     for s in streams:
         vid      = s.get("videoid", "")
@@ -297,37 +301,27 @@ def home(request: Request):
             Td(A("\u25b6", href=url, target="_blank")),
         ))
 
-    # Tabela de playlists com links usando IP do browser
-    playlist_rows = []
-    for name, (mode, mode_type) in _PLAYLIST_ROUTES.items():
-        playlist_url = f"{base_url}/playlist/{name}"
-        playlist_rows.append(Tr(
-            Td(name),
-            Td(mode),
-            Td(mode_type),
-            Td(
-                A(playlist_url, href=playlist_url, target="_blank",
-                  style="font-size:0.82em;word-break:break-all;"),
-            ),
-        ))
-
     channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
     return Titled(
         "TubeWrangler",
         _nav(),
         H2("Canais monitorados"),
         Ul(*channel_items) if channel_items else P("Nenhum canal."),
-        H2("Playlists"),
-        Table(
-            Thead(Tr(Th("Arquivo"), Th("Modo"), Th("Tipo"), Th("Link"))),
-            Tbody(*playlist_rows),
-            style="font-size:0.9em;",
-        ),
         H2(f"Streams ({len(streams)})"),
+        P(A("Ver Playlists e Proxy →", href="/proxy"), style="font-size:0.9em;"),
         Table(
             Thead(Tr(Th("Canal"), Th("Evento"), Th("Status"), Th("Categoria"), Th(""))),
             Tbody(*rows),
         ),
+    )
+
+
+@app.get("/proxy")
+def proxy_page(request: Request):
+    return proxy_dashboard_page(
+        request=request,
+        playlist_routes=_PLAYLIST_ROUTES,
+        base_url=_get_base_url(request),
     )
 
 
@@ -472,7 +466,7 @@ def api_epg():
 
 
 # ---------------------------------------------------------------------------
-# API — proxy status
+# API — proxy status e controle
 # ---------------------------------------------------------------------------
 
 @app.get("/api/proxy/status")
@@ -560,15 +554,15 @@ async def api_proxy_stream(request):
     mgr.add_client(client_id, client_ip, user_agent)
 
     async def generate():
-        local_index     = max(0, buf.index - 10)   # comeca 10 chunks atras
-        bytes_sent      = 0
-        last_yield_time = time.monotonic()
+        local_index       = max(0, buf.index - 10)
+        bytes_sent        = 0
+        last_yield_time   = time.monotonic()
         consecutive_empty = 0
 
         try:
             while True:
-                # Processo morreu e buffer inativo
-                if not is_stream_active(video_id) and not _buffers.get(video_id):
+                # Processo morreu e buffer foi removido
+                if not is_stream_active(video_id) and video_id not in _buffers:
                     logger.warning(f"[{video_id}][{client_id}] stream encerrado, saindo")
                     break
 
@@ -584,18 +578,15 @@ async def api_proxy_stream(request):
                     mgr.update_activity(client_id, bytes_sent)
                 else:
                     consecutive_empty += 1
-                    sleep_s = min(0.05 * consecutive_empty, 1.0)
-                    await asyncio.sleep(sleep_s)
+                    await asyncio.sleep(min(0.05 * consecutive_empty, 1.0))
 
-                    # Timeout sem dados
                     if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                         logger.warning(f"[{video_id}][{client_id}] timeout {CLIENT_TIMEOUT_S}s sem dados")
                         break
 
-                    # Cliente muito atrasado: pula para frente
                     if buf.index - local_index > 100:
                         logger.warning(f"[{video_id}][{client_id}] cliente atrasado, pulando para frente")
-                        local_index = max(0, buf.index - 10)
+                        local_index       = max(0, buf.index - 10)
                         consecutive_empty = 0
 
         except asyncio.CancelledError:
@@ -604,8 +595,6 @@ async def api_proxy_stream(request):
             logger.error(f"[{video_id}][{client_id}] erro no generator: {exc}")
         finally:
             remaining = mgr.remove_client(client_id)
-
-            # Agenda parada do stream se nao ha mais clientes
             if remaining == 0:
                 async def _delayed_stop():
                     await asyncio.sleep(STREAM_IDLE_STOP_S)
@@ -630,11 +619,7 @@ app.routes.append(Route("/api/proxy/{video_id}", endpoint=api_proxy_stream))
 # ---------------------------------------------------------------------------
 
 async def api_player_stream(request):
-    """Handler de streaming MPEG-TS para /api/player/{video_id}.
-
-    Delega toda a logica de comando para build_player_command_async(),
-    que e a unica fonte de verdade para todos os status (live, none, placeholder).
-    """
+    """Handler de streaming MPEG-TS para /api/player/{video_id}."""
     video_id   = request.path_params["video_id"]
     user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
 
