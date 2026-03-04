@@ -358,7 +358,7 @@ def home(request: Request):
             Td(Code(vid)),
             Td(Span(status, cls=badge_cls)),
             Td(cat_cell),
-            Td(A("▶", href=url, target="_blank")),
+            Td(A("\u25b6", href=url, target="_blank")),
         ))
 
     channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
@@ -512,12 +512,68 @@ def config_filters(saved: str = ""):
             ),
         )
 
+    # JS para tags interativas — definido FORA do Form para evitar
+    # positional-after-keyword no FastHTML
+    tags_js = Script("""
+        function _syncHidden(hiddenName) {
+            const container = document.getElementById('tags_' + hiddenName);
+            const hidden    = document.getElementById('hidden_' + hiddenName);
+            const texts = Array.from(container.querySelectorAll('.tag-text'))
+                               .map(el => el.textContent.trim())
+                               .filter(Boolean);
+            hidden.value = texts.join(',');
+        }
+
+        function removeTag(btn, hiddenName) {
+            btn.closest('.tag').remove();
+            _syncHidden(hiddenName);
+        }
+
+        function addTag(inputId, hiddenName) {
+            const inp = document.getElementById('input_' + inputId);
+            const val = inp.value.trim();
+            if (!val) return;
+            const container = document.getElementById('tags_' + hiddenName);
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.innerHTML = `<span class="tag-text">${val}</span>`
+                          + `<button class="remove-tag" type="button"
+                              onclick="removeTag(this,'${hiddenName}')">\\u00d7</button>`;
+            container.appendChild(tag);
+            inp.value = '';
+            _syncHidden(hiddenName);
+        }
+
+        // Enter no input também adiciona
+        document.querySelectorAll('[id^="input_"]').forEach(inp => {
+            inp.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const hiddenName = inp.id.replace('input_new_', '');
+                    addTag(inp.id.replace('input_', ''), hiddenName);
+                }
+            });
+        });
+
+        // Checkboxes: quando desmarcado, envia "false"
+        document.querySelectorAll('form input[type=checkbox]').forEach(cb => {
+            const form = cb.closest('form');
+            form.addEventListener('submit', () => {
+                if (!cb.checked) {
+                    const hidden = document.createElement('input');
+                    hidden.type  = 'hidden';
+                    hidden.name  = cb.name;
+                    hidden.value = 'false';
+                    form.appendChild(hidden);
+                }
+            });
+        });
+    """)
+
     return _page_shell(
         "Filtros", "config_filters",
         alert,
         Form(
-            method="post", action="/config/filters",
-
             # ---- 1. Categoria ----
             Div(
                 H2("Filtro de Categoria"),
@@ -546,9 +602,7 @@ def config_filters(saved: str = ""):
             Div(
                 H2("Filtro de Shorts"),
                 P(
-                    "Shorts com ",
-                    Strong("duração conhecida"),
-                    " são bloqueados pelo campo de segundos. ",
+                    "Shorts com duração conhecida são bloqueados pelo campo de segundos. "
                     "Para upcoming/live (duração ainda desconhecida), use palavras-chave.",
                     cls="text-muted",
                 ),
@@ -646,64 +700,10 @@ def config_filters(saved: str = ""):
                 Button("Salvar filtros", type="submit"),
                 style="margin-top:8px;",
             ),
+            method="post",
+            action="/config/filters",
         ),
-
-        # JS para tags interativas
-        Script("""
-            function _syncHidden(hiddenName) {
-                const container = document.getElementById('tags_' + hiddenName);
-                const hidden    = document.getElementById('hidden_' + hiddenName);
-                const texts = Array.from(container.querySelectorAll('.tag-text'))
-                                   .map(el => el.textContent.trim())
-                                   .filter(Boolean);
-                hidden.value = texts.join(',');
-            }
-
-            function removeTag(btn, hiddenName) {
-                btn.closest('.tag').remove();
-                _syncHidden(hiddenName);
-            }
-
-            function addTag(inputId, hiddenName) {
-                const inp = document.getElementById('input_' + inputId);
-                const val = inp.value.trim();
-                if (!val) return;
-                const container = document.getElementById('tags_' + hiddenName);
-                const tag = document.createElement('span');
-                tag.className = 'tag';
-                tag.innerHTML = `<span class="tag-text">${val}</span>`
-                              + `<button class="remove-tag" type="button"
-                                  onclick="removeTag(this,'${hiddenName}')">\u00d7</button>`;
-                container.appendChild(tag);
-                inp.value = '';
-                _syncHidden(hiddenName);
-            }
-
-            // Enter no input também adiciona
-            document.querySelectorAll('[id^="input_"]').forEach(inp => {
-                inp.addEventListener('keydown', e => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const hiddenName = inp.id.replace('input_new_', '');
-                        addTag(inp.id.replace('input_', ''), hiddenName);
-                    }
-                });
-            });
-
-            // Checkboxes: quando desmarcado, envia "false"
-            document.querySelectorAll('form input[type=checkbox]').forEach(cb => {
-                const form = cb.closest('form');
-                form.addEventListener('submit', () => {
-                    if (!cb.checked) {
-                        const hidden = document.createElement('input');
-                        hidden.type  = 'hidden';
-                        hidden.name  = cb.name;
-                        hidden.value = 'false';
-                        form.appendChild(hidden);
-                    }
-                });
-            });
-        """),
+        tags_js,
     )
 
 
@@ -713,7 +713,6 @@ async def config_filters_save(req):
     if not _config:
         return RedirectResponse("/config/filters", status_code=303)
 
-    # Checkboxes não enviados = false
     bool_keys = [
         "filter_by_category",
         "prefix_title_with_channel_name",
@@ -1141,7 +1140,6 @@ async def api_logs_level_set(req):
 def logs_page():
     current_level = logging.getLevelName(logging.getLogger().level)
 
-    # Painel de controle de logging (colapsável)
     logging_panel = Div(
         Details(
             Summary(
@@ -1182,7 +1180,6 @@ def logs_page():
         style="margin-bottom:16px;",
     )
 
-    # Controles de visão
     controls = Div(
         Select(
             Option("DEBUG",   value="DEBUG"),
@@ -1264,7 +1261,6 @@ def logs_page():
                 output.querySelectorAll('span').forEach(applyVisibility);
             };
 
-            // --- Controle de nível de log ---
             function setLogLevel(level) {
                 fetch('/api/logs/level', {
                     method: 'POST',
@@ -1276,7 +1272,7 @@ def logs_page():
                     if (d.ok) {
                         document.getElementById('current-level-badge').textContent = d.level;
                         document.getElementById('level-feedback').textContent =
-                            '\u2705 Nível alterado para ' + d.level;
+                            '\\u2705 Nível alterado para ' + d.level;
                         document.querySelectorAll('[id^="btn-level-"]').forEach(b => {
                             b.style.borderColor = '';
                             b.style.color = '';
@@ -1287,7 +1283,7 @@ def logs_page():
                     }
                 })
                 .catch(() => {
-                    document.getElementById('level-feedback').textContent = '\u274c Erro ao alterar nível.';
+                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao alterar nível.';
                     document.getElementById('level-feedback').style.color = '#f85149';
                 });
             }
