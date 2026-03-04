@@ -83,7 +83,8 @@ DEFAULTS: dict = {
     "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
     # --- Logs (1) ---
-    "log_level":                     ("INFO", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
+    # DEBUG por padrão para capturar erros de streamlink/ffmpeg durante desenvolvimento
+    "log_level":                     ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
 }
 
 

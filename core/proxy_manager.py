@@ -194,7 +194,11 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
         bufsize=0,
     )
     _processes[video_id] = process
-    logger.info(f"[{video_id}] processo iniciado  PID={process.pid}  cmd={' '.join(cmd[:4])}...")
+
+    # Log do comando completo para facilitar debug
+    cmd_str = " ".join(cmd)
+    logger.info(f"[{video_id}] processo iniciado  PID={process.pid}")
+    logger.debug(f"[{video_id}] cmd completo: {cmd_str}")
 
     # Thread: lê stdout → buffer
     def _read_stdout() -> None:
@@ -211,7 +215,7 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
             buf.active = False
             logger.info(f"[{video_id}] stdout encerrado (index={buf.index})")
 
-    # Thread: loga stderr
+    # Thread: loga TODO o stderr em INFO (não só erros)
     def _read_stderr() -> None:
         try:
             for raw in process.stderr:
@@ -219,12 +223,12 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
                 if not line:
                     continue
                 low = line.lower()
-                if "error" in low or "fail" in low:
+                if any(kw in low for kw in ("error", "fail", "fatal", "invalid", "no playable", "unable")):
                     logger.warning(f"[{video_id}] stderr: {line}")
                 else:
-                    logger.debug(f"[{video_id}] stderr: {line}")
-        except Exception:
-            pass
+                    logger.info(f"[{video_id}] stderr: {line}")
+        except Exception as exc:
+            logger.debug(f"[{video_id}] stderr thread encerrada: {exc}")
 
     threading.Thread(target=_read_stdout, daemon=True, name=f"stdout-{video_id}").start()
     threading.Thread(target=_read_stderr, daemon=True, name=f"stderr-{video_id}").start()
