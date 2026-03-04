@@ -220,7 +220,8 @@ class M3UGenerator(ContentGenerator):
             category = self.get_display_category(cat_id, categories_db)
 
             if mode_type == "proxy":
-                url = f"{base_url}/api/player/{vid}" if base_url else f"/api/player/{vid}"
+                # /api/proxy/{vid} — buffer compartilhado, suporta N clientes
+                url = f"{base_url}/api/proxy/{vid}" if base_url else f"/api/proxy/{vid}"
                 logo = (
                     thumbnail_manager.get_url(vid, base_url)
                     if thumbnail_manager and base_url
