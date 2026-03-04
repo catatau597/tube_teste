@@ -20,6 +20,14 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger("TubeWrangler.player_router")
 
+
+class GeoBlockedError(Exception):
+    """Levantada quando yt-dlp detecta bloqueio geografico (retorna HTTP 451).
+
+    Mensagem contém a watch_url do vídeo bloqueado para facilitar logging.
+    """
+
+
 # User-Agent Edge moderno — usado para ffmpeg, yt-dlp e placeholder.
 # NAO e passado ao streamlink: o plugin YouTube >=8.1.2 usa useragents.CHROME
 # internamente para o POST em youtubei/v1/player (clientName=ANDROID).
@@ -53,7 +61,7 @@ def _escape_ffmpeg_text(text: str) -> str:
 
     Exemplos:
         >>> _escape_ffmpeg_text("50% off: vale 'isso'")
-        "50\\% off\\: vale \'isso\'"
+        "50\\% off\\: vale \\'isso\\'"
     """
     text = text.replace("\\", "\\\\")  # \ -> \\\\
     text = text.replace("'", "\\'")    # ' -> \'
@@ -120,6 +128,13 @@ def build_live_hls_ffmpeg_cmd(
     Confirmado em testes (log novo-28.txt): yt-dlp -g retorna HLS muxado
     de manifest.googlevideo.com com itag/96, 1920x1080, H264+AAC.
 
+    -re: essencial para live streams — lê segmentos HLS a velocidade real
+    (1x). Sem -re, ffmpeg baixa todos os segmentos disponíveis no DVR de uma
+    vez (velocidade de rede >> velocidade de reprodução), inundando o ring
+    buffer antes do cliente conectar e causando "cliente atrasado" em loop.
+    Com -re, o buffer cresce a ~1x, o cliente conecta próximo ao live edge
+    e não há skips de segmento.
+
     Flags de reconnect garantem resiliencia durante o live:
     - -reconnect 1: reconecta se a conexao cair (HTTP drops).
     - -reconnect_streamed 1: reconecta em streams HLS/DASH ja iniciados.
@@ -134,6 +149,7 @@ def build_live_hls_ffmpeg_cmd(
     """
     return [
         "ffmpeg", "-loglevel", "error",
+        "-re",                           # lê HLS a 1x — impede buffer overflow no live
         "-user_agent", user_agent,
         "-reconnect", "1",
         "-reconnect_streamed", "1",
@@ -351,6 +367,10 @@ async def resolve_vod_url_async(
     Nao bloqueia o event loop. Em timeout ou falha retorna string vazia,
     e o chamador deve usar build_vod_cmd(cdn_url="") para acionar o fallback.
 
+    Levanta GeoBlockedError se yt-dlp reportar bloqueio geografico.
+    O chamador deve capturar GeoBlockedError e retornar HTTP 451 ao cliente,
+    sem tentativa de retry (o bloqueio e permanente e determinístico).
+
     Flags utilizadas:
     - --js-runtimes node: usa Node.js instalado no container para executar
       o JS player do YouTube, evitando o warning de JS runtime e garantindo
@@ -364,6 +384,9 @@ async def resolve_vod_url_async(
 
     Returns:
         URL CDN como string, ou "" em falha/timeout.
+
+    Raises:
+        GeoBlockedError: quando yt-dlp detecta bloqueio geografico.
     """
     proc = None
     try:
@@ -384,9 +407,19 @@ async def resolve_vod_url_async(
             logger.warning(
                 f"[resolve_vod] yt-dlp falhou rc={proc.returncode} url={watch_url} | {err_msg[:200]}"
             )
+            # Geo-block: erro permanente e determinístico — não tenta fallback.
+            # yt-dlp reporta: "The uploader has not made this video available in your country"
+            if "not available in your country" in err_msg.lower():
+                logger.warning(
+                    f"[resolve_vod] geo-block detectado para {watch_url} — levantando GeoBlockedError"
+                )
+                raise GeoBlockedError(watch_url)
             return ""
         text = out.decode("utf-8", errors="replace").strip()
         return text.splitlines()[0] if text else ""
+
+    except GeoBlockedError:
+        raise  # repropaga sem envolver em outro except
 
     except asyncio.TimeoutError:
         logger.warning(f"[resolve_vod] timeout ({timeout}s) para {watch_url}")
@@ -473,6 +506,10 @@ async def build_player_command_async(
 
     Para status=none resolve a URL CDN via resolve_vod_url_async() sem bloquear
     o event loop. Para os demais status delega ao build_player_command() sincrono.
+
+    Raises:
+        GeoBlockedError: propagada de resolve_vod_url_async() quando o video
+            esta geo-bloqueado. O chamador deve retornar HTTP 451.
 
     Args: idem build_player_command().
 
