@@ -17,6 +17,7 @@ from core.player_router import build_player_command_async
 from core.playlist_builder import M3UGenerator, XMLTVGenerator, _resolve_proxy_base_url
 from core.proxy_manager import (
     start_stream_reader, stop_stream, is_stream_active, streams_status,
+    register_placeholder, restart_placeholder_if_needed,
     _buffers, _managers, _processes,
     INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
 )
@@ -545,6 +546,15 @@ async def api_proxy_stream(request):
             return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
 
         start_stream_reader(video_id, cmd)
+
+        # Registra placeholder para restart automatico se nao for live nem VOD.
+        # live  → streamlink corre indefinidamente (sem restart necessario)
+        # none  → VOD, tambem corre ate o fim (nao e placeholder)
+        # qualquer outro status (upcoming, None, etc.) → e placeholder com -t finito
+        if status not in ("live", "none"):
+            register_placeholder(video_id, cmd)
+            logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
+
         logger.info(f"[{video_id}] stream proxy iniciado")
 
         deadline = time.monotonic() + INIT_TIMEOUT_S
@@ -573,6 +583,10 @@ async def api_proxy_stream(request):
                 if not is_stream_active(video_id) and video_id not in _buffers:
                     logger.warning(f"[{video_id}][{client_id}] stream encerrado, saindo")
                     break
+
+                # Reinicia placeholder se o processo encerrou naturalmente
+                # e ainda ha clientes (incluindo este).
+                restart_placeholder_if_needed(video_id)
 
                 chunks, next_index = buf.get_chunks(local_index, count=5)
 
@@ -606,9 +620,12 @@ async def api_proxy_stream(request):
             if remaining == 0:
                 async def _delayed_stop():
                     await asyncio.sleep(STREAM_IDLE_STOP_S)
-                    if is_stream_active(video_id) and _managers.get(video_id) and _managers[video_id].count == 0:
-                        logger.info(f"[{video_id}] sem clientes por {STREAM_IDLE_STOP_S}s, parando stream")
-                        stop_stream(video_id)
+                    mgr2 = _managers.get(video_id)
+                    if mgr2 and mgr2.count > 0:
+                        # Novos clientes conectaram durante a espera — nao para
+                        return
+                    logger.info(f"[{video_id}] sem clientes por {STREAM_IDLE_STOP_S}s, parando stream")
+                    stop_stream(video_id)
                 asyncio.create_task(_delayed_stop())
 
     return StreamingResponse(
