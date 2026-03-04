@@ -175,7 +175,6 @@ async def lifespan(app):
             await task
         except asyncio.CancelledError:
             pass
-        # Para todos os streams proxy ao encerrar
         for vid in list(_processes.keys()):
             stop_stream(vid)
         _state.save_to_disk()
@@ -207,9 +206,24 @@ def _serialize_stream(s: dict) -> dict:
 
 
 def _get_base_url(request) -> str:
-    """Detecta URL base usando o IP do browser (respeita X-Forwarded-For)."""
+    """
+    Resolve a URL base para links gerados no servidor.
+    Prioridade:
+      1. proxy_base_url configurado no banco (ex: http://100.98.81.67:8888)
+      2. Host do request (funciona para qualquer IP de acesso)
+    """
+    if _config:
+        configured = _config.get_str("proxy_base_url").strip()
+        if configured:
+            return configured.rstrip("/")
+    # Usa o host exato com que o cliente acessou (tailscale, LAN, etc)
+    host = request.headers.get("host", "")
+    if host:
+        scheme = "https" if request.url.scheme == "https" else "http"
+        return f"{scheme}://{host}"
+    # Fallback: IP do cliente + porta do server
     client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
-    port      = request.url.port or 8000
+    port      = request.url.port or 8888
     return f"http://{client_ip}:{port}"
 
 
@@ -224,27 +238,45 @@ def _nav():
     )
 
 
-def _serve_playlist_onthefly(mode: str, mode_type: str) -> Response:
+def _serve_playlist_onthefly(mode: str, mode_type: str, request=None) -> Response:
     if _m3u_generator is None or _state is None:
         return Response("Servidor ainda inicializando", status_code=503)
     streams    = list(_state.get_all_streams())
     cats       = _categories_db if _categories_db else {}
-    proxy_base = _resolve_proxy_base_url(_config) if mode_type == "proxy" else ""
-    content    = _m3u_generator.generate_playlist(
-        streams, cats, mode=mode, mode_type=mode_type, proxy_base_url=proxy_base
+    proxy_base = ""
+    if mode_type == "proxy":
+        if request is not None:
+            proxy_base = _get_base_url(request)
+        else:
+            proxy_base = _resolve_proxy_base_url(_config)
+    content = _m3u_generator.generate_playlist(
+        streams, cats, mode=mode, mode_type=mode_type,
+        thumbnail_manager=_thumbnail_manager,
+        proxy_base_url=proxy_base,
     )
+    logger.debug(f"Playlist [{mode}/{mode_type}] gerada  base_url={proxy_base!r}  streams_total={len(streams)}")
     return Response(content, media_type="audio/x-mpegurl")
 
 
 # ---------------------------------------------------------------------------
-# Rotas de playlist (dinamicas)
+# Rotas de playlist (dinamicas) — passam o request para _serve_playlist_onthefly
 # ---------------------------------------------------------------------------
 
+async def _make_playlist_handler(mode: str, mode_type: str):
+    async def handler(request):
+        return _serve_playlist_onthefly(mode, mode_type, request=request)
+    return handler
+
 for _playlist_name, (_mode, _mode_type) in _PLAYLIST_ROUTES.items():
+    import asyncio as _asyncio
+    _handler = _asyncio.get_event_loop().run_until_complete(
+        _make_playlist_handler(_mode, _mode_type)
+    ) if False else None
+
     def _make_playlist_route(mode=_mode, mode_type=_mode_type, playlist_name=_playlist_name):
-        @app.get(f"/playlist/{playlist_name}")
-        def _playlist_route():
-            return _serve_playlist_onthefly(mode, mode_type)
+        async def _playlist_route(request):
+            return _serve_playlist_onthefly(mode, mode_type, request=request)
+        app.routes.append(Route(f"/playlist/{playlist_name}", endpoint=_playlist_route))
     _make_playlist_route()
 
 
@@ -263,7 +295,6 @@ async def _epg_route(request):
     return serve_epg_onthefly()
 
 
-# Workaround: FastHTML intercepta URLs com extensao — registrar via Starlette
 app.router.routes.insert(0, Route("/epg.xml", endpoint=_epg_route))
 
 
@@ -293,10 +324,14 @@ def home(request: Request):
         if not cat_name and _config is not None and cat_id:
             cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
         cat_cell = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "\u2014")
+        status   = s.get("status") or "none"
+        channel  = (s.get("channelname") or "")[:30] or "\u2014"
+        title    = (s.get("title")       or "")[:70] or f"[{vid}]"
         rows.append(Tr(
-            Td((s.get("channelname") or "")[:30]),
-            Td((s.get("title")       or "")[:70]),
-            Td(s.get("status") or "none"),
+            Td(channel),
+            Td(title),
+            Td(vid, style="font-size:0.8em;color:#888;"),
+            Td(status),
             Td(cat_cell),
             Td(A("\u25b6", href=url, target="_blank")),
         ))
@@ -308,9 +343,9 @@ def home(request: Request):
         H2("Canais monitorados"),
         Ul(*channel_items) if channel_items else P("Nenhum canal."),
         H2(f"Streams ({len(streams)})"),
-        P(A("Ver Playlists e Proxy →", href="/proxy"), style="font-size:0.9em;"),
+        P(A("Ver Playlists e Proxy \u2192", href="/proxy"), style="font-size:0.9em;"),
         Table(
-            Thead(Tr(Th("Canal"), Th("Evento"), Th("Status"), Th("Categoria"), Th(""))),
+            Thead(Tr(Th("Canal"), Th("Evento"), Th("Video ID"), Th("Status"), Th("Categoria"), Th(""))),
             Tbody(*rows),
         ),
     )
@@ -471,13 +506,11 @@ def api_epg():
 
 @app.get("/api/proxy/status")
 def api_proxy_status():
-    """Retorna status de todos os streams proxy ativos."""
     return JSONResponse({"streams": streams_status(), "count": len(_buffers)})
 
 
 @app.delete("/api/proxy/{video_id}")
 def api_proxy_stop(video_id: str):
-    """Para manualmente um stream proxy."""
     if not is_stream_active(video_id):
         return JSONResponse({"error": "stream nao encontrado ou ja parado"}, status_code=404)
     stop_stream(video_id)
@@ -485,17 +518,10 @@ def api_proxy_stop(video_id: str):
 
 
 # ---------------------------------------------------------------------------
-# API — proxy streaming  (Starlette direto — suporte a path param)
+# API — proxy streaming
 # ---------------------------------------------------------------------------
 
 async def api_proxy_stream(request):
-    """
-    Endpoint de streaming via proxy: GET /api/proxy/{video_id}
-
-    - Inicializa o stream (subprocess + buffer) se ainda nao existe.
-    - Registra o cliente e entrega os chunks do buffer.
-    - Para o processo automaticamente 30s apos o ultimo cliente sair.
-    """
     video_id   = request.path_params["video_id"]
     user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
     client_id  = f"{int(time.time()*1000)}_{random.randint(1000,9999)}"
@@ -503,17 +529,20 @@ async def api_proxy_stream(request):
 
     logger.info(f"[{video_id}] nova conexao proxy  client={client_id}  ip={client_ip}")
 
-    # Inicializa stream se nao existe ou processo morreu
     if not is_stream_active(video_id):
         if _state is None:
             return Response("Servidor ainda inicializando", status_code=503)
 
         stream_info   = _state.streams.get(video_id)
+        if stream_info is None:
+            logger.warning(f"[{video_id}] video_id nao encontrado no estado — stream desconhecido")
         status        = stream_info.get("status")       if stream_info else None
         thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
         watch_url     = f"https://www.youtube.com/watch?v={video_id}"
         placeholder   = _config.get_str("placeholder_image_url")
         thumb_for_ph  = thumbnail_url or placeholder
+
+        logger.info(f"[{video_id}] iniciando stream  status={status!r}  url={watch_url}")
 
         local_thumb = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
         if local_thumb.exists():
@@ -536,7 +565,6 @@ async def api_proxy_stream(request):
         start_stream_reader(video_id, cmd)
         logger.info(f"[{video_id}] stream proxy iniciado")
 
-        # Aguarda primeiro chunk (timeout INIT_TIMEOUT_S)
         deadline = time.monotonic() + INIT_TIMEOUT_S
         while time.monotonic() < deadline:
             buf = _buffers.get(video_id)
@@ -548,7 +576,6 @@ async def api_proxy_stream(request):
             logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
             return Response("Stream timeout na inicializacao", status_code=504)
 
-    # Registra cliente
     buf = _buffers[video_id]
     mgr = _managers[video_id]
     mgr.add_client(client_id, client_ip, user_agent)
@@ -561,7 +588,6 @@ async def api_proxy_stream(request):
 
         try:
             while True:
-                # Processo morreu e buffer foi removido
                 if not is_stream_active(video_id) and video_id not in _buffers:
                     logger.warning(f"[{video_id}][{client_id}] stream encerrado, saindo")
                     break
@@ -610,16 +636,14 @@ async def api_proxy_stream(request):
     )
 
 
-# Registra rotas Starlette (path params + extensoes)
 app.routes.append(Route("/api/proxy/{video_id}", endpoint=api_proxy_stream))
 
 
 # ---------------------------------------------------------------------------
-# API — player streaming (legado — sem buffer, 1 cliente por processo)
+# API — player streaming (legado)
 # ---------------------------------------------------------------------------
 
 async def api_player_stream(request):
-    """Handler de streaming MPEG-TS para /api/player/{video_id}."""
     video_id   = request.path_params["video_id"]
     user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
 

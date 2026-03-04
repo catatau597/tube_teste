@@ -3,13 +3,6 @@ core/playlist_builder.py
 Responsabilidade: Gerar playlists M3U, EPG XML e conteúdos derivados.
 Depende de: AppConfig
 NÃO depende de: Flask, FastHTML, os.getenv
-
-Exemplo de uso:
-    from core.config import AppConfig
-    cfg = AppConfig(db_path="/tmp/test.db")
-    m3u = M3UGenerator(cfg)
-    xml = XMLTVGenerator(cfg)
-    cg = ContentGenerator(cfg)
 """
 from core.config import AppConfig
 from datetime import datetime, timezone, timedelta
@@ -58,9 +51,13 @@ class ContentGenerator:
 
     @staticmethod
     def is_vod(stream: dict) -> bool:
-        return (
-            not ContentGenerator.is_live(stream)
-            and not ContentGenerator.is_upcoming(stream)
+        """VOD = stream encerrado. Aceita status 'none' ou 'completed', com ou sem actualendtimeutc."""
+        status = stream.get("status")
+        if ContentGenerator.is_live(stream) or ContentGenerator.is_upcoming(stream):
+            return False
+        # status 'none' (YouTube antigo), 'completed' ou qualquer status que nao seja live/upcoming
+        return status in ("none", "completed") or (
+            status not in ("live", "upcoming", None)
             and stream.get("actualendtimeutc") is not None
         )
 
@@ -75,14 +72,11 @@ class ContentGenerator:
     def get_display_title(self, stream: dict) -> str:
         title = stream.get("title") or "Sem título"
 
-        # Remover expressões filtradas do título
         for expr in self._config.get_list("title_filter_expressions"):
             title = title.replace(expr, "").strip()
 
-        # Remover dois-pontos e espaços extras no início do título
         title = title.lstrip(": ").strip()
 
-        # Prefixar com status (antes do canal)
         status_prefix = ""
         if self._config.get_bool("prefix_title_with_status"):
             status = stream.get("status", "none")
@@ -91,7 +85,6 @@ class ContentGenerator:
             elif status == "upcoming":
                 status_prefix = "🕐 AGENDADO"
 
-        # Prefixar com nome do canal
         channel_prefix = ""
         if self._config.get_bool("prefix_title_with_channel_name"):
             mappings = self._config.get_mapping("channel_name_mappings")
@@ -100,7 +93,6 @@ class ContentGenerator:
             if channel:
                 channel_prefix = channel
 
-        # Montar título final: [Canal] [Status]: Título
         parts = []
         if channel_prefix:
             parts.append(channel_prefix)
@@ -119,27 +111,21 @@ class ContentGenerator:
         return mappings.get(raw, raw)
 
     def filter_streams(self, streams: list, mode: str) -> list:
-        if self._config.get_bool("filter_by_category"):
-            mappings = self._config.get_mapping("category_mappings")
-            allowed = set(mappings.keys())
-            if allowed:
-                streams = [
-                    s for s in streams
-                    if str(s.get("categoryoriginal", "")) in allowed
-                ]
+        """Filtra streams por modo. upcoming NAO aplica filter_by_category (todos os canais devem aparecer)."""
         if mode == "upcoming":
+            # Upcoming: nao filtra por categoria — agenda completa
             max_hours  = self._config.get_int("max_schedule_hours")
             max_per_ch = self._config.get_int("max_upcoming_per_channel")
             cutoff     = datetime.now(timezone.utc) + timedelta(hours=max_hours)
             now        = datetime.now(timezone.utc)
-            streams = [
+            candidates = [
                 s for s in streams
                 if s.get("status") == "upcoming"
                 and isinstance(s.get("scheduledstarttimeutc"), datetime)
                 and now < s["scheduledstarttimeutc"] <= cutoff
             ]
             per_channel = defaultdict(list)
-            for s in streams:
+            for s in candidates:
                 per_channel[s.get("channelid", "")].append(s)
             result = []
             for ch_streams in per_channel.values():
@@ -148,7 +134,20 @@ class ContentGenerator:
                     or datetime.min.replace(tzinfo=timezone.utc)
                 )
                 result.extend(ch_streams[:max_per_ch])
+            logger.debug(f"filter_streams [upcoming]: {len(candidates)} candidatos → {len(result)} após max_per_ch")
             return result
+
+        # Para live/vod: aplica filter_by_category se configurado
+        if self._config.get_bool("filter_by_category"):
+            mappings = self._config.get_mapping("category_mappings")
+            allowed = set(mappings.keys())
+            if allowed:
+                before = len(streams)
+                streams = [
+                    s for s in streams
+                    if str(s.get("categoryoriginal", "")) in allowed
+                ]
+                logger.debug(f"filter_by_category [{mode}]: {before} → {len(streams)}")
         return streams
 
 
@@ -166,17 +165,12 @@ class M3UGenerator(ContentGenerator):
         thumbnail_manager=None,
         proxy_base_url: str = "",
     ) -> str:
-        # LÓGICA DO VOD:
-        # Streams VOD não são buscados diretamente.
-        # Ciclo: upcoming → live → (encerra) → vod
-        # A playlist VOD filtra streams já em memória com actualendtimeutc.
-        # NÃO buscar VOD na API — apenas filtrar os existentes.
-
         if mode == "upcoming" and mode_type == "direct":
             raise ValueError("upcoming nunca pode ser modo direct")
 
         if mode == "live":
             filtered = [s for s in streams if ContentGenerator.is_live(s)]
+            filtered = self.filter_streams(filtered, "live")
 
         elif mode == "upcoming":
             filtered = self.filter_streams(streams, "upcoming")
@@ -189,23 +183,35 @@ class M3UGenerator(ContentGenerator):
             max_per_ch     = self._config.get_int("max_recorded_per_channel")
             retention_days = self._config.get_int("recorded_retention_days")
             cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-            candidates = [
-                s for s in streams
-                if ContentGenerator.is_vod(s)
-                and isinstance(s.get("fetchtime"), datetime)
-                and s["fetchtime"] >= cutoff
-            ]
+
+            # VOD: aceita status 'none' ou 'completed', com ou sem actualendtimeutc
+            # desde que fetchtime esteja dentro do periodo de retencao
+            candidates = []
+            for s in streams:
+                if not ContentGenerator.is_vod(s):
+                    continue
+                ft = s.get("fetchtime")
+                et = s.get("actualendtimeutc")
+                ref_time = et if isinstance(et, datetime) else (ft if isinstance(ft, datetime) else None)
+                if ref_time is None or ref_time >= cutoff:
+                    candidates.append(s)
+
             per_channel = defaultdict(list)
             for s in candidates:
                 per_channel[s.get("channelid", "")].append(s)
             filtered = []
             for ch_streams in per_channel.values():
                 ch_streams.sort(
-                    key=lambda x: x.get("fetchtime")
-                    or datetime.min.replace(tzinfo=timezone.utc),
+                    key=lambda x: (
+                        x.get("actualendtimeutc")
+                        or x.get("fetchtime")
+                        or datetime.min.replace(tzinfo=timezone.utc)
+                    ),
                     reverse=True
                 )
                 filtered.extend(ch_streams[:max_per_ch])
+            filtered = self.filter_streams(filtered, "vod")
+            logger.debug(f"M3U [vod]: {len(candidates)} candidatos → {len(filtered)} após filtros")
         else:
             filtered = streams
 
@@ -220,7 +226,6 @@ class M3UGenerator(ContentGenerator):
             category = self.get_display_category(cat_id, categories_db)
 
             if mode_type == "proxy":
-                # /api/proxy/{vid} — buffer compartilhado, suporta N clientes
                 url = f"{base_url}/api/proxy/{vid}" if base_url else f"/api/proxy/{vid}"
                 logo = (
                     thumbnail_manager.get_url(vid, base_url)
