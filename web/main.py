@@ -63,7 +63,25 @@ _buffer_handler = _BufferHandler()
 _buffer_handler.setFormatter(_LOG_FMT)
 
 
-def _setup_logging(level_str: str = "INFO") -> None:
+class _AccessLogFilter(logging.Filter):
+    """
+    Filtro para uvicorn.access: suprime entradas de rotas muito frequentes
+    (ex: GET / HTTP/1.1) que poluem os logs sem agregar valor.
+    """
+    _SUPPRESS_PATTERNS = [
+        re.compile(r'"GET / HTTP'),
+        re.compile(r'"GET /api/logs/stream HTTP'),
+    ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(p.search(msg) for p in self._SUPPRESS_PATTERNS)
+
+
+_access_filter = _AccessLogFilter()
+
+
+def _setup_logging(level_str: str = "INFO", hide_access: bool = True) -> None:
     level = getattr(logging, level_str.upper(), logging.INFO)
     root = logging.getLogger()
     root.setLevel(level)
@@ -78,6 +96,15 @@ def _setup_logging(level_str: str = "INFO") -> None:
     access.handlers = [_buffer_handler, console]
     access.setLevel(level)
     access.propagate = False
+    # Aplica ou remove o filtro de acordo com a config
+    if hide_access:
+        if _access_filter not in access.filters:
+            access.addFilter(_access_filter)
+    else:
+        try:
+            access.removeFilter(_access_filter)
+        except Exception:
+            pass
 
 
 logger = logging.getLogger("TubeWrangler")
@@ -121,7 +148,8 @@ async def lifespan(app):
     global _m3u_generator, _xmltv_generator, _categories_db
 
     _config = AppConfig()
-    _setup_logging(_config.get_str("log_level") or "INFO")
+    hide_access = _config.get_bool("hide_access_logs")
+    _setup_logging(_config.get_str("log_level") or "INFO", hide_access=hide_access)
     logger.info("=== TubeWrangler iniciando ===")
 
     _state = StateManager(_config)
@@ -136,13 +164,13 @@ async def lifespan(app):
     _thumbnail_manager = ThumbnailManager(thumb_dir)
     _state.set_thumbnail_manager(_thumbnail_manager)
 
-    api_key  = _config.get_str("youtube_api_key")
+    api_keys = _config.get_list("youtube_api_keys")
     handles  = [h.strip() for h in _config.get_str("target_channel_handles").split(",") if h.strip()]
     chan_ids = [i.strip() for i in _config.get_str("target_channel_ids").split(",") if i.strip()]
     logger.info(f"Handles configurados : {handles}")
     logger.info(f"IDs configurados     : {chan_ids}")
 
-    scraper = YouTubeAPI(api_key)
+    scraper = YouTubeAPI(api_keys)
 
     all_target_ids = set(chan_ids)
     if handles:
@@ -202,7 +230,7 @@ def _serialize_stream(s: dict) -> dict:
     cat_name = (_categories_db or {}).get(cat_id, "") if cat_id else ""
     if not cat_name and _config is not None and cat_id:
         cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
-    data["category_display"] = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "\u2014")
+    data["category_display"] = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "—")
     return data
 
 
@@ -347,9 +375,9 @@ def home(request: Request):
         cat_name = (_categories_db or {}).get(cat_id, "") if cat_id else ""
         if not cat_name and _config is not None and cat_id:
             cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
-        cat_cell = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "\u2014")
+        cat_cell = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "—")
         status   = s.get("status") or "none"
-        channel  = (s.get("channelname") or "")[:30] or "\u2014"
+        channel  = (s.get("channelname") or "")[:30] or "—"
         title    = (s.get("title")       or "")[:70] or f"[{vid}]"
         badge_cls = f"badge badge-{status}" if status in ("live","upcoming","vod") else "badge badge-none"
         rows.append(Tr(
@@ -358,7 +386,7 @@ def home(request: Request):
             Td(Code(vid)),
             Td(Span(status, cls=badge_cls)),
             Td(cat_cell),
-            Td(A("\u25b6", href=url, target="_blank")),
+            Td(A("▶", href=url, target="_blank")),
         ))
 
     channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
@@ -455,6 +483,30 @@ async def config_technical_save(req):
 
 
 # ---------------------------------------------------------------------------
+# Rota HTML — /config/logging
+# ---------------------------------------------------------------------------
+
+@app.get("/config/logging")
+def config_logging_page(saved: str = ""):
+    return _config_page("logging", "Logging", "config_logging", saved == "1")
+
+
+@app.post("/config/logging")
+async def config_logging_save(req):
+    form = await req.form()
+    if not _config:
+        return RedirectResponse("/config/logging", status_code=303)
+    updates = dict(form)
+    if "hide_access_logs" not in updates:
+        updates["hide_access_logs"] = "false"
+    _config.update_many(updates)
+    # Reaplica logging em tempo real
+    hide_access = _config.get_bool("hide_access_logs")
+    _setup_logging(_config.get_str("log_level") or "INFO", hide_access=hide_access)
+    return RedirectResponse("/config/logging?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
 # Rota HTML — /config/filters (UI dedicada)
 # ---------------------------------------------------------------------------
 
@@ -512,8 +564,6 @@ def config_filters(saved: str = ""):
             ),
         )
 
-    # JS para tags interativas — definido FORA do Form para evitar
-    # positional-after-keyword no FastHTML
     tags_js = Script("""
         function _syncHidden(hiddenName) {
             const container = document.getElementById('tags_' + hiddenName);
@@ -544,7 +594,6 @@ def config_filters(saved: str = ""):
             _syncHidden(hiddenName);
         }
 
-        // Enter no input também adiciona
         document.querySelectorAll('[id^="input_"]').forEach(inp => {
             inp.addEventListener('keydown', e => {
                 if (e.key === 'Enter') {
@@ -555,7 +604,6 @@ def config_filters(saved: str = ""):
             });
         });
 
-        // Checkboxes: quando desmarcado, envia "false"
         document.querySelectorAll('form input[type=checkbox]').forEach(cb => {
             const form = cb.closest('form');
             form.addEventListener('submit', () => {
@@ -574,7 +622,6 @@ def config_filters(saved: str = ""):
         "Filtros", "config_filters",
         alert,
         Form(
-            # ---- 1. Categoria ----
             Div(
                 H2("Filtro de Categoria"),
                 P("Quando ativo, apenas streams com IDs de categoria permitidos entram na playlist.",
@@ -597,8 +644,6 @@ def config_filters(saved: str = ""):
                 ),
                 cls="card",
             ),
-
-            # ---- 2. Filtro de Shorts ----
             Div(
                 H2("Filtro de Shorts"),
                 P(
@@ -619,8 +664,6 @@ def config_filters(saved: str = ""):
                 ),
                 cls="card",
             ),
-
-            # ---- 3. Títulos ----
             Div(
                 H2("Títulos"),
                 Label(
@@ -647,8 +690,6 @@ def config_filters(saved: str = ""):
                 ),
                 cls="card",
             ),
-
-            # ---- 4. VOD / Gravações ----
             Div(
                 H2("VOD / Gravações"),
                 Label(
@@ -677,8 +718,6 @@ def config_filters(saved: str = ""):
                 ),
                 cls="card",
             ),
-
-            # ---- 5. Agendamentos futuros ----
             Div(
                 H2("Agendamentos futuros"),
                 Label(
@@ -695,7 +734,6 @@ def config_filters(saved: str = ""):
                 ),
                 cls="card",
             ),
-
             Div(
                 Button("Salvar filtros", type="submit"),
                 style="margin-top:8px;",
@@ -1126,7 +1164,8 @@ async def api_logs_level_set(req):
     level = body.get("level", "INFO").upper()
     if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
         return JSONResponse({"error": "Nível inválido"}, status_code=400)
-    _setup_logging(level)
+    hide_access = _config.get_bool("hide_access_logs") if _config else True
+    _setup_logging(level, hide_access=hide_access)
     if _config:
         try:
             _config.update("log_level", level)
