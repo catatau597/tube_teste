@@ -13,7 +13,11 @@ from starlette.routing import Route
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from core.config import AppConfig
-from core.player_router import build_player_command_async
+from core.player_router import (
+    build_player_command_async,
+    build_live_hls_ffmpeg_cmd,
+    resolve_live_hls_url_async,
+)
 from core.playlist_builder import M3UGenerator, XMLTVGenerator, _resolve_proxy_base_url
 from core.proxy_manager import (
     start_stream_reader, stop_stream, is_stream_active, streams_status,
@@ -29,6 +33,11 @@ from web.routes.proxy_dashboard import proxy_dashboard_page
 
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+# Segundos que streamlink tem para entregar o primeiro chunk antes de
+# acionar o fallback yt-dlp HLS. Deve ser menor que INIT_TIMEOUT_S.
+# 8s e suficiente para streamlink iniciar; se nao iniciou e porque falhou.
+STREAMLINK_FAST_FAIL_S = 8
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -557,6 +566,49 @@ async def api_proxy_stream(request):
 
         logger.info(f"[{video_id}] stream proxy iniciado")
 
+        # --- Fast-fail para live streams ---
+        # Streamlink tem STREAMLINK_FAST_FAIL_S para entregar o primeiro chunk.
+        # Se nao entregar (ex: plugin falhou, API retornou erro, 400 Bad Request),
+        # mata o processo e aciona o fallback: yt-dlp -g resolve a URL HLS e
+        # ffmpeg consome diretamente. Topologia inalterada: clientes continuam
+        # recebendo MPEG-TS via proxy buffer, sem saber que houve troca.
+        if status == "live":
+            ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
+            while time.monotonic() < ff_deadline:
+                buf = _buffers.get(video_id)
+                if buf and buf.index > 0:
+                    break
+                await asyncio.sleep(0.1)
+            else:
+                logger.warning(
+                    f"[{video_id}] streamlink fast-fail: sem chunk em "
+                    f"{STREAMLINK_FAST_FAIL_S}s \u2192 fallback yt-dlp HLS"
+                )
+                stop_stream(video_id)
+
+                # resolve_live_hls_url_async usa DEFAULT_USER_AGENT (Edge)
+                # que e o UA correto para o yt-dlp, nao o UA do cliente.
+                hls_url = await resolve_live_hls_url_async(watch_url)
+                if not hls_url:
+                    logger.error(
+                        f"[{video_id}] yt-dlp nao resolveu HLS URL "
+                        "(streamlink + yt-dlp falharam)"
+                    )
+                    return Response(
+                        "Stream indisponivel (streamlink + yt-dlp falharam)",
+                        status_code=503,
+                    )
+
+                cmd = build_live_hls_ffmpeg_cmd(hls_url)
+                start_stream_reader(video_id, cmd)
+                logger.info(
+                    f"[{video_id}] fallback HLS ativo: {hls_url[:70]}..."
+                )
+
+        # Aguarda primeiro chunk com timeout completo.
+        # Para o path normal (streamlink ok) este loop geralmente ja passa
+        # imediatamente pois o fast-fail ja confirmou buf.index > 0.
+        # Para o path de fallback, espera o ffmpeg iniciar.
         deadline = time.monotonic() + INIT_TIMEOUT_S
         while time.monotonic() < deadline:
             buf = _buffers.get(video_id)
