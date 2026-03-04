@@ -4,6 +4,8 @@ import collections
 import logging
 import os
 import re
+import time
+import random
 from pathlib import Path
 
 from fasthtml.common import *
@@ -13,6 +15,11 @@ from starlette.responses import JSONResponse, RedirectResponse, Response, Stream
 from core.config import AppConfig
 from core.player_router import build_player_command_async
 from core.playlist_builder import M3UGenerator, XMLTVGenerator, _resolve_proxy_base_url
+from core.proxy_manager import (
+    start_stream_reader, stop_stream, is_stream_active, streams_status,
+    _buffers, _managers, _processes,
+    INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
+)
 from core.scheduler import Scheduler
 from core.state_manager import StateManager
 from core.thumbnail_manager import ThumbnailManager
@@ -167,6 +174,9 @@ async def lifespan(app):
             await task
         except asyncio.CancelledError:
             pass
+        # Para todos os streams proxy ao encerrar
+        for vid in list(_processes.keys()):
+            stop_stream(vid)
         _state.save_to_disk()
         logger.info("=== TubeWrangler encerrado ===")
 
@@ -261,9 +271,14 @@ for _old, _new in _LEGACY_REDIRECTS.items():
 # ---------------------------------------------------------------------------
 
 @app.get("/")
-def home():
+def home(request: Request):
     streams  = _state.get_all_streams() if _state else []
     channels = _state.get_all_channels() if _state else {}
+
+    # Detecta IP do cliente (browser que esta acessando)
+    client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
+    port      = request.url.port or 8000
+    base_url  = f"http://{client_ip}:{port}"
 
     rows = []
     for s in streams:
@@ -282,12 +297,32 @@ def home():
             Td(A("\u25b6", href=url, target="_blank")),
         ))
 
+    # Tabela de playlists com links usando IP do browser
+    playlist_rows = []
+    for name, (mode, mode_type) in _PLAYLIST_ROUTES.items():
+        playlist_url = f"{base_url}/playlist/{name}"
+        playlist_rows.append(Tr(
+            Td(name),
+            Td(mode),
+            Td(mode_type),
+            Td(
+                A(playlist_url, href=playlist_url, target="_blank",
+                  style="font-size:0.82em;word-break:break-all;"),
+            ),
+        ))
+
     channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
     return Titled(
         "TubeWrangler",
         _nav(),
         H2("Canais monitorados"),
         Ul(*channel_items) if channel_items else P("Nenhum canal."),
+        H2("Playlists"),
+        Table(
+            Thead(Tr(Th("Arquivo"), Th("Modo"), Th("Tipo"), Th("Link"))),
+            Tbody(*playlist_rows),
+            style="font-size:0.9em;",
+        ),
         H2(f"Streams ({len(streams)})"),
         Table(
             Thead(Tr(Th("Canal"), Th("Evento"), Th("Status"), Th("Categoria"), Th(""))),
@@ -437,7 +472,161 @@ def api_epg():
 
 
 # ---------------------------------------------------------------------------
-# API — player streaming (Starlette direto — contorna catch-all FastHTML)
+# API — proxy status
+# ---------------------------------------------------------------------------
+
+@app.get("/api/proxy/status")
+def api_proxy_status():
+    """Retorna status de todos os streams proxy ativos."""
+    return JSONResponse({"streams": streams_status(), "count": len(_buffers)})
+
+
+@app.delete("/api/proxy/{video_id}")
+def api_proxy_stop(video_id: str):
+    """Para manualmente um stream proxy."""
+    if not is_stream_active(video_id):
+        return JSONResponse({"error": "stream nao encontrado ou ja parado"}, status_code=404)
+    stop_stream(video_id)
+    return JSONResponse({"ok": True, "video_id": video_id})
+
+
+# ---------------------------------------------------------------------------
+# API — proxy streaming  (Starlette direto — suporte a path param)
+# ---------------------------------------------------------------------------
+
+async def api_proxy_stream(request):
+    """
+    Endpoint de streaming via proxy: GET /api/proxy/{video_id}
+
+    - Inicializa o stream (subprocess + buffer) se ainda nao existe.
+    - Registra o cliente e entrega os chunks do buffer.
+    - Para o processo automaticamente 30s apos o ultimo cliente sair.
+    """
+    video_id   = request.path_params["video_id"]
+    user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
+    client_id  = f"{int(time.time()*1000)}_{random.randint(1000,9999)}"
+    client_ip  = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
+
+    logger.info(f"[{video_id}] nova conexao proxy  client={client_id}  ip={client_ip}")
+
+    # Inicializa stream se nao existe ou processo morreu
+    if not is_stream_active(video_id):
+        if _state is None:
+            return Response("Servidor ainda inicializando", status_code=503)
+
+        stream_info   = _state.streams.get(video_id)
+        status        = stream_info.get("status")       if stream_info else None
+        thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
+        watch_url     = f"https://www.youtube.com/watch?v={video_id}"
+        placeholder   = _config.get_str("placeholder_image_url")
+        thumb_for_ph  = thumbnail_url or placeholder
+
+        local_thumb = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
+        if local_thumb.exists():
+            thumb_for_ph = str(local_thumb)
+
+        try:
+            cmd, _temp = await build_player_command_async(
+                video_id=video_id,
+                status=status,
+                watch_url=watch_url,
+                thumbnail_url=thumb_for_ph,
+                user_agent=user_agent,
+                font_path=FONT_PATH,
+                texts_cache_path=TEXTS_CACHE_PATH,
+            )
+        except Exception as exc:
+            logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
+            return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
+
+        start_stream_reader(video_id, cmd)
+        logger.info(f"[{video_id}] stream proxy iniciado")
+
+        # Aguarda primeiro chunk (timeout INIT_TIMEOUT_S)
+        deadline = time.monotonic() + INIT_TIMEOUT_S
+        while time.monotonic() < deadline:
+            buf = _buffers.get(video_id)
+            if buf and buf.index > 0:
+                break
+            await asyncio.sleep(0.1)
+        else:
+            stop_stream(video_id)
+            logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
+            return Response("Stream timeout na inicializacao", status_code=504)
+
+    # Registra cliente
+    buf = _buffers[video_id]
+    mgr = _managers[video_id]
+    mgr.add_client(client_id, client_ip, user_agent)
+
+    async def generate():
+        local_index     = max(0, buf.index - 10)   # comeca 10 chunks atras
+        bytes_sent      = 0
+        last_yield_time = time.monotonic()
+        consecutive_empty = 0
+
+        try:
+            while True:
+                # Processo morreu e buffer inativo
+                if not is_stream_active(video_id) and not _buffers.get(video_id):
+                    logger.warning(f"[{video_id}][{client_id}] stream encerrado, saindo")
+                    break
+
+                chunks, next_index = buf.get_chunks(local_index, count=5)
+
+                if chunks:
+                    for chunk in chunks:
+                        yield chunk
+                        bytes_sent += len(chunk)
+                    local_index       = next_index
+                    last_yield_time   = time.monotonic()
+                    consecutive_empty = 0
+                    mgr.update_activity(client_id, bytes_sent)
+                else:
+                    consecutive_empty += 1
+                    sleep_s = min(0.05 * consecutive_empty, 1.0)
+                    await asyncio.sleep(sleep_s)
+
+                    # Timeout sem dados
+                    if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
+                        logger.warning(f"[{video_id}][{client_id}] timeout {CLIENT_TIMEOUT_S}s sem dados")
+                        break
+
+                    # Cliente muito atrasado: pula para frente
+                    if buf.index - local_index > 100:
+                        logger.warning(f"[{video_id}][{client_id}] cliente atrasado, pulando para frente")
+                        local_index = max(0, buf.index - 10)
+                        consecutive_empty = 0
+
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            logger.error(f"[{video_id}][{client_id}] erro no generator: {exc}")
+        finally:
+            remaining = mgr.remove_client(client_id)
+
+            # Agenda parada do stream se nao ha mais clientes
+            if remaining == 0:
+                async def _delayed_stop():
+                    await asyncio.sleep(STREAM_IDLE_STOP_S)
+                    if is_stream_active(video_id) and _managers.get(video_id) and _managers[video_id].count == 0:
+                        logger.info(f"[{video_id}] sem clientes por {STREAM_IDLE_STOP_S}s, parando stream")
+                        stop_stream(video_id)
+                asyncio.create_task(_delayed_stop())
+
+    return StreamingResponse(
+        generate(),
+        media_type="video/mp2t",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# Registra rotas Starlette (path params + extensoes)
+app.routes.append(Route("/api/proxy/{video_id}", endpoint=api_proxy_stream))
+
+
+# ---------------------------------------------------------------------------
+# API — player streaming (legado — sem buffer, 1 cliente por processo)
 # ---------------------------------------------------------------------------
 
 async def api_player_stream(request):
@@ -464,7 +653,6 @@ async def api_player_stream(request):
         proc_logger = logging.getLogger("TubeWrangler.player")
         temp_files  = []
         try:
-            # Unica chamada — player_router decide o comando para qualquer status
             cmd, temp_files = await build_player_command_async(
                 video_id=video_id,
                 status=status,
@@ -527,7 +715,6 @@ async def api_player_stream(request):
     )
 
 
-# Workaround: rota com path param precisa ser append no Starlette
 app.routes.append(Route("/api/player/{video_id}", endpoint=api_player_stream))
 
 
