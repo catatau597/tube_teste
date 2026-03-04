@@ -12,11 +12,14 @@ google-auth-httplib2>=0.2.0
 # Fuso horário
 pytz>=2024.1
 
-# Streams ao vivo — usado por smart_player.py como subprocesso
-streamlink
+# Streams ao vivo — atualizar sempre que YouTube invalidar chave interna
+# streamlink < 8.x usa chave hardcoded antiga que retorna HTTP 400
+streamlink>=8.2.0
 
-# VOD e download — usado por smart_player.py como subprocesso
-yt-dlp
+# VOD e download — versao 2026.x necessaria para suporte a nodejs como JS runtime
+# Sem JS runtime yt-dlp cai no fallback android_vr causando geo-bloqueio falso
+# nodejs ja instalado no Dockerfile (apt-get install nodejs)
+yt-dlp>=2026.3.3
 
 # Testes
 pytest>=8.0.0
