@@ -24,67 +24,88 @@ _OBSOLETE_KEYS = [
     "xmltv_filename",
     "generate_direct_playlists",
     "generate_proxy_playlists",
-    "allowed_category_ids",
     "log_to_file",
     "smart_player_log_level",
     "smart_player_log_to_file",
 ]
 
-# Todas as 43 variáveis do file.env original
+# Todas as variáveis do projeto.
 # Formato: "chave": ("default", "seção", "descrição", "tipo")
 # tipos: "str" | "int" | "bool" | "list" | "mapping"
 DEFAULTS: dict = {
-    # --- Credenciais (3) ---
+    # --- Credenciais ---
     "youtube_api_key":               ("", "credentials", "Chave de API do YouTube", "str"),
     "target_channel_handles":        ("", "credentials", "Handles de canais separados por vírgula", "list"),
     "target_channel_ids":            ("", "credentials", "IDs diretos de canais separados por vírgula", "list"),
 
-    # --- Agendador (10) ---
+    # --- Agendador ---
     "scheduler_main_interval_hours":         ("4",  "scheduler", "Intervalo principal em horas", "int"),
     "scheduler_pre_event_window_hours":      ("2",  "scheduler", "Janela pré-evento em horas", "int"),
     "scheduler_pre_event_interval_minutes":  ("5",  "scheduler", "Intervalo pré-evento em minutos", "int"),
     "scheduler_post_event_interval_minutes": ("5",  "scheduler", "Intervalo pós-evento em minutos", "int"),
-    "enable_scheduler_active_hours":         ("true","scheduler", "Ativar horário de atividade", "bool"),
+    "enable_scheduler_active_hours":         ("true", "scheduler", "Ativar horário de atividade", "bool"),
     "scheduler_active_start_hour":           ("7",  "scheduler", "Hora de início (formato 24h)", "int"),
     "scheduler_active_end_hour":             ("22", "scheduler", "Hora de fim (formato 24h)", "int"),
     "full_sync_interval_hours":              ("48", "scheduler", "Intervalo de full sync em horas", "int"),
     "resolve_handles_ttl_hours":             ("24", "scheduler", "TTL cache de handles em horas", "int"),
     "initial_sync_days":                     ("2",  "scheduler", "Dias para busca inicial (0=tudo)", "int"),
 
-    # --- Filtros (13) ---
+    # --- Filtros gerais ---
     "max_schedule_hours":            ("72",  "filters", "Limite futuro em horas para agendamentos", "int"),
     "max_upcoming_per_channel":      ("6",   "filters", "Máximo de agendamentos futuros por canal", "int"),
-    "title_filter_expressions":      ("ao vivo,AO VIVO,AO VIVO E COM IMAGRENS,ao vivo e com imagens,com imagens,COM IMAGRENS,cortes,react,ge.globo,#live,!,:,ge tv,JOGO COMPLETO",
-                                      "filters", "Expressões a remover dos títulos (vírgula)", "list"),
-    "prefix_title_with_channel_name":("true","filters", "Prefixar título com nome do canal", "bool"),
-    "prefix_title_with_status":      ("true","filters", "Prefixar título com status [Ao Vivo] etc", "bool"),
-    "category_mappings":             ("17|ESPORTES,20|JOGOS,22|ESPORTES,25|NOTICIAS",
-                                      "filters", "Mapeamento categorias API|Exibição (vírgula)", "mapping"),
-    "channel_name_mappings":         ("FAF TV | @fafalagoas|FAF TV,Canal GOAT|GOAT,Federação de Futebol de Mato Grosso do Sul|FFMS,Federação Paranaense de Futebol|FPF TV,Federação Catarinense de Futebol|FCF TV,Jovem Pan Esportes|J. Pan Esportes,TNT Sports Brasil|TNT Sports",
-                                      "filters", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
-    "epg_description_cleanup":       ("true","filters", "Manter apenas primeiro parágrafo da descrição EPG", "bool"),
-    "filter_by_category":            ("true","filters", "Filtrar streams por categoria da API", "bool"),
-    "keep_recorded_streams":         ("true","filters", "Manter streams gravados (ex-live) no cache", "bool"),
-    "max_recorded_per_channel":      ("2",   "filters", "Máximo de gravações mantidas por canal", "int"),
-    "recorded_retention_days":       ("2",   "filters", "Dias de retenção de streams gravados", "int"),
+    "title_filter_expressions":      (
+        "ao vivo,AO VIVO,AO VIVO E COM IMAGRENS,ao vivo e com imagens,com imagens,"
+        "COM IMAGRENS,cortes,react,ge.globo,#live,!,:,ge tv,JOGO COMPLETO",
+        "filters", "Expressões a remover dos títulos (vírgula)", "list"),
+    "prefix_title_with_channel_name": ("true", "filters", "Prefixar título com nome do canal", "bool"),
+    "prefix_title_with_status":       ("true", "filters", "Prefixar título com status [Ao Vivo] etc", "bool"),
+    "epg_description_cleanup":        ("true", "filters", "Manter apenas primeiro parágrafo da descrição EPG", "bool"),
+    "keep_recorded_streams":          ("true", "filters", "Manter streams gravados (ex-live) no cache", "bool"),
+    "max_recorded_per_channel":       ("2",   "filters", "Máximo de gravações mantidas por canal", "int"),
+    "recorded_retention_days":        ("2",   "filters", "Dias de retenção de streams gravados", "int"),
+
+    # --- Filtros de categoria ---
+    # filter_by_category: quando true, apenas categoria_ids em allowed_category_ids passam.
+    # allowed_category_ids: lista de IDs numéricos permitidos (ex: 17,25).
+    # category_mappings: SÓ renomeia para exibição (ex: 17|ESPORTES). NÃO filtra.
+    "filter_by_category":            ("true",  "filters", "Filtrar streams por categoria da API YouTube", "bool"),
+    "allowed_category_ids":          ("17,22", "filters", "IDs de categoria permitidos (vírgula)", "list"),
+    "category_mappings":             (
+        "17|ESPORTES,20|JOGOS,22|ESPORTES,25|NOTÍCIAS",
+        "filters", "Renomear categorias para exibição: ID|Nome (vírgula) — NÃO filtra", "mapping"),
+    "channel_name_mappings":         (
+        "FAF TV | @fafalagoas|FAF TV,Canal GOAT|GOAT,"
+        "Federação de Futebol de Mato Grosso do Sul|FFMS,"
+        "Federação Paranaense de Futebol|FPF TV,"
+        "Federação Catarinense de Futebol|FCF TV,"
+        "Jovem Pan Esportes|J. Pan Esportes,TNT Sports Brasil|TNT Sports",
+        "filters", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
+
+    # --- Filtros de Shorts ---
+    # shorts_max_duration_s: vídeos com duração <= este valor (segundos) são ignorados.
+    #   0 = desativado. Padrão 62s (margem de 2s sobre o limite de 60s do YouTube).
+    # shorts_block_words: se qualquer palavra aparecer no título ou tags, o vídeo é ignorado.
+    #   Importante para upcoming/live onde duration_iso ainda não está disponível.
+    "shorts_max_duration_s":         ("62",       "filters", "Duracão máxima (s) para bloquear Shorts (0=off)", "int"),
+    "shorts_block_words":            ("#shorts,#short", "filters", "Palavras no título/tags que identificam Shorts", "list"),
 
     # --- Saída ---
-    "placeholder_image_url":         ("https://i.ibb.co/9kZStw28/placeholder-sports.png",
-                                      "output", "URL da imagem placeholder para streams sem thumb", "str"),
+    "placeholder_image_url":         (
+        "https://i.ibb.co/9kZStw28/placeholder-sports.png",
+        "output", "URL da imagem placeholder para streams sem thumb", "str"),
     "use_invisible_placeholder":     ("true", "output", "Usar placeholder invisível no M3U", "bool"),
     "thumbnail_cache_directory":     ("/data/thumbnails", "output", "Diretório de cache de thumbnails", "str"),
 
-    # --- Técnico (5) ---
+    # --- Técnico ---
     "http_port":                     ("8888",             "technical", "Porta HTTP do servidor web", "int"),
     "state_cache_filename":          ("state_cache.json", "technical", "Nome do arquivo JSON de estado", "str"),
     "stale_hours":                   ("6",                "technical", "Horas para considerar stream stale", "int"),
     "use_playlist_items":            ("true",             "technical", "Usar playlistItems API (vs search.list)", "bool"),
-    "local_timezone":                ("America/Sao_Paulo","technical", "Fuso horário local (pytz)", "str"),
+    "local_timezone":                ("America/Sao_Paulo", "technical", "Fuso horário local (pytz)", "str"),
     "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
-    # --- Logs (1) ---
-    # DEBUG por padrão para capturar erros de streamlink/ffmpeg durante desenvolvimento
-    "log_level":                     ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
+    # --- Logs ---
+    "log_level": ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
 }
 
 
@@ -142,7 +163,10 @@ class AppConfig:
         return self.get_raw(key)
 
     def get_int(self, key: str) -> int:
-        return int(self.get_raw(key))
+        try:
+            return int(self.get_raw(key))
+        except (ValueError, TypeError):
+            return 0
 
     def get_bool(self, key: str) -> bool:
         return self.get_raw(key).lower() == "true"
@@ -170,7 +194,10 @@ class AppConfig:
     def update_many(self, updates: dict):
         """Atualiza múltiplas chaves. Útil para POST /config."""
         for key, value in updates.items():
-            self.update(key, str(value))
+            try:
+                self.update(key, str(value))
+            except KeyError:
+                pass
 
     def get_all_by_section(self) -> dict:
         """Retorna configurações agrupadas por seção. Usado pelo formulário web."""
