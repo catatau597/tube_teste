@@ -1,8 +1,8 @@
 """
 core/playlist_builder.py
-Responsabilidade: Gerar playlists M3U, EPG XML e conteúdos derivados.
+Responsabilidade: Gerar playlists M3U, EPG XML e conteudos derivados.
 Depende de: AppConfig
-NÃO depende de: Flask, FastHTML, os.getenv
+NAO depende de: Flask, FastHTML, os.getenv
 """
 from core.config import AppConfig
 from datetime import datetime, timezone, timedelta
@@ -15,7 +15,14 @@ logger = logging.getLogger("TubeWrangler")
 
 
 def _resolve_proxy_base_url(config) -> str:
-    """Resolve PROXY_BASE_URL. Se vazio, auto-detecta IP do host."""
+    """
+    Resolve a URL base para links dentro de playlists M3U geradas sem request
+    (ex: agendador, API externa).
+    Prioridade:
+      1. proxy_base_url configurado no banco
+      2. Auto-deteccao pelo IP do host
+    NAO usar para paginas web — la usar request.headers["host"].
+    """
     configured = config.get_str("proxy_base_url").strip()
     if configured:
         return configured.rstrip("/")
@@ -55,7 +62,6 @@ class ContentGenerator:
         status = stream.get("status")
         if ContentGenerator.is_live(stream) or ContentGenerator.is_upcoming(stream):
             return False
-        # status 'none' (YouTube antigo), 'completed' ou qualquer status que nao seja live/upcoming
         return status in ("none", "completed") or (
             status not in ("live", "upcoming", None)
             and stream.get("actualendtimeutc") is not None
@@ -70,7 +76,7 @@ class ContentGenerator:
         )
 
     def get_display_title(self, stream: dict) -> str:
-        title = stream.get("title") or "Sem título"
+        title = stream.get("title") or "Sem titulo"
 
         for expr in self._config.get_list("title_filter_expressions"):
             title = title.replace(expr, "").strip()
@@ -81,9 +87,9 @@ class ContentGenerator:
         if self._config.get_bool("prefix_title_with_status"):
             status = stream.get("status", "none")
             if status == "live":
-                status_prefix = "🔴 AO VIVO"
+                status_prefix = "\U0001f534 AO VIVO"
             elif status == "upcoming":
-                status_prefix = "🕐 AGENDADO"
+                status_prefix = "\U0001f550 AGENDADO"
 
         channel_prefix = ""
         if self._config.get_bool("prefix_title_with_channel_name"):
@@ -111,9 +117,13 @@ class ContentGenerator:
         return mappings.get(raw, raw)
 
     def filter_streams(self, streams: list, mode: str) -> list:
-        """Filtra streams por modo. upcoming NAO aplica filter_by_category (todos os canais devem aparecer)."""
+        """
+        Filtra streams por modo.
+        - upcoming: aplica apenas limites de horario e max_per_channel
+        - live/vod: category_mappings e so para renomear categorias, NAO para filtrar
+          (todos os streams do modo aparecem independente de categoria)
+        """
         if mode == "upcoming":
-            # Upcoming: nao filtra por categoria — agenda completa
             max_hours  = self._config.get_int("max_schedule_hours")
             max_per_ch = self._config.get_int("max_upcoming_per_channel")
             cutoff     = datetime.now(timezone.utc) + timedelta(hours=max_hours)
@@ -134,20 +144,10 @@ class ContentGenerator:
                     or datetime.min.replace(tzinfo=timezone.utc)
                 )
                 result.extend(ch_streams[:max_per_ch])
-            logger.debug(f"filter_streams [upcoming]: {len(candidates)} candidatos → {len(result)} após max_per_ch")
+            logger.debug(f"filter_streams [upcoming]: {len(candidates)} candidatos -> {len(result)} apos max_per_ch")
             return result
 
-        # Para live/vod: aplica filter_by_category se configurado
-        if self._config.get_bool("filter_by_category"):
-            mappings = self._config.get_mapping("category_mappings")
-            allowed = set(mappings.keys())
-            if allowed:
-                before = len(streams)
-                streams = [
-                    s for s in streams
-                    if str(s.get("categoryoriginal", "")) in allowed
-                ]
-                logger.debug(f"filter_by_category [{mode}]: {before} → {len(streams)}")
+        # live / vod: sem filtro por categoria — category_mappings so renomeia
         return streams
 
 
@@ -184,8 +184,6 @@ class M3UGenerator(ContentGenerator):
             retention_days = self._config.get_int("recorded_retention_days")
             cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
-            # VOD: aceita status 'none' ou 'completed', com ou sem actualendtimeutc
-            # desde que fetchtime esteja dentro do periodo de retencao
             candidates = []
             for s in streams:
                 if not ContentGenerator.is_vod(s):
@@ -210,8 +208,8 @@ class M3UGenerator(ContentGenerator):
                     reverse=True
                 )
                 filtered.extend(ch_streams[:max_per_ch])
-            filtered = self.filter_streams(filtered, "vod")
-            logger.debug(f"M3U [vod]: {len(candidates)} candidatos → {len(filtered)} após filtros")
+            # vod nao aplica filter_by_category — category_mappings so renomeia
+            logger.debug(f"M3U [vod]: {len(candidates)} candidatos -> {len(filtered)} apos max_per_ch")
         else:
             filtered = streams
 
@@ -243,7 +241,7 @@ class M3UGenerator(ContentGenerator):
             lines.append(url)
 
         if not filtered and self._config.get_bool("use_invisible_placeholder"):
-            placeholder_id = f"PLACEHOLDER_{mode.upper()}"
+            placeholder_id  = f"PLACEHOLDER_{mode.upper()}"
             placeholder_url = "https://placeholder_url"
             lines.append(
                 f'#EXTINF:-1 tvg-id="{placeholder_id}" tvg-name="" tvg-logo="" group-title="",'
@@ -295,7 +293,7 @@ class XMLTVGenerator(ContentGenerator):
             else:
                 title_check = (s.get("title") or "").lower()
                 sport_keywords = (
-                    "jogo", "partida", "futebol", "basquete", "judô", "grand slam",
+                    "jogo", "partida", "futebol", "basquete", "judo", "grand slam",
                     "semifinal", "final", "copa", "campeonato", "ao vivo", "live",
                 )
                 if any(kw in title_check for kw in sport_keywords):

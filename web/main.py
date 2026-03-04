@@ -30,7 +30,7 @@ TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 # ---------------------------------------------------------------------------
-# Logging — buffer circular (SSE /api/logs/stream) + console
+# Logging
 # ---------------------------------------------------------------------------
 
 _LOG_BUFFER: collections.deque[tuple[int, str]] = collections.deque(maxlen=1000)
@@ -38,8 +38,6 @@ _LOG_SEQ = 0
 
 
 class _BufferHandler(logging.Handler):
-    """Escreve entradas de log no buffer circular para SSE."""
-
     def emit(self, record: logging.LogRecord) -> None:
         global _LOG_SEQ
         try:
@@ -58,20 +56,16 @@ _buffer_handler.setFormatter(_LOG_FMT)
 
 
 def _setup_logging(level_str: str = "INFO") -> None:
-    """Configura logging global: buffer circular + console. Idempotente."""
     level = getattr(logging, level_str.upper(), logging.INFO)
     root = logging.getLogger()
     root.setLevel(level)
-
     for h in root.handlers[:]:
         if isinstance(h, (logging.FileHandler, logging.StreamHandler)):
             root.removeHandler(h)
-
     console = logging.StreamHandler()
     console.setFormatter(_LOG_FMT)
     root.addHandler(_buffer_handler)
     root.addHandler(console)
-
     access = logging.getLogger("uvicorn.access")
     access.handlers = [_buffer_handler, console]
     access.setLevel(level)
@@ -81,7 +75,7 @@ def _setup_logging(level_str: str = "INFO") -> None:
 logger = logging.getLogger("TubeWrangler")
 
 # ---------------------------------------------------------------------------
-# Estado global da aplicacao (inicializado no lifespan)
+# Estado global
 # ---------------------------------------------------------------------------
 
 _config: Optional[AppConfig] = None
@@ -92,7 +86,6 @@ _m3u_generator: Optional[M3UGenerator] = None
 _xmltv_generator: Optional[XMLTVGenerator] = None
 _categories_db: dict = {}
 
-# Mapeamento: sufixo da rota -> (mode, mode_type)
 _PLAYLIST_ROUTES = {
     "live.m3u":          ("live",     "direct"),
     "live-proxy.m3u":    ("live",     "proxy"),
@@ -111,7 +104,7 @@ _LEGACY_REDIRECTS = {
 
 
 # ---------------------------------------------------------------------------
-# Lifespan — inicializacao e finalizacao
+# Lifespan
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
@@ -207,21 +200,17 @@ def _serialize_stream(s: dict) -> dict:
 
 def _get_base_url(request) -> str:
     """
-    Resolve a URL base para links gerados no servidor.
-    Prioridade:
-      1. proxy_base_url configurado no banco (ex: http://100.98.81.67:8888)
-      2. Host do request (funciona para qualquer IP de acesso)
+    Resolve a URL base usando o host do request (header Host).
+    Usado APENAS para paginas web e links gerados com request disponivel.
+    NAO usa proxy_base_url — esse parametro e exclusivo para playlists M3U
+    geradas sem request (ex: agendador, API externa).
+    Assim o acesso via qualquer IP (Tailscale, LAN, localhost) sempre funciona.
     """
-    if _config:
-        configured = _config.get_str("proxy_base_url").strip()
-        if configured:
-            return configured.rstrip("/")
-    # Usa o host exato com que o cliente acessou (tailscale, LAN, etc)
     host = request.headers.get("host", "")
     if host:
         scheme = "https" if request.url.scheme == "https" else "http"
         return f"{scheme}://{host}"
-    # Fallback: IP do cliente + porta do server
+    # Fallback caso Host nao venha no header
     client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
     port      = request.url.port or 8888
     return f"http://{client_ip}:{port}"
@@ -246,33 +235,26 @@ def _serve_playlist_onthefly(mode: str, mode_type: str, request=None) -> Respons
     proxy_base = ""
     if mode_type == "proxy":
         if request is not None:
+            # Usa o IP/host exato do request para que os links M3U
+            # funcionem independente de qual IP foi usado para baixar a playlist
             proxy_base = _get_base_url(request)
         else:
+            # Sem request (chamada interna) usa proxy_base_url configurado ou auto-deteccao
             proxy_base = _resolve_proxy_base_url(_config)
     content = _m3u_generator.generate_playlist(
         streams, cats, mode=mode, mode_type=mode_type,
         thumbnail_manager=_thumbnail_manager,
         proxy_base_url=proxy_base,
     )
-    logger.debug(f"Playlist [{mode}/{mode_type}] gerada  base_url={proxy_base!r}  streams_total={len(streams)}")
+    logger.debug(f"Playlist [{mode}/{mode_type}] gerada  base_url={proxy_base!r}  total={len(streams)}")
     return Response(content, media_type="audio/x-mpegurl")
 
 
 # ---------------------------------------------------------------------------
-# Rotas de playlist (dinamicas) — passam o request para _serve_playlist_onthefly
+# Rotas de playlist — Starlette direto para receber request
 # ---------------------------------------------------------------------------
 
-async def _make_playlist_handler(mode: str, mode_type: str):
-    async def handler(request):
-        return _serve_playlist_onthefly(mode, mode_type, request=request)
-    return handler
-
 for _playlist_name, (_mode, _mode_type) in _PLAYLIST_ROUTES.items():
-    import asyncio as _asyncio
-    _handler = _asyncio.get_event_loop().run_until_complete(
-        _make_playlist_handler(_mode, _mode_type)
-    ) if False else None
-
     def _make_playlist_route(mode=_mode, mode_type=_mode_type, playlist_name=_playlist_name):
         async def _playlist_route(request):
             return _serve_playlist_onthefly(mode, mode_type, request=request)
@@ -535,7 +517,7 @@ async def api_proxy_stream(request):
 
         stream_info   = _state.streams.get(video_id)
         if stream_info is None:
-            logger.warning(f"[{video_id}] video_id nao encontrado no estado — stream desconhecido")
+            logger.warning(f"[{video_id}] video_id nao encontrado no estado")
         status        = stream_info.get("status")       if stream_info else None
         thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
         watch_url     = f"https://www.youtube.com/watch?v={video_id}"
