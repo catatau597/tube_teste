@@ -30,13 +30,11 @@ from core.state_manager import StateManager
 from core.thumbnail_manager import ThumbnailManager
 from core.youtube_api import YouTubeAPI
 from web.routes.proxy_dashboard import proxy_dashboard_page
+from web.layout import _page_shell
 
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# Segundos que streamlink tem para entregar o primeiro chunk antes de
-# acionar o fallback yt-dlp HLS. Deve ser menor que INIT_TIMEOUT_S.
-# 8s e suficiente para streamlink iniciar; se nao iniciou e porque falhou.
 STREAMLINK_FAST_FAIL_S = 8
 
 # ---------------------------------------------------------------------------
@@ -190,7 +188,7 @@ async def lifespan(app):
 
 app, rt = fast_app(
     lifespan=lifespan,
-    hdrs=[Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/pico.css@2/css/pico.min.css")],
+    hdrs=[],
 )
 
 
@@ -209,32 +207,13 @@ def _serialize_stream(s: dict) -> dict:
 
 
 def _get_base_url(request) -> str:
-    """
-    Resolve a URL base usando o host do request (header Host).
-    Usado APENAS para paginas web e links gerados com request disponivel.
-    NAO usa proxy_base_url — esse parametro e exclusivo para playlists M3U
-    geradas sem request (ex: agendador, API externa).
-    Assim o acesso via qualquer IP (Tailscale, LAN, localhost) sempre funciona.
-    """
     host = request.headers.get("host", "")
     if host:
         scheme = "https" if request.url.scheme == "https" else "http"
         return f"{scheme}://{host}"
-    # Fallback caso Host nao venha no header
     client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
     port      = request.url.port or 8888
     return f"http://{client_ip}:{port}"
-
-
-def _nav():
-    return Div(
-        A("Dashboard",  href="/",           style="margin-right:12px;"),
-        A("Proxy",      href="/proxy",      style="margin-right:12px;"),
-        A("Force Sync", href="/force-sync", style="margin-right:12px;"),
-        A("Config",     href="/config",     style="margin-right:12px;"),
-        A("Logs",       href="/logs"),
-        style="padding:8px 0 16px 0; border-bottom: 1px solid #ccc; margin-bottom:16px;",
-    )
 
 
 def _serve_playlist_onthefly(mode: str, mode_type: str, request=None) -> Response:
@@ -245,30 +224,26 @@ def _serve_playlist_onthefly(mode: str, mode_type: str, request=None) -> Respons
     proxy_base = ""
     if mode_type == "proxy":
         if request is not None:
-            # Usa o IP/host exato do request para que os links M3U
-            # funcionem independente de qual IP foi usado para baixar a playlist
             proxy_base = _get_base_url(request)
         else:
-            # Sem request (chamada interna) usa proxy_base_url configurado ou auto-deteccao
             proxy_base = _resolve_proxy_base_url(_config)
     content = _m3u_generator.generate_playlist(
         streams, cats, mode=mode, mode_type=mode_type,
         thumbnail_manager=_thumbnail_manager,
         proxy_base_url=proxy_base,
     )
-    logger.debug(f"Playlist [{mode}/{mode_type}] gerada  base_url={proxy_base!r}  total={len(streams)}")
     return Response(content, media_type="audio/x-mpegurl")
 
 
 # ---------------------------------------------------------------------------
-# Rotas de playlist — Starlette direto para receber request
+# Rotas de playlist
 # ---------------------------------------------------------------------------
 
 for _playlist_name, (_mode, _mode_type) in _PLAYLIST_ROUTES.items():
-    def _make_playlist_route(mode=_mode, mode_type=_mode_type, playlist_name=_playlist_name):
+    def _make_playlist_route(mode=_mode, mode_type=_mode_type):
         async def _playlist_route(request):
             return _serve_playlist_onthefly(mode, mode_type, request=request)
-        app.routes.append(Route(f"/playlist/{playlist_name}", endpoint=_playlist_route))
+        app.routes.append(Route(f"/playlist/{_playlist_name}", endpoint=_playlist_route))
     _make_playlist_route()
 
 
@@ -299,7 +274,64 @@ for _old, _new in _LEGACY_REDIRECTS.items():
 
 
 # ---------------------------------------------------------------------------
-# Rotas HTML
+# Helpers de formulário de config
+# ---------------------------------------------------------------------------
+
+def _config_form_fields(rows: list, section: str) -> list:
+    """Gera campos de formulário genéricos para uma seção de config."""
+    fields = []
+    for row in rows:
+        key   = row["key"]
+        value = row["value"]
+        desc  = row.get("description", "")
+        vtype = row.get("value_type", "str")
+        if vtype == "bool":
+            checked = value.lower() == "true"
+            fields.append(
+                Label(
+                    Input(type="checkbox", name=key, value="true",
+                          checked=checked, id=f"field_{key}"),
+                    f" {desc or key}",
+                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
+                )
+            )
+        else:
+            fields.append(
+                Label(
+                    Span(desc or key, style="display:block;margin-bottom:4px;"),
+                    Input(name=key, value=value, type="text", id=f"field_{key}"),
+                )
+            )
+    return fields
+
+
+def _config_page(section_key: str, title: str, active_key: str, saved: bool = False):
+    """Renderiza página genérica de config para uma seção."""
+    sections = _config.get_all_by_section() if _config else {}
+    rows = sections.get(section_key, [])
+    fields = _config_form_fields(rows, section_key)
+    alert = Div("✅ Configurações salvas com sucesso.",
+                cls="alert alert-success") if saved else ""
+    return _page_shell(
+        title, active_key,
+        alert,
+        Div(
+            Form(
+                *fields,
+                Div(
+                    Button("Salvar", type="submit"),
+                    style="margin-top:20px;",
+                ),
+                method="post",
+                action=f"/config/{section_key}",
+            ),
+            cls="card",
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rotas HTML — Dashboard
 # ---------------------------------------------------------------------------
 
 @app.get("/")
@@ -319,29 +351,38 @@ def home(request: Request):
         status   = s.get("status") or "none"
         channel  = (s.get("channelname") or "")[:30] or "\u2014"
         title    = (s.get("title")       or "")[:70] or f"[{vid}]"
+        badge_cls = f"badge badge-{status}" if status in ("live","upcoming","vod") else "badge badge-none"
         rows.append(Tr(
             Td(channel),
             Td(title),
-            Td(vid, style="font-size:0.8em;color:#888;"),
-            Td(status),
+            Td(Code(vid)),
+            Td(Span(status, cls=badge_cls)),
             Td(cat_cell),
-            Td(A("\u25b6", href=url, target="_blank")),
+            Td(A("▶", href=url, target="_blank")),
         ))
 
     channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
-    return Titled(
-        "TubeWrangler",
-        _nav(),
-        H2("Canais monitorados"),
-        Ul(*channel_items) if channel_items else P("Nenhum canal."),
-        H2(f"Streams ({len(streams)})"),
-        P(A("Ver Playlists e Proxy \u2192", href="/proxy"), style="font-size:0.9em;"),
-        Table(
-            Thead(Tr(Th("Canal"), Th("Evento"), Th("Video ID"), Th("Status"), Th("Categoria"), Th(""))),
-            Tbody(*rows),
+    return _page_shell(
+        "Dashboard", "dashboard",
+        Div(
+            H2("Canais monitorados"),
+            Ul(*channel_items) if channel_items else P("Nenhum canal.", cls="text-muted"),
+            H2(f"Streams ({len(streams)})"),
+            P(A("Ver Playlists e Proxy →", href="/proxy"), cls="text-muted"),
+            Table(
+                Thead(Tr(
+                    Th("Canal"), Th("Evento"), Th("Video ID"),
+                    Th("Status"), Th("Categoria"), Th(""),
+                )),
+                Tbody(*rows),
+            ),
         ),
     )
 
+
+# ---------------------------------------------------------------------------
+# Rotas HTML — Proxy
+# ---------------------------------------------------------------------------
 
 @app.get("/proxy")
 def proxy_page(request: Request):
@@ -352,44 +393,354 @@ def proxy_page(request: Request):
     )
 
 
+# ---------------------------------------------------------------------------
+# Rotas HTML — Config (redirect + sub-páginas)
+# ---------------------------------------------------------------------------
+
 @app.get("/config")
-def config_page():
-    sections = _config.get_all_by_section() if _config else {}
-    fields = []
-    for section, rows in sections.items():
-        fields.append(H3(section))
-        for row in rows:
-            fields.append(
-                Label(row["key"], Input(name=f"{section}__{row['key']}", value=row["value"], type="text"))
+def config_redirect():
+    return RedirectResponse("/config/credentials", status_code=302)
+
+
+@app.get("/config/credentials")
+def config_credentials(saved: str = ""):
+    return _config_page("credentials", "Credenciais", "config_credentials", saved == "1")
+
+
+@app.post("/config/credentials")
+async def config_credentials_save(req):
+    form = await req.form()
+    if _config:
+        _config.update_many(dict(form))
+    return RedirectResponse("/config/credentials?saved=1", status_code=303)
+
+
+@app.get("/config/scheduler")
+def config_scheduler(saved: str = ""):
+    return _config_page("scheduler", "Agendador", "config_scheduler", saved == "1")
+
+
+@app.post("/config/scheduler")
+async def config_scheduler_save(req):
+    form = await req.form()
+    if _config:
+        _config.update_many(dict(form))
+    return RedirectResponse("/config/scheduler?saved=1", status_code=303)
+
+
+@app.get("/config/output")
+def config_output(saved: str = ""):
+    return _config_page("output", "Output", "config_output", saved == "1")
+
+
+@app.post("/config/output")
+async def config_output_save(req):
+    form = await req.form()
+    if _config:
+        _config.update_many(dict(form))
+    return RedirectResponse("/config/output?saved=1", status_code=303)
+
+
+@app.get("/config/technical")
+def config_technical(saved: str = ""):
+    return _config_page("technical", "Técnico", "config_technical", saved == "1")
+
+
+@app.post("/config/technical")
+async def config_technical_save(req):
+    form = await req.form()
+    if _config:
+        _config.update_many(dict(form))
+    return RedirectResponse("/config/technical?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Rota HTML — /config/filters (UI dedicada)
+# ---------------------------------------------------------------------------
+
+@app.get("/config/filters")
+def config_filters(saved: str = ""):
+    if not _config:
+        return _page_shell("Filtros", "config_filters", P("Config não inicializado."))
+
+    cfg = _config
+    alert = Div("✅ Filtros salvos com sucesso.", cls="alert alert-success") if saved == "1" else ""
+
+    # --- Valores atuais ---
+    filter_by_cat       = cfg.get_bool("filter_by_category")
+    allowed_ids         = cfg.get_raw("allowed_category_ids")
+    cat_mappings        = cfg.get_raw("category_mappings")
+    channel_mappings    = cfg.get_raw("channel_name_mappings")
+    shorts_max_s        = cfg.get_raw("shorts_max_duration_s")
+    shorts_words_raw    = cfg.get_raw("shorts_block_words")
+    shorts_words        = [w.strip() for w in shorts_words_raw.split(",") if w.strip()]
+    title_exprs_raw     = cfg.get_raw("title_filter_expressions")
+    title_exprs         = [w.strip() for w in title_exprs_raw.split(",") if w.strip()]
+    prefix_channel      = cfg.get_bool("prefix_title_with_channel_name")
+    prefix_status       = cfg.get_bool("prefix_title_with_status")
+    epg_cleanup         = cfg.get_bool("epg_description_cleanup")
+    keep_recorded       = cfg.get_bool("keep_recorded_streams")
+    max_recorded        = cfg.get_raw("max_recorded_per_channel")
+    retention_days      = cfg.get_raw("recorded_retention_days")
+    max_schedule        = cfg.get_raw("max_schedule_hours")
+    max_upcoming        = cfg.get_raw("max_upcoming_per_channel")
+
+    def _tag_list_with_input(words: list, field_name: str, hidden_name: str) -> Div:
+        """Renderiza lista de tags editáveis + campo hidden que armazena o valor."""
+        tags = []
+        for w in words:
+            tags.append(
+                Span(
+                    Span(w, cls="tag-text"),
+                    Button("×", cls="remove-tag", type="button",
+                           onclick=f"removeTag(this, '{hidden_name}')"),
+                    cls="tag",
+                )
             )
-    return Titled(
-        "Configuracoes",
-        _nav(),
-        Form(*fields, Button("Salvar", type="submit"), method="post", action="/config"),
+        return Div(
+            Input(type="hidden", name=hidden_name,
+                  value=",".join(words), id=f"hidden_{hidden_name}"),
+            Div(*tags, id=f"tags_{hidden_name}", cls="tag-list"),
+            Div(
+                Input(type="text", id=f"input_{field_name}",
+                      placeholder="Adicionar... (Enter)",
+                      style="width:200px;display:inline-block;margin-right:8px;"),
+                Button("+ Adicionar", type="button", cls="btn-secondary",
+                       onclick=f"addTag('{field_name}', '{hidden_name}')",
+                       style="font-size:0.82rem;padding:5px 12px;"),
+                style="margin-top:8px;",
+            ),
+        )
+
+    return _page_shell(
+        "Filtros", "config_filters",
+        alert,
+        Form(
+            method="post", action="/config/filters",
+
+            # ---- 1. Categoria ----
+            Div(
+                H2("Filtro de Categoria"),
+                P("Quando ativo, apenas streams com IDs de categoria permitidos entram na playlist.",
+                  cls="text-muted"),
+                Label(
+                    Input(type="checkbox", name="filter_by_category", value="true",
+                          checked=filter_by_cat, id="field_filter_by_category"),
+                    " Ativar filtro por categoria",
+                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
+                ),
+                Label(
+                    Span("IDs permitidos (vírgula) — ex: 17,22,25",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="allowed_category_ids", value=allowed_ids, type="text"),
+                ),
+                Label(
+                    Span("Renomear categorias: ID|Nome (vírgula) — não filtra, só exibe",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="category_mappings", value=cat_mappings, type="text"),
+                ),
+                cls="card",
+            ),
+
+            # ---- 2. Filtro de Shorts ----
+            Div(
+                H2("Filtro de Shorts"),
+                P(
+                    "Shorts com ",
+                    Strong("duração conhecida"),
+                    " são bloqueados pelo campo de segundos. ",
+                    "Para upcoming/live (duração ainda desconhecida), use palavras-chave.",
+                    cls="text-muted",
+                ),
+                Label(
+                    Span("Duração máxima (s) — 0 = desativado",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="shorts_max_duration_s", value=shorts_max_s,
+                          type="number", style="width:140px;"),
+                ),
+                Label(
+                    Span("Palavras bloqueadas (título/tags)",
+                         style="display:block;margin-bottom:4px;"),
+                    _tag_list_with_input(shorts_words, "new_short_word", "shorts_block_words"),
+                ),
+                cls="card",
+            ),
+
+            # ---- 3. Títulos ----
+            Div(
+                H2("Títulos"),
+                Label(
+                    Span("Expressões a remover dos títulos",
+                         style="display:block;margin-bottom:4px;"),
+                    _tag_list_with_input(title_exprs, "new_title_expr", "title_filter_expressions"),
+                ),
+                Label(
+                    Input(type="checkbox", name="prefix_title_with_channel_name", value="true",
+                          checked=prefix_channel, id="field_prefix_channel"),
+                    " Prefixar título com nome do canal",
+                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;margin-top:14px;",
+                ),
+                Label(
+                    Input(type="checkbox", name="prefix_title_with_status", value="true",
+                          checked=prefix_status, id="field_prefix_status"),
+                    " Prefixar título com status [Ao Vivo] / [Agendado]",
+                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
+                ),
+                Label(
+                    Span("Mapeamento de nomes de canal: Nome Longo|Nome Curto (vírgula)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="channel_name_mappings", value=channel_mappings, type="text"),
+                ),
+                cls="card",
+            ),
+
+            # ---- 4. VOD / Gravações ----
+            Div(
+                H2("VOD / Gravações"),
+                Label(
+                    Input(type="checkbox", name="keep_recorded_streams", value="true",
+                          checked=keep_recorded, id="field_keep_recorded"),
+                    " Manter streams gravados (ex-live) na playlist VOD",
+                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
+                ),
+                Label(
+                    Input(type="checkbox", name="epg_description_cleanup", value="true",
+                          checked=epg_cleanup, id="field_epg_cleanup"),
+                    " Manter apenas o primeiro parágrafo da descrição no EPG",
+                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
+                ),
+                Label(
+                    Span("Máximo de gravações por canal",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="max_recorded_per_channel", value=max_recorded,
+                          type="number", style="width:100px;"),
+                ),
+                Label(
+                    Span("Dias de retenção de gravados",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="recorded_retention_days", value=retention_days,
+                          type="number", style="width:100px;"),
+                ),
+                cls="card",
+            ),
+
+            # ---- 5. Agendamentos futuros ----
+            Div(
+                H2("Agendamentos futuros"),
+                Label(
+                    Span("Limite futuro em horas para upcoming (ex: 72)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="max_schedule_hours", value=max_schedule,
+                          type="number", style="width:100px;"),
+                ),
+                Label(
+                    Span("Máximo de agendamentos por canal",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="max_upcoming_per_channel", value=max_upcoming,
+                          type="number", style="width:100px;"),
+                ),
+                cls="card",
+            ),
+
+            Div(
+                Button("Salvar filtros", type="submit"),
+                style="margin-top:8px;",
+            ),
+        ),
+
+        # JS para tags interativas
+        Script("""
+            function _syncHidden(hiddenName) {
+                const container = document.getElementById('tags_' + hiddenName);
+                const hidden    = document.getElementById('hidden_' + hiddenName);
+                const texts = Array.from(container.querySelectorAll('.tag-text'))
+                                   .map(el => el.textContent.trim())
+                                   .filter(Boolean);
+                hidden.value = texts.join(',');
+            }
+
+            function removeTag(btn, hiddenName) {
+                btn.closest('.tag').remove();
+                _syncHidden(hiddenName);
+            }
+
+            function addTag(inputId, hiddenName) {
+                const inp = document.getElementById('input_' + inputId);
+                const val = inp.value.trim();
+                if (!val) return;
+                const container = document.getElementById('tags_' + hiddenName);
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.innerHTML = `<span class="tag-text">${val}</span>`
+                              + `<button class="remove-tag" type="button"
+                                  onclick="removeTag(this,'${hiddenName}')">\u00d7</button>`;
+                container.appendChild(tag);
+                inp.value = '';
+                _syncHidden(hiddenName);
+            }
+
+            // Enter no input também adiciona
+            document.querySelectorAll('[id^="input_"]').forEach(inp => {
+                inp.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const hiddenName = inp.id.replace('input_new_', '');
+                        addTag(inp.id.replace('input_', ''), hiddenName);
+                    }
+                });
+            });
+
+            // Checkboxes: quando desmarcado, envia "false"
+            document.querySelectorAll('form input[type=checkbox]').forEach(cb => {
+                const form = cb.closest('form');
+                form.addEventListener('submit', () => {
+                    if (!cb.checked) {
+                        const hidden = document.createElement('input');
+                        hidden.type  = 'hidden';
+                        hidden.name  = cb.name;
+                        hidden.value = 'false';
+                        form.appendChild(hidden);
+                    }
+                });
+            });
+        """),
     )
 
 
-@app.post("/config")
-async def config_save(req):
+@app.post("/config/filters")
+async def config_filters_save(req):
     form = await req.form()
-    updates = {}
-    for k, v in form.items():
-        if "__" in k:
-            _, key = k.split("__", 1)
-            updates[key] = v
-    if updates and _config:
-        _config.update_many(updates)
-    return RedirectResponse("/config", status_code=303)
+    if not _config:
+        return RedirectResponse("/config/filters", status_code=303)
 
+    # Checkboxes não enviados = false
+    bool_keys = [
+        "filter_by_category",
+        "prefix_title_with_channel_name",
+        "prefix_title_with_status",
+        "epg_description_cleanup",
+        "keep_recorded_streams",
+    ]
+    updates = dict(form)
+    for k in bool_keys:
+        if k not in updates:
+            updates[k] = "false"
+
+    _config.update_many(updates)
+    return RedirectResponse("/config/filters?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Rotas HTML — Canais e Force-sync
+# ---------------------------------------------------------------------------
 
 @app.get("/channels")
 def channels_page():
     channels = _state.get_all_channels() if _state else {}
-    return Titled(
-        "Canais",
-        _nav(),
+    return _page_shell(
+        "Canais", "dashboard",
         Ul(*[Li(f"{cid}: {title}") for cid, title in channels.items()])
-        if channels else P("Nenhum canal."),
+        if channels else P("Nenhum canal.", cls="text-muted"),
     )
 
 
@@ -556,22 +907,12 @@ async def api_proxy_stream(request):
 
         start_stream_reader(video_id, cmd)
 
-        # Registra placeholder para restart automatico se nao for live nem VOD.
-        # live  → streamlink corre indefinidamente (sem restart necessario)
-        # none  → VOD, tambem corre ate o fim (nao e placeholder)
-        # qualquer outro status (upcoming, None, etc.) → e placeholder com -t finito
         if status not in ("live", "none"):
             register_placeholder(video_id, cmd)
             logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
 
         logger.info(f"[{video_id}] stream proxy iniciado")
 
-        # --- Fast-fail para live streams ---
-        # Streamlink tem STREAMLINK_FAST_FAIL_S para entregar o primeiro chunk.
-        # Se nao entregar (ex: plugin falhou, API retornou erro, 400 Bad Request),
-        # mata o processo e aciona o fallback: yt-dlp -g resolve a URL HLS e
-        # ffmpeg consome diretamente. Topologia inalterada: clientes continuam
-        # recebendo MPEG-TS via proxy buffer, sem saber que houve troca.
         if status == "live":
             ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
             while time.monotonic() < ff_deadline:
@@ -585,30 +926,17 @@ async def api_proxy_stream(request):
                     f"{STREAMLINK_FAST_FAIL_S}s \u2192 fallback yt-dlp HLS"
                 )
                 stop_stream(video_id)
-
-                # resolve_live_hls_url_async usa DEFAULT_USER_AGENT (Edge)
-                # que e o UA correto para o yt-dlp, nao o UA do cliente.
                 hls_url = await resolve_live_hls_url_async(watch_url)
                 if not hls_url:
-                    logger.error(
-                        f"[{video_id}] yt-dlp nao resolveu HLS URL "
-                        "(streamlink + yt-dlp falharam)"
-                    )
+                    logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
                     return Response(
                         "Stream indisponivel (streamlink + yt-dlp falharam)",
                         status_code=503,
                     )
-
                 cmd = build_live_hls_ffmpeg_cmd(hls_url)
                 start_stream_reader(video_id, cmd)
-                logger.info(
-                    f"[{video_id}] fallback HLS ativo: {hls_url[:70]}..."
-                )
+                logger.info(f"[{video_id}] fallback HLS ativo: {hls_url[:70]}...")
 
-        # Aguarda primeiro chunk com timeout completo.
-        # Para o path normal (streamlink ok) este loop geralmente ja passa
-        # imediatamente pois o fast-fail ja confirmou buf.index > 0.
-        # Para o path de fallback, espera o ffmpeg iniciar.
         deadline = time.monotonic() + INIT_TIMEOUT_S
         while time.monotonic() < deadline:
             buf = _buffers.get(video_id)
@@ -629,19 +957,12 @@ async def api_proxy_stream(request):
         bytes_sent        = 0
         last_yield_time   = time.monotonic()
         consecutive_empty = 0
-
         try:
             while True:
                 if not is_stream_active(video_id) and video_id not in _buffers:
-                    logger.warning(f"[{video_id}][{client_id}] stream encerrado, saindo")
                     break
-
-                # Reinicia placeholder se o processo encerrou naturalmente
-                # e ainda ha clientes (incluindo este).
                 restart_placeholder_if_needed(video_id)
-
                 chunks, next_index = buf.get_chunks(local_index, count=5)
-
                 if chunks:
                     for chunk in chunks:
                         yield chunk
@@ -653,16 +974,11 @@ async def api_proxy_stream(request):
                 else:
                     consecutive_empty += 1
                     await asyncio.sleep(min(0.05 * consecutive_empty, 1.0))
-
                     if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
-                        logger.warning(f"[{video_id}][{client_id}] timeout {CLIENT_TIMEOUT_S}s sem dados")
                         break
-
                     if buf.index - local_index > 100:
-                        logger.warning(f"[{video_id}][{client_id}] cliente atrasado, pulando para frente")
                         local_index       = max(0, buf.index - 10)
                         consecutive_empty = 0
-
         except asyncio.CancelledError:
             pass
         except Exception as exc:
@@ -674,9 +990,7 @@ async def api_proxy_stream(request):
                     await asyncio.sleep(STREAM_IDLE_STOP_S)
                     mgr2 = _managers.get(video_id)
                     if mgr2 and mgr2.count > 0:
-                        # Novos clientes conectaram durante a espera — nao para
                         return
-                    logger.info(f"[{video_id}] sem clientes por {STREAM_IDLE_STOP_S}s, parando stream")
                     stop_stream(video_id)
                 asyncio.create_task(_delayed_stop())
 
@@ -697,15 +1011,13 @@ app.routes.append(Route("/api/proxy/{video_id}", endpoint=api_proxy_stream))
 async def api_player_stream(request):
     video_id   = request.path_params["video_id"]
     user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
-
     stream_info   = _state.streams.get(video_id)
     status        = stream_info.get("status")       if stream_info else None
     thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
     watch_url     = f"https://www.youtube.com/watch?v={video_id}"
     placeholder   = _config.get_str("placeholder_image_url")
     thumb_for_ph  = thumbnail_url or placeholder
-
-    local_thumb = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
+    local_thumb   = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
     if local_thumb.exists():
         thumb_for_ph = str(local_thumb)
 
@@ -714,40 +1026,29 @@ async def api_player_stream(request):
         temp_files  = []
         try:
             cmd, temp_files = await build_player_command_async(
-                video_id=video_id,
-                status=status,
-                watch_url=watch_url,
-                thumbnail_url=thumb_for_ph,
-                user_agent=user_agent,
-                font_path=FONT_PATH,
-                texts_cache_path=TEXTS_CACHE_PATH,
+                video_id=video_id, status=status, watch_url=watch_url,
+                thumbnail_url=thumb_for_ph, user_agent=user_agent,
+                font_path=FONT_PATH, texts_cache_path=TEXTS_CACHE_PATH,
             )
         except Exception as exc:
             proc_logger.error(f"[{video_id}] erro ao montar comando: {exc}")
             return
-
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            limit=1024 * 1024,
+            *cmd, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE, limit=1024*1024,
         )
-
         async def _log_stderr():
             try:
                 async for line in proc.stderr:
                     text = line.decode("utf-8", errors="replace").rstrip()
-                    if text:
-                        proc_logger.info(f"[{video_id}] {text}")
+                    if text: proc_logger.info(f"[{video_id}] {text}")
             except Exception:
                 pass
-
         stderr_task = asyncio.create_task(_log_stderr())
         try:
             while True:
                 chunk = await proc.stdout.read(65536)
-                if not chunk:
-                    break
+                if not chunk: break
                 yield chunk
         except asyncio.CancelledError:
             pass
@@ -758,19 +1059,14 @@ async def api_player_stream(request):
             except Exception:
                 pass
             stderr_task.cancel()
-            try:
-                await stderr_task
-            except (asyncio.CancelledError, Exception):
-                pass
+            try: await stderr_task
+            except (asyncio.CancelledError, Exception): pass
             for tf in temp_files:
-                try:
-                    os.unlink(tf)
-                except Exception:
-                    pass
+                try: os.unlink(tf)
+                except Exception: pass
 
     return StreamingResponse(
-        stream_gen(),
-        media_type="video/mp2t",
+        stream_gen(), media_type="video/mp2t",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
@@ -790,13 +1086,12 @@ def api_thumbnail(video_id: str):
     if data:
         return Response(data, media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
     return RedirectResponse(
-        f"https://i.ytimg.com/vi/{video_id}/maxresdefault_live.jpg",
-        status_code=302,
+        f"https://i.ytimg.com/vi/{video_id}/maxresdefault_live.jpg", status_code=302,
     )
 
 
 # ---------------------------------------------------------------------------
-# Logs SSE + pagina /logs
+# Logs SSE + página /logs com painel de nível inline
 # ---------------------------------------------------------------------------
 
 @app.get("/api/logs/stream")
@@ -813,7 +1108,6 @@ async def api_logs_stream():
             for seq, line in new_entries:
                 yield f"data: {line}\n\n"
                 last_seq = seq
-
     return StreamingResponse(
         event_gen(),
         media_type="text/event-stream",
@@ -821,36 +1115,113 @@ async def api_logs_stream():
     )
 
 
+@app.get("/api/logs/level")
+def api_logs_level_get():
+    current = logging.getLogger().level
+    return JSONResponse({"level": logging.getLevelName(current)})
+
+
+@app.post("/api/logs/level")
+async def api_logs_level_set(req):
+    body  = await req.json()
+    level = body.get("level", "INFO").upper()
+    if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        return JSONResponse({"error": "Nível inválido"}, status_code=400)
+    _setup_logging(level)
+    if _config:
+        try:
+            _config.update("log_level", level)
+        except Exception:
+            pass
+    logger.info(f"Nível de log alterado para {level} via UI.")
+    return JSONResponse({"ok": True, "level": level})
+
+
 @app.get("/logs")
 def logs_page():
-    return Titled(
-        "Logs",
-        _nav(),
-        Div(
-            Select(
-                Option("DEBUG",   value="DEBUG"),
-                Option("INFO",    value="INFO",    selected=True),
-                Option("WARNING", value="WARNING"),
-                Option("ERROR",   value="ERROR"),
-                id="log-level-filter",
-                style="margin-right:8px;",
+    current_level = logging.getLevelName(logging.getLogger().level)
+
+    # Painel de controle de logging (colapsável)
+    logging_panel = Div(
+        Details(
+            Summary(
+                "🔧 Configuração de Logging",
+                style="cursor:pointer;font-weight:600;color:#58a6ff;font-size:0.95rem;",
             ),
-            Button("Limpar", id="btn-clear", type="button", style="margin-right:8px;"),
-            Label(
-                Input(type="checkbox", id="auto-scroll", checked=True, style="margin-right:4px;"),
-                "Auto-scroll",
+            Div(
+                P(
+                    "Nível atual: ",
+                    Strong(current_level, id="current-level-badge",
+                           style="color:#58a6ff;"),
+                    cls="text-muted", style="margin-bottom:12px;",
+                ),
+                Div(
+                    *[
+                        Button(
+                            lv,
+                            type="button",
+                            cls="btn-secondary",
+                            id=f"btn-level-{lv}",
+                            onclick=f"setLogLevel('{lv}')",
+                            style=(
+                                "margin-right:8px;font-size:0.82rem;padding:5px 14px;"
+                                + ("border-color:#58a6ff;color:#58a6ff;"
+                                   if lv == current_level else "")
+                            ),
+                        )
+                        for lv in ("DEBUG", "INFO", "WARNING", "ERROR")
+                    ],
+                    id="level-buttons",
+                    style="margin-bottom:10px;",
+                ),
+                Div(id="level-feedback", style="font-size:0.82rem;color:#3fb950;min-height:18px;"),
+                style="padding:12px 0 4px;",
             ),
-            style="margin-bottom:8px;",
         ),
+        cls="card",
+        style="margin-bottom:16px;",
+    )
+
+    # Controles de visão
+    controls = Div(
+        Select(
+            Option("DEBUG",   value="DEBUG"),
+            Option("INFO",    value="INFO",    selected=True),
+            Option("WARNING", value="WARNING"),
+            Option("ERROR",   value="ERROR"),
+            id="log-level-filter",
+            style="margin-right:8px;width:120px;",
+        ),
+        Button("Limpar", id="btn-clear", type="button",
+               cls="btn-secondary",
+               style="margin-right:8px;font-size:0.85em;"),
+        Label(
+            Input(type="checkbox", id="auto-scroll", checked=True,
+                  style="margin-right:4px;"),
+            "Auto-scroll",
+            style="display:inline-flex;align-items:center;font-size:0.85rem;",
+        ),
+        style="margin-bottom:10px;display:flex;align-items:center;",
+    )
+
+    return _page_shell(
+        "Logs", "logs",
+        logging_panel,
+        controls,
         Pre(
             id="log-output",
-            style="height:80vh;overflow-y:auto;background:#111;color:#eee;font-size:0.78rem;padding:8px;",
+            style=(
+                "height:72vh;overflow-y:auto;"
+                "background:#0d1117;color:#eee;"
+                "font-size:0.76rem;padding:10px;"
+                "border:1px solid #30363d;border-radius:6px;"
+            ),
         ),
         Style("""
-            .log-DEBUG   { color: #888; }
-            .log-INFO    { color: #eee; }
-            .log-WARNING { color: #f90; }
-            .log-ERROR   { color: #f44; font-weight:bold; }
+            .log-DEBUG   { color: #484f58; }
+            .log-INFO    { color: #e6edf3; }
+            .log-WARNING { color: #d29922; }
+            .log-ERROR   { color: #f85149; font-weight:bold; }
         """),
         Script("""
             const output     = document.getElementById('log-output');
@@ -892,5 +1263,33 @@ def logs_page():
             filter.onchange = () => {
                 output.querySelectorAll('span').forEach(applyVisibility);
             };
+
+            // --- Controle de nível de log ---
+            function setLogLevel(level) {
+                fetch('/api/logs/level', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ level }),
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.ok) {
+                        document.getElementById('current-level-badge').textContent = d.level;
+                        document.getElementById('level-feedback').textContent =
+                            '\u2705 Nível alterado para ' + d.level;
+                        document.querySelectorAll('[id^="btn-level-"]').forEach(b => {
+                            b.style.borderColor = '';
+                            b.style.color = '';
+                        });
+                        const active = document.getElementById('btn-level-' + d.level);
+                        if (active) { active.style.borderColor='#58a6ff'; active.style.color='#58a6ff'; }
+                        setTimeout(() => { document.getElementById('level-feedback').textContent=''; }, 3000);
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('level-feedback').textContent = '\u274c Erro ao alterar nível.';
+                    document.getElementById('level-feedback').style.color = '#f85149';
+                });
+            }
         """),
     )
