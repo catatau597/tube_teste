@@ -5,21 +5,32 @@ Responsabilidade: Gerenciar estado dos streams, canais e cache persistente.
 Depende de: AppConfig
 NÃO depende de: Flask, FastHTML, os.getenv
 
-Exemplo de uso:
-    from core.config import AppConfig
-    cfg = AppConfig(db_path="/tmp/test.db")
-    sm = StateManager(cfg)
-    sm.streams["canal1"] = {"status": "online"}
-    print(sm.cache_path)
+Filtros aplicados em update_streams (em ordem):
+  1. Categoria: se filter_by_category=true, apenas IDs em allowed_category_ids passam.
+  2. Shorts por palavra: se título ou tags contêm shorts_block_words, descarta.
+  3. Shorts por duração: se duration_iso <= shorts_max_duration_s, descarta.
 """
 import json
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from core.config import AppConfig
 
 logger = logging.getLogger("TubeWrangler")
+
+
+def _parse_duration_seconds(duration_iso: str) -> int:
+    """Converte duração ISO 8601 (ex: PT1M2S) para segundos. Retorna 0 se inválido."""
+    if not duration_iso or duration_iso in ("P0D", "PT0S", ""):
+        return 0
+    m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_iso)
+    if not m:
+        return 0
+    h, mi, s = (int(v) if v else 0 for v in m.groups())
+    return h * 3600 + mi * 60 + s
+
 
 class StateManager:
     def get_all_streams(self) -> list:
@@ -93,7 +104,11 @@ class StateManager:
                     source_streams = raw if isinstance(raw, dict) else {}
                     self.channels = {}
                     self.meta = self.meta
-                self.streams = {vid: parse_stream(s) for vid, s in source_streams.items() if isinstance(s, dict)}
+                self.streams = {
+                    vid: parse_stream(s)
+                    for vid, s in source_streams.items()
+                    if isinstance(s, dict)
+                }
                 logger.info(
                     f"Cache carregado do disco: "
                     f"{cache_file.name} | streams={len(self.streams)}"
@@ -136,13 +151,76 @@ class StateManager:
                 self.channels[cid] = title
 
     def update_streams(self, new_streams: list):
+        """
+        Processa lista de streams da API, aplica filtros e atualiza o estado.
+
+        Filtros (em ordem, configurados via /config/filters):
+          1. Categoria: descarta se filter_by_category=true e categoria não está em allowed_category_ids.
+          2. Shorts por palavras: descarta se título ou tags contêm qualquer palavra de shorts_block_words.
+          3. Shorts por duração: descarta se duration_iso <= shorts_max_duration_s (e shorts_max_duration_s > 0).
+        """
         now = datetime.now(timezone.utc)
-        added = 0
-        updated = 0
+        added = updated = 0
+        ign_category = ign_shorts_words = ign_shorts_duration = 0
+
+        # --- Lê configurações de filtro ---
+        filter_by_cat   = self._config.get_bool("filter_by_category")
+        allowed_cat_ids = set(self._config.get_list("allowed_category_ids"))
+        shorts_max_s    = self._config.get_int("shorts_max_duration_s")
+        shorts_words    = [w.lower() for w in self._config.get_list("shorts_block_words") if w]
+
         for stream in new_streams:
             vid = stream.get("videoid")
             if not vid:
                 continue
+
+            # ----------------------------------------------------------------
+            # Filtro 1: Categoria
+            # ----------------------------------------------------------------
+            if filter_by_cat and allowed_cat_ids:
+                cat_id = str(stream.get("categoryoriginal") or "").strip()
+                if cat_id and cat_id not in allowed_cat_ids:
+                    logger.debug(f"[filtro:categoria] ignorando {vid} (cat={cat_id})")
+                    # Se já estava no estado, remove para não persistir categoria errada
+                    self.streams.pop(vid, None)
+                    ign_category += 1
+                    continue
+
+            # ----------------------------------------------------------------
+            # Filtro 2: Shorts por palavras no título ou tags
+            # ----------------------------------------------------------------
+            if shorts_words:
+                title_lower = (stream.get("title") or stream.get("titleoriginal") or "").lower()
+                tags_lower  = [t.lower() for t in (stream.get("tags") or [])]
+                hit = next(
+                    (w for w in shorts_words if w in title_lower or w in tags_lower),
+                    None,
+                )
+                if hit:
+                    logger.debug(f"[filtro:shorts-palavra] ignorando {vid} (match='{hit}')")
+                    self.streams.pop(vid, None)
+                    ign_shorts_words += 1
+                    continue
+
+            # ----------------------------------------------------------------
+            # Filtro 3: Shorts por duração
+            # ----------------------------------------------------------------
+            if shorts_max_s > 0:
+                duration_s = _parse_duration_seconds(stream.get("durationiso") or "")
+                # duration_s == 0 significa que a API ainda não informou duração
+                # (upcoming/live em andamento) — não bloqueia nesses casos.
+                if 0 < duration_s <= shorts_max_s:
+                    logger.debug(
+                        f"[filtro:shorts-duracao] ignorando {vid} "
+                        f"(dur={duration_s}s <= max={shorts_max_s}s)"
+                    )
+                    self.streams.pop(vid, None)
+                    ign_shorts_duration += 1
+                    continue
+
+            # ----------------------------------------------------------------
+            # Atualiza estado
+            # ----------------------------------------------------------------
             stream["lastseen"] = now
             stream.setdefault("fetchtime", now)
             if vid in self.streams:
@@ -152,7 +230,12 @@ class StateManager:
                 self.streams[vid] = stream
                 added += 1
 
-        logger.info(f"Update Streams: Adicionados {added}, Atualizados {updated}")
+        logger.info(
+            f"Update Streams: +{added} upd={updated} "
+            f"| ign categoria={ign_category} "
+            f"shorts(palavra)={ign_shorts_words} "
+            f"shorts(dur)={ign_shorts_duration}"
+        )
         self.prune_ended_streams()
 
     def prune_ended_streams(self):
@@ -160,19 +243,19 @@ class StateManager:
         to_delete = set()
         recorded_by_channel = defaultdict(list)
 
-        keep_recorded = self._config.get_bool("keep_recorded_streams")
+        keep_recorded          = self._config.get_bool("keep_recorded_streams")
         max_recorded_per_channel = self._config.get_int("max_recorded_per_channel")
-        retention_days = self._config.get_int("recorded_retention_days")
-        stale_hours = self._config.get_int("stale_hours")
-        main_interval = self._config.get_int("scheduler_main_interval_hours")
+        retention_days         = self._config.get_int("recorded_retention_days")
+        stale_hours            = self._config.get_int("stale_hours")
+        main_interval          = self._config.get_int("scheduler_main_interval_hours")
 
         recorded_cutoff = now - timedelta(days=retention_days)
-        stale_cutoff = now - timedelta(hours=max(stale_hours * 2, main_interval * 2))
+        stale_cutoff    = now - timedelta(hours=max(stale_hours * 2, main_interval * 2))
 
         for vid, s in list(self.streams.items()):
-            status = s.get("status")
+            status    = s.get("status")
             last_seen = self._parse_dt(s.get("lastseen")) or self._parse_dt(s.get("fetchtime")) or now
-            end_time = self._parse_dt(s.get("actualendtimeutc"))
+            end_time  = self._parse_dt(s.get("actualendtimeutc"))
             channel_id = s.get("channelid")
 
             if end_time and end_time < recorded_cutoff:
