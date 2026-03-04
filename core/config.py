@@ -28,6 +28,7 @@ _OBSOLETE_KEYS = [
     "smart_player_log_level",
     "smart_player_log_to_file",
     "local_timezone",
+    "youtube_api_key",  # migrado para youtube_api_keys (lista)
 ]
 
 # Todas as variáveis do projeto.
@@ -35,7 +36,7 @@ _OBSOLETE_KEYS = [
 # tipos: "str" | "int" | "bool" | "list" | "mapping"
 DEFAULTS: dict = {
     # --- Credenciais ---
-    "youtube_api_key":               ("", "credentials", "Chave de API do YouTube", "str"),
+    "youtube_api_keys":              ("", "credentials", "Chaves de API do YouTube (vírgula para múltiplas)", "list"),
     "target_channel_handles":        ("", "credentials", "Handles de canais separados por vírgula", "list"),
     "target_channel_ids":            ("", "credentials", "IDs diretos de canais separados por vírgula", "list"),
 
@@ -66,9 +67,6 @@ DEFAULTS: dict = {
     "recorded_retention_days":        ("2",   "filters", "Dias de retenção de streams gravados", "int"),
 
     # --- Filtros de categoria ---
-    # filter_by_category: quando true, apenas categoria_ids em allowed_category_ids passam.
-    # allowed_category_ids: lista de IDs numéricos permitidos (ex: 17,25).
-    # category_mappings: SÓ renomeia para exibição (ex: 17|ESPORTES). NÃO filtra.
     "filter_by_category":            ("true",  "filters", "Filtrar streams por categoria da API YouTube", "bool"),
     "allowed_category_ids":          ("17,22", "filters", "IDs de categoria permitidos (vírgula)", "list"),
     "category_mappings":             (
@@ -83,10 +81,6 @@ DEFAULTS: dict = {
         "filters", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
 
     # --- Filtros de Shorts ---
-    # shorts_max_duration_s: vídeos com duração <= este valor (segundos) são ignorados.
-    #   0 = desativado. Padrão 62s (margem de 2s sobre o limite de 60s do YouTube).
-    # shorts_block_words: se qualquer palavra aparecer no título ou tags, o vídeo é ignorado.
-    #   Importante para upcoming/live onde duration_iso ainda não está disponível.
     "shorts_max_duration_s":         ("62",       "filters", "Duracão máxima (s) para bloquear Shorts (0=off)", "int"),
     "shorts_block_words":            ("#shorts,#short", "filters", "Palavras no título/tags que identificam Shorts", "list"),
 
@@ -105,7 +99,8 @@ DEFAULTS: dict = {
     "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
     # --- Logs ---
-    "log_level": ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
+    "log_level":                     ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
+    "hide_access_logs":              ("true",  "logging", "Ocultar logs de acesso HTTP (uvicorn.access GET /)", "bool"),
 }
 
 
@@ -120,6 +115,7 @@ class AppConfig:
     def __init__(self, db_path: Path = DB_PATH):
         self._db = database(db_path)
         self._ensure_table()
+        self._migrate_api_key()
         self._cleanup_obsolete_keys()
         self._cache: dict = {}
         self.reload()
@@ -141,6 +137,20 @@ class AppConfig:
                     "description": desc,
                     "value_type": vtype,
                 })
+
+    def _migrate_api_key(self):
+        """Migra youtube_api_key (str) para youtube_api_keys (list) se ainda existir no banco."""
+        try:
+            rows = list(self._db.t.config.rows_where("key = ?", ["youtube_api_key"]))
+            if rows:
+                old_value = rows[0]["value"]
+                if old_value:
+                    # Copia o valor antigo para a nova chave se a nova estiver vazia
+                    new_rows = list(self._db.t.config.rows_where("key = ?", ["youtube_api_keys"]))
+                    if new_rows and not new_rows[0]["value"]:
+                        self._db.t.config.update({"key": "youtube_api_keys", "value": old_value})
+        except Exception:
+            pass
 
     def _cleanup_obsolete_keys(self):
         """Remove configs obsoletos do SQLite se existirem."""

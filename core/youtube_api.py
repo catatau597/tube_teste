@@ -2,12 +2,16 @@
 core/youtube_api.py
 -------------------
 Responsabilidade: Interface para YouTube Data API v3.
-Depende de: api_key passado pelo chamador
+Depende de: lista de api_keys passada pelo chamador
 NÃO depende de: AppConfig, Flask, FastHTML, os.getenv
 
+Distribuição de chaves: round-robin por instância.
+Cada chamada a next_key() avança o índice, distribuindo uniformemente
+as chamadas entre todas as chaves configuradas.
+
 Exemplo de uso:
-    yt = YouTubeAPI(api_key="dummy")
-    print(yt.api_key)
+    yt = YouTubeAPI(api_keys=["key1", "key2"])
+    print(yt.api_key)  # chave ativa atual
 """
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -17,15 +21,54 @@ from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger("TubeWrangler")
 
+
 class YouTubeAPI:
-    def __init__(self, api_key: str):
-        self.api_key = (api_key or "").strip()
+    def __init__(self, api_keys):
+        # Aceita str (legado) ou list
+        if isinstance(api_keys, str):
+            self._keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+        else:
+            self._keys = [k.strip() for k in (api_keys or []) if k.strip()]
+
+        self._key_index = 0
         self.youtube = None
-        if self.api_key:
-            self.youtube = build("youtube", "v3", developerKey=self.api_key)
+        self.api_key = ""
+        self.uploads_cache: dict = {}
+
+        if self._keys:
+            self._build_client()
+            count = len(self._keys)
+            if count > 1:
+                logger.info(f"YouTubeAPI: {count} chaves configuradas (round-robin ativo).")
+            else:
+                logger.info("YouTubeAPI: 1 chave configurada.")
         else:
             logger.warning("YouTube API key ausente. API desativada ate configuracao no /config.")
-        self.uploads_cache: dict = {}
+
+    # ------------------------------------------------------------------
+    # Gerenciamento de chaves
+    # ------------------------------------------------------------------
+
+    def _build_client(self):
+        """(Re)constrói o cliente com a chave no índice atual."""
+        self.api_key = self._keys[self._key_index]
+        self.youtube = build("youtube", "v3", developerKey=self.api_key)
+
+    def rotate_key(self):
+        """
+        Avança para a próxima chave em round-robin.
+        Chame antes de cada operação de busca para distribuir as chamadas.
+        Se houver apenas 1 chave, não faz nada.
+        """
+        if len(self._keys) <= 1:
+            return
+        self._key_index = (self._key_index + 1) % len(self._keys)
+        self._build_client()
+        logger.debug(f"YouTubeAPI: usando chave [{self._key_index + 1}/{len(self._keys)}]")
+
+    # ------------------------------------------------------------------
+    # Métodos públicos
+    # ------------------------------------------------------------------
 
     def resolve_channel_handles_to_ids(self, handles: List[str], state) -> Dict[str, str]:
         if not self.youtube:
@@ -49,6 +92,7 @@ class YouTubeAPI:
                         need_resolve = False
             if not need_resolve:
                 continue
+            self.rotate_key()
             try:
                 req = self.youtube.search().list(part="id,snippet", q=handle, type="channel", maxResults=1)
                 res = req.execute()
@@ -82,6 +126,7 @@ class YouTubeAPI:
         fetched_titles = {}
         ids_list = list(ids_without_title)
         for i in range(0, len(ids_list), 50):
+            self.rotate_key()
             batch_ids = ids_list[i:i+50]
             try:
                 req = self.youtube.channels().list(part="snippet", id=",".join(batch_ids))
@@ -116,6 +161,7 @@ class YouTubeAPI:
         data = []
         logger.info(f"Buscando detalhes para {len(video_ids)} video(s) específicos... (em batches)")
         for i in range(0, len(video_ids), 50):
+            self.rotate_key()
             try:
                 batch = video_ids[i:i+50]
                 req = self.youtube.videos().list(part="snippet,liveStreamingDetails,contentDetails", id=",".join(batch))
@@ -136,6 +182,7 @@ class YouTubeAPI:
         for cid in channels_dict.keys():
             page_token = None
             page_count = 0
+            self.rotate_key()
             while True:
                 page_count += 1
                 try:
@@ -184,6 +231,7 @@ class YouTubeAPI:
         for cid in channels_dict.keys():
             playlist_id = self.uploads_cache.get(cid)
             if not playlist_id:
+                self.rotate_key()
                 try:
                     ch_req = self.youtube.channels().list(part='contentDetails', id=cid, maxResults=1)
                     ch_res = ch_req.execute()
@@ -201,6 +249,7 @@ class YouTubeAPI:
             page_token = None
             page_count = 0
             stopped_early = False
+            self.rotate_key()
             while True:
                 page_count += 1
                 try:
