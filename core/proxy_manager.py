@@ -30,11 +30,15 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # Configuracao
 # ---------------------------------------------------------------------------
 
-CHUNK_SIZE          = 65536          # 64 KB por chunk de leitura
-BUFFER_MAXLEN       = 200            # máximo de chunks no deque (~12 MB)
-CLIENT_TIMEOUT_S    = 30             # segundos sem receber dado → desconecta cliente
-STREAM_IDLE_STOP_S  = 30             # segundos sem clientes → para o processo
-INIT_TIMEOUT_S      = 15             # segundos aguardando primeiro chunk
+CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura
+BUFFER_MAXLEN            = 200     # máximo de chunks no deque (~12 MB)
+CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
+STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
+INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
+
+# Duração em segundos de cada segmento do placeholder antes de encerrar naturalmente.
+# Deve ser igual ao -t passado ao ffmpeg em build_ffmpeg_placeholder_cmd().
+PLACEHOLDER_SEGMENT_DURATION = 30
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +175,10 @@ _buffers:   Dict[str, StreamBuffer]  = {}
 _managers:  Dict[str, ClientManager] = {}
 _processes: Dict[str, subprocess.Popen] = {}
 
+# Registra comandos de placeholder para permitir restart automático.
+# video_id → List[str] cmd (somente para streams do tipo placeholder)
+_placeholder_cmds: Dict[str, List[str]] = {}
+
 
 # ---------------------------------------------------------------------------
 # start_stream_reader
@@ -186,6 +194,9 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     if video_id not in _buffers:
         _buffers[video_id]  = StreamBuffer(video_id=video_id)
         _managers[video_id] = ClientManager(video_id=video_id)
+    else:
+        # Reativa o buffer para um novo segmento de placeholder
+        _buffers[video_id].active = True
 
     process = subprocess.Popen(
         cmd,
@@ -195,7 +206,6 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     )
     _processes[video_id] = process
 
-    # Log do comando completo para facilitar debug
     cmd_str = " ".join(cmd)
     logger.info(f"[{video_id}] processo iniciado  PID={process.pid}")
     logger.debug(f"[{video_id}] cmd completo: {cmd_str}")
@@ -237,11 +247,70 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
 
 
 # ---------------------------------------------------------------------------
+# register_placeholder / restart_placeholder_if_needed
+# ---------------------------------------------------------------------------
+
+def register_placeholder(video_id: str, cmd: List[str]) -> None:
+    """Registra o comando de placeholder para permitir restart automático.
+
+    Deve ser chamado pelo caller (web/main.py) logo após start_stream_reader()
+    quando o comando for um placeholder (ffmpeg -loop 1 -t N).
+
+    Args:
+        video_id: ID do vídeo YouTube.
+        cmd:      Comando completo passado ao start_stream_reader().
+    """
+    _placeholder_cmds[video_id] = cmd
+    logger.debug(f"[{video_id}] placeholder registrado para restart automático")
+
+
+def restart_placeholder_if_needed(video_id: str) -> bool:
+    """Reinicia o processo placeholder se ele encerrou e ainda há clientes.
+
+    O processo placeholder usa ffmpeg com -loop 1 -t PLACEHOLDER_SEGMENT_DURATION,
+    portanto encerra normalmente após ~30s. Este método deve ser chamado
+    periodicamente (ex: pelo loop do async generator de cada cliente) para
+    garantir continuidade do stream enquanto houver audiência.
+
+    Retorna True se um novo processo foi iniciado, False caso contrário.
+
+    Não reinicia se:
+    - O stream não é um placeholder (não está em _placeholder_cmds).
+    - O processo ainda está rodando (poll() is None).
+    - Não há clientes conectados (evita iniciar sem audiência).
+    - O stream foi removido (stop_stream chamado).
+    """
+    if video_id not in _placeholder_cmds:
+        return False
+
+    mgr = _managers.get(video_id)
+    if mgr is None or mgr.count == 0:
+        # Sem clientes — não reinicia; stop_stream cuidará da limpeza
+        return False
+
+    proc = _processes.get(video_id)
+    if proc is not None and proc.poll() is None:
+        # Processo ainda vivo — nenhuma ação necessária
+        return False
+
+    cmd = _placeholder_cmds[video_id]
+    logger.info(
+        f"[{video_id}] placeholder encerrou naturalmente, reiniciando "
+        f"(clientes={mgr.count})  cmd={cmd[0]}"
+    )
+    start_stream_reader(video_id, cmd)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # stop_stream
 # ---------------------------------------------------------------------------
 
 def stop_stream(video_id: str) -> None:
     """Para o processo e remove os recursos do stream."""
+    # Remove registro de placeholder antes de qualquer outra coisa
+    _placeholder_cmds.pop(video_id, None)
+
     proc = _processes.pop(video_id, None)
     if proc:
         try:
@@ -276,13 +345,14 @@ def streams_status() -> List[dict]:
         mgr  = _managers.get(vid)
         proc = _processes.get(vid)
         result.append({
-            "video_id":      vid,
-            "buffer_chunks": len(buf.chunks),
-            "buffer_index":  buf.index,
-            "buffer_mb":     round(len(buf.chunks) * CHUNK_SIZE / 1024 / 1024, 2),
-            "clients":       mgr.count if mgr else 0,
-            "clients_info":  mgr.snapshot() if mgr else [],
-            "process_alive": proc.poll() is None if proc else False,
-            "process_pid":   proc.pid if proc else None,
+            "video_id":        vid,
+            "buffer_chunks":   len(buf.chunks),
+            "buffer_index":    buf.index,
+            "buffer_mb":       round(len(buf.chunks) * CHUNK_SIZE / 1024 / 1024, 2),
+            "clients":         mgr.count if mgr else 0,
+            "clients_info":    mgr.snapshot() if mgr else [],
+            "process_alive":   proc.poll() is None if proc else False,
+            "process_pid":     proc.pid if proc else None,
+            "is_placeholder":  vid in _placeholder_cmds,
         })
     return result

@@ -18,6 +18,20 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger("TubeWrangler.player_router")
 
+# User-Agent completo que imita browser Edge moderno.
+# Usado como default em todos os builders de comando.
+# Resolve o fallback android_vr do yt-dlp (que causava geo-bloqueio)
+# pois com um UA de browser o yt-dlp usa o web player JS.
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0"
+)
+
+# Duração em segundos de cada segmento do placeholder.
+# Deve ser igual ao PLACEHOLDER_SEGMENT_DURATION em proxy_manager.py.
+PLACEHOLDER_SEGMENT_DURATION = 30
+
 
 # ---------------------------------------------------------------------------
 # Utilitarios internos
@@ -32,7 +46,7 @@ def _escape_ffmpeg_text(text: str) -> str:
         >>> _escape_ffmpeg_text("50% off: vale 'isso'")
         "50\\% off\\: vale \'isso\'"
     """
-    text = text.replace("\\", "\\\\")  # \ -> \\
+    text = text.replace("\\", "\\\\")  # \ -> \\\\
     text = text.replace("'", "\\'")    # ' -> \'
     text = text.replace(":", "\\:")    # : -> \:
     text = text.replace("%", "\\%")    # % -> \%
@@ -55,7 +69,7 @@ def _get_texts_from_cache(video_id: str, texts_cache_path: Path) -> Dict[str, st
 # Builders de comandos (sincronos, retornam List[str])
 # ---------------------------------------------------------------------------
 
-def build_streamlink_cmd(watch_url: str, user_agent: str = "Mozilla/5.0") -> List[str]:
+def build_streamlink_cmd(watch_url: str, user_agent: str = DEFAULT_USER_AGENT) -> List[str]:
     """Retorna comando streamlink para stream ao vivo (status=live)."""
     return [
         "streamlink", "--stdout",
@@ -69,7 +83,7 @@ def build_streamlink_cmd(watch_url: str, user_agent: str = "Mozilla/5.0") -> Lis
 def build_vod_cmd(
     cdn_url: str,
     watch_url: str,
-    user_agent: str = "Mozilla/5.0",
+    user_agent: str = DEFAULT_USER_AGENT,
 ) -> List[str]:
     """Retorna comando para reproducao de VOD (status=none).
 
@@ -113,13 +127,19 @@ def build_ffmpeg_placeholder_cmd(
     text_line1: str = "",
     text_line2: str = "",
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    user_agent: str = "Mozilla/5.0",
+    user_agent: str = DEFAULT_USER_AGENT,
 ) -> tuple[list[str], list[str]]:
     """Retorna (cmd, temp_files) para placeholder de stream indisponivel.
 
-    Gera um loop de imagem estatica (1280x720, 25fps) com overlay de texto
-    opcional via drawtext. Arquivos temporarios de texto sao criados e devem
-    ser deletados pelo chamador apos o processo terminar.
+    Mudancas vs. versao anterior:
+    - Removido loop=-1 (loop infinito que impede SIGTERM limpo e cria zombie).
+    - Adicionado -loop 1 -t PLACEHOLDER_SEGMENT_DURATION: processo encerra
+      normalmente apos ~30s; proxy_manager.restart_placeholder_if_needed()
+      relanca enquanto houver clientes.
+    - fps=1 no filtro + -r 1 -g 1 na saida: reduz CPU de encoding ~96%
+      (imagem estatica nao precisa de 25fps).
+    - -b:a 32k: audio minimo para placeholder silencioso.
+    - Removido -shortest: conflitava com -t explicito.
 
     Args:
         image_url:   URL ou path local da imagem de fundo.
@@ -152,23 +172,33 @@ def build_ffmpeg_placeholder_cmd(
             )
 
     filter_chain = ",".join(drawtext_filters) if drawtext_filters else ""
+    # fps=1: imagem estatica nao precisa de 25fps — reduz CPU ~96%
     video_filter = (
-        f"[0:v]fps=25,scale=1280:720,loop=-1:1:0"
+        f"[0:v]fps=1,scale=1280:720,loop=1:1:0"
         f"{(',' + filter_chain) if filter_chain else ''}[v]"
     )
 
     is_local = image_url.startswith("/") or image_url.startswith("file://")
-    input_args = ["-i", image_url] if is_local else ["-headers", f"User-Agent: {user_agent}\r\n", "-i", image_url]
+    input_args = (
+        ["-i", image_url]
+        if is_local
+        else ["-headers", f"User-Agent: {user_agent}\r\n", "-i", image_url]
+    )
 
     cmd = [
         "ffmpeg", "-loglevel", "error",
         "-re",
+        # -loop 1 + -t: processo encerra naturalmente apos PLACEHOLDER_SEGMENT_DURATION s
+        "-loop", "1",
+        "-t", str(PLACEHOLDER_SEGMENT_DURATION),
         *input_args,
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-filter_complex", video_filter,
         "-map", "[v]", "-map", "1:a",
         "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k",
+        # 1fps saida + todo frame keyframe → seek instantaneo no player
+        "-r", "1", "-g", "1",
+        "-c:a", "aac", "-b:a", "32k",
         "-tune", "stillimage",
         "-f", "mpegts", "pipe:1",
     ]
@@ -181,7 +211,7 @@ def build_ffmpeg_placeholder_cmd(
 
 async def resolve_vod_url_async(
     watch_url: str,
-    user_agent: str = "Mozilla/5.0",
+    user_agent: str = DEFAULT_USER_AGENT,
     timeout: int = 20,
 ) -> str:
     """Resolve a URL CDN real de um VOD via yt-dlp --get-url de forma assincrona.
@@ -247,7 +277,7 @@ def build_player_command(
     status: Optional[str],
     watch_url: str,
     thumbnail_url: str,
-    user_agent: str = "Mozilla/5.0",
+    user_agent: str = DEFAULT_USER_AGENT,
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     texts_cache_path: Optional[Path] = None,
 ) -> tuple[list[str], list[str]]:
@@ -273,8 +303,6 @@ def build_player_command(
         return build_streamlink_cmd(watch_url, user_agent), []
 
     # status "none" nao deve chegar aqui em producao
-    # (web/main.py usa build_player_command_async para esse caso)
-    # Mas se chamado diretamente (ex: testes/scripts), usa fallback imediato
     if status == "none":
         logger.warning(
             f"[{video_id}] build_player_command() chamado com status=none — "
@@ -298,7 +326,7 @@ async def build_player_command_async(
     status: Optional[str],
     watch_url: str,
     thumbnail_url: str,
-    user_agent: str = "Mozilla/5.0",
+    user_agent: str = DEFAULT_USER_AGENT,
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     texts_cache_path: Optional[Path] = None,
 ) -> tuple[list[str], list[str]]:
