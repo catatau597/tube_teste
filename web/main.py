@@ -96,7 +96,6 @@ def _setup_logging(level_str: str = "INFO", hide_access: bool = True) -> None:
     access.handlers = [_buffer_handler, console]
     access.setLevel(level)
     access.propagate = False
-    # Aplica ou remove o filtro de acordo com a config
     if hide_access:
         if _access_filter not in access.filters:
             access.addFilter(_access_filter)
@@ -230,7 +229,7 @@ def _serialize_stream(s: dict) -> dict:
     cat_name = (_categories_db or {}).get(cat_id, "") if cat_id else ""
     if not cat_name and _config is not None and cat_id:
         cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
-    data["category_display"] = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "—")
+    data["category_display"] = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "\u2014")
     return data
 
 
@@ -375,9 +374,9 @@ def home(request: Request):
         cat_name = (_categories_db or {}).get(cat_id, "") if cat_id else ""
         if not cat_name and _config is not None and cat_id:
             cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
-        cat_cell = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "—")
+        cat_cell = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "\u2014")
         status   = s.get("status") or "none"
-        channel  = (s.get("channelname") or "")[:30] or "—"
+        channel  = (s.get("channelname") or "")[:30] or "\u2014"
         title    = (s.get("title")       or "")[:70] or f"[{vid}]"
         badge_cls = f"badge badge-{status}" if status in ("live","upcoming","vod") else "badge badge-none"
         rows.append(Tr(
@@ -386,7 +385,7 @@ def home(request: Request):
             Td(Code(vid)),
             Td(Span(status, cls=badge_cls)),
             Td(cat_cell),
-            Td(A("▶", href=url, target="_blank")),
+            Td(A("\u25b6", href=url, target="_blank")),
         ))
 
     channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
@@ -396,7 +395,7 @@ def home(request: Request):
             H2("Canais monitorados"),
             Ul(*channel_items) if channel_items else P("Nenhum canal.", cls="text-muted"),
             H2(f"Streams ({len(streams)})"),
-            P(A("Ver Playlists e Proxy →", href="/proxy"), cls="text-muted"),
+            P(A("Ver Playlists e Proxy \u2192", href="/proxy"), cls="text-muted"),
             Table(
                 Thead(Tr(
                     Th("Canal"), Th("Evento"), Th("Video ID"),
@@ -483,30 +482,6 @@ async def config_technical_save(req):
 
 
 # ---------------------------------------------------------------------------
-# Rota HTML — /config/logging
-# ---------------------------------------------------------------------------
-
-@app.get("/config/logging")
-def config_logging_page(saved: str = ""):
-    return _config_page("logging", "Logging", "config_logging", saved == "1")
-
-
-@app.post("/config/logging")
-async def config_logging_save(req):
-    form = await req.form()
-    if not _config:
-        return RedirectResponse("/config/logging", status_code=303)
-    updates = dict(form)
-    if "hide_access_logs" not in updates:
-        updates["hide_access_logs"] = "false"
-    _config.update_many(updates)
-    # Reaplica logging em tempo real
-    hide_access = _config.get_bool("hide_access_logs")
-    _setup_logging(_config.get_str("log_level") or "INFO", hide_access=hide_access)
-    return RedirectResponse("/config/logging?saved=1", status_code=303)
-
-
-# ---------------------------------------------------------------------------
 # Rota HTML — /config/filters (UI dedicada)
 # ---------------------------------------------------------------------------
 
@@ -518,7 +493,6 @@ def config_filters(saved: str = ""):
     cfg = _config
     alert = Div("✅ Filtros salvos com sucesso.", cls="alert alert-success") if saved == "1" else ""
 
-    # --- Valores atuais ---
     filter_by_cat       = cfg.get_bool("filter_by_category")
     allowed_ids         = cfg.get_raw("allowed_category_ids")
     cat_mappings        = cfg.get_raw("category_mappings")
@@ -538,13 +512,12 @@ def config_filters(saved: str = ""):
     max_upcoming        = cfg.get_raw("max_upcoming_per_channel")
 
     def _tag_list_with_input(words: list, field_name: str, hidden_name: str) -> Div:
-        """Renderiza lista de tags editáveis + campo hidden que armazena o valor."""
         tags = []
         for w in words:
             tags.append(
                 Span(
                     Span(w, cls="tag-text"),
-                    Button("×", cls="remove-tag", type="button",
+                    Button("\u00d7", cls="remove-tag", type="button",
                            onclick=f"removeTag(this, '{hidden_name}')"),
                     cls="tag",
                 )
@@ -1128,7 +1101,7 @@ def api_thumbnail(video_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Logs SSE + página /logs com painel de nível inline
+# Logs SSE + página /logs com painel de configuração inline
 # ---------------------------------------------------------------------------
 
 @app.get("/api/logs/stream")
@@ -1175,9 +1148,23 @@ async def api_logs_level_set(req):
     return JSONResponse({"ok": True, "level": level})
 
 
+@app.post("/api/logs/hide-access")
+async def api_logs_hide_access_set(req):
+    """Toggle hide_access_logs via fetch — chamado pelo checkbox na página /logs."""
+    body        = await req.json()
+    hide_access = bool(body.get("hide_access", True))
+    if _config:
+        _config.update("hide_access_logs", "true" if hide_access else "false")
+    current_level = logging.getLevelName(logging.getLogger().level)
+    _setup_logging(current_level, hide_access=hide_access)
+    logger.info(f"Ocultar logs de acesso HTTP: {hide_access}")
+    return JSONResponse({"ok": True, "hide_access": hide_access})
+
+
 @app.get("/logs")
 def logs_page():
     current_level = logging.getLevelName(logging.getLogger().level)
+    hide_access   = _config.get_bool("hide_access_logs") if _config else True
 
     logging_panel = Div(
         Details(
@@ -1209,7 +1196,20 @@ def logs_page():
                         for lv in ("DEBUG", "INFO", "WARNING", "ERROR")
                     ],
                     id="level-buttons",
-                    style="margin-bottom:10px;",
+                    style="margin-bottom:14px;",
+                ),
+                # --- checkbox ocultar access logs ---
+                Label(
+                    Input(
+                        type="checkbox",
+                        id="chk-hide-access",
+                        checked=hide_access,
+                        style="margin-right:6px;width:auto;display:inline;",
+                        onchange="toggleHideAccess(this.checked)",
+                    ),
+                    "Ocultar logs de acesso HTTP (GET / e /api/logs/stream)",
+                    style="display:inline-flex;align-items:center;font-size:0.85rem;"
+                          "color:#8b949e;cursor:pointer;margin-bottom:10px;",
                 ),
                 Div(id="level-feedback", style="font-size:0.82rem;color:#3fb950;min-height:18px;"),
                 style="padding:12px 0 4px;",
@@ -1323,6 +1323,26 @@ def logs_page():
                 })
                 .catch(() => {
                     document.getElementById('level-feedback').textContent = '\\u274c Erro ao alterar nível.';
+                    document.getElementById('level-feedback').style.color = '#f85149';
+                });
+            }
+
+            function toggleHideAccess(hide) {
+                fetch('/api/logs/hide-access', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hide_access: hide }),
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.ok) {
+                        const msg = hide ? '\\u2705 Logs de acesso ocultados.' : '\\u2705 Logs de acesso visíveis.';
+                        document.getElementById('level-feedback').textContent = msg;
+                        setTimeout(() => { document.getElementById('level-feedback').textContent=''; }, 3000);
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao salvar preferência.';
                     document.getElementById('level-feedback').style.color = '#f85149';
                 });
             }
