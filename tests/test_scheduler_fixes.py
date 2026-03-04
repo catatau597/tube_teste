@@ -21,18 +21,11 @@ class MockConfig:
             "enable_scheduler_active_hours": True,
             "scheduler_active_start_hour": 7,
             "scheduler_active_end_hour": 22,
-            "local_timezone": "America/Sao_Paulo",
             "initial_sync_days": 2,
             "scheduler_pre_event_interval_minutes": 5,
             "scheduler_post_event_interval_minutes": 5,
             "scheduler_pre_event_window_hours": 2,
             "use_playlist_items": True,
-            "playlist_save_directory": "/data/m3us",
-            "xmltv_save_directory": "/data/epgs",
-            "playlist_live_filename": "playlist_live.m3u8",
-            "playlist_upcoming_filename": "playlist_upcoming.m3u8",
-            "playlist_vod_filename": "playlist_vod.m3u8",
-            "xmltv_filename": "epg.xml",
             "keep_recorded_streams": True,
         }
         self.defaults.update(overrides)
@@ -93,7 +86,7 @@ class MockScraper:
                 for i in range(50)
             ]
     
-    def fetch_all_streams_for_channels_using_playlists(self, channels, published_after=None):
+    def fetch_all_streams_for_channels_using_playlists(self, channels, published_after=None, **kwargs):
         return self.fetch_all_streams_for_channels(channels, published_after)
     
     def fetch_streams_by_ids(self, ids, channels):

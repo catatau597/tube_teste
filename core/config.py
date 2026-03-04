@@ -27,6 +27,7 @@ _OBSOLETE_KEYS = [
     "log_to_file",
     "smart_player_log_level",
     "smart_player_log_to_file",
+    "local_timezone",
 ]
 
 # Todas as variáveis do projeto.
@@ -101,7 +102,6 @@ DEFAULTS: dict = {
     "state_cache_filename":          ("state_cache.json", "technical", "Nome do arquivo JSON de estado", "str"),
     "stale_hours":                   ("6",                "technical", "Horas para considerar stream stale", "int"),
     "use_playlist_items":            ("true",             "technical", "Usar playlistItems API (vs search.list)", "bool"),
-    "local_timezone":                ("America/Sao_Paulo", "technical", "Fuso horário local (pytz)", "str"),
     "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
     # --- Logs ---

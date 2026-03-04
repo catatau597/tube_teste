@@ -10,7 +10,6 @@ import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
-import pytz
 
 logger = logging.getLogger("TubeWrangler")
 
@@ -27,8 +26,10 @@ def _save_files(state, config, categories_db: dict, thumbnail_manager=None):
                 thumbnail_manager.ensure_cached(vid, thumb)
 
     # ── Gerar textosepg.json (countdown para smartplayer.py) ──
+    # Horário de exibição usa UTC-3 (América/São Paulo) fixo.
+    # O fuso é fixo pois o sistema não precisa de configuração de timezone.
     try:
-        local_tz = pytz.timezone(config.get_str("local_timezone"))
+        UTC_MINUS_3 = timezone(timedelta(hours=-3))
         now_utc  = datetime.now(timezone.utc)
         MESES    = ["Jan","Fev","Mar","Abr","Mai","Jun",
                     "Jul","Ago","Set","Out","Nov","Dez"]
@@ -41,7 +42,7 @@ def _save_files(state, config, categories_db: dict, thumbnail_manager=None):
             if not isinstance(start, datetime):
                 continue
             try:
-                start_local = start.astimezone(local_tz)
+                start_local = start.astimezone(UTC_MINUS_3)
                 total_secs  = (start - now_utc).total_seconds()
                 if total_secs < 0:
                     line1 = "Ao vivo em instantes"
@@ -143,6 +144,9 @@ class Scheduler:
             logger.info("Scheduler: aplicando delay inicial")
             self.last_main_run = datetime.now(timezone.utc)
 
+        # UTC-3 fixo para guard de horário ativo (América/São Paulo)
+        UTC_MINUS_3 = timezone(timedelta(hours=-3))
+
         while True:
             now_utc = datetime.now(timezone.utc)
             dt_min_utc = datetime.min.replace(tzinfo=timezone.utc)
@@ -177,10 +181,7 @@ class Scheduler:
                 "enable_scheduler_active_hours"
             ):
                 try:
-                    local_tz = pytz.timezone(
-                        self._config.get_str("local_timezone")
-                    )
-                    local_hour = datetime.now(local_tz).hour
+                    local_hour = datetime.now(UTC_MINUS_3).hour
                     start_h = self._config.get_int("scheduler_active_start_hour")
                     end_h = self._config.get_int("scheduler_active_end_hour")
                     if not (start_h <= local_hour < end_h):
@@ -241,9 +242,7 @@ class Scheduler:
 
                 if all_target_channels:
                     try:
-                        use_playlists = self._config.get_bool(
-                            "use_playlist_items"
-                        )
+                        use_playlists = self._config.get_bool("use_playlist_items")
                         if use_playlists:
                             new_streams = self._scraper.fetch_all_streams_for_channels_using_playlists(
                                 all_target_channels,
@@ -291,8 +290,6 @@ class Scheduler:
                     f"--- Scheduler: Verificação principal PULADA "
                     f"(fora do horário {start_h}h-{end_h}h) ---"
                 )
-
-            # ...existing code...
 
             # ── 2. Verificações de alta frequência ──
             streams_in_memory = self._state.get_all_streams()
