@@ -1,0 +1,123 @@
+root@master2:~# docker logs -f tubewranglerr
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+2026-03-03 21:14:25 INFO     TubeWrangler  === TubeWrangler iniciando ===
+2026-03-03 21:14:25 INFO     TubeWrangler  Cache carregado do disco: state_cache.json | streams=16
+2026-03-03 21:14:25 INFO     TubeWrangler  Cache disco: True | canais=2 streams=16
+2026-03-03 21:14:25 INFO     TubeWrangler  Handles configurados : ['@xsports.brasil', '@cazetv']
+2026-03-03 21:14:25 INFO     TubeWrangler  IDs configurados     : []
+2026-03-03 21:14:25 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-03 21:14:25 INFO     TubeWrangler  Resolvendo 2 handle(s) via API...
+2026-03-03 21:14:25 INFO     TubeWrangler  Resolvendo 2 handles de canais para IDs... (usando cache quando possível)
+2026-03-03 21:14:26 INFO     TubeWrangler  Handle '@xsports.brasil' -> UCH-BU-Os3JSo2L8lBQxE8KA (Xsports)
+2026-03-03 21:14:26 INFO     TubeWrangler  Handle '@cazetv' -> UCZiYbVptd3PVPf4f6eR6UaQ (CazéTV)
+2026-03-03 21:14:26 INFO     TubeWrangler  Resolvido/cacheado via handle 2 canais nesta execução.
+2026-03-03 21:14:26 INFO     TubeWrangler  Handles resolvidos: {'UCH-BU-Os3JSo2L8lBQxE8KA': 'Xsports', 'UCZiYbVptd3PVPf4f6eR6UaQ': 'CazéTV'}
+2026-03-03 21:14:26 INFO     TubeWrangler  Canais prontos: 2
+2026-03-03 21:14:26 INFO     TubeWrangler  Scheduler iniciado.
+2026-03-03 21:14:26 INFO     TubeWrangler  Scheduler: PRIMEIRA EXECUÇÃO — Limitando aos últimos 2 dias. publishedAfter=2026-03-02T00:14:26.523962+00:00
+2026-03-03 21:14:26 INFO     TubeWrangler  --- Scheduler: Verificação Principal [canais=2, force=False] ---
+2026-03-03 21:14:26 INFO     TubeWrangler  Buscando streams [playlistItems] para 2 canais (publishedAfter=2026-03-02T00:14:26.523962+00:00)...
+2026-03-03 21:14:27 INFO     TubeWrangler  Busca [playlistItems] encontrou 98 IDs únicos. Buscando detalhes...
+2026-03-03 21:14:27 INFO     TubeWrangler  Buscando detalhes para 98 video(s) específicos... (em batches)
+2026-03-03 21:14:28 INFO     TubeWrangler  Recebidos detalhes de 98 video(s).
+2026-03-03 21:14:28 INFO     TubeWrangler  Update Streams: Adicionados 92, Atualizados 6
+2026-03-03 21:14:28 INFO     TubeWrangler  Removendo 93 streams antigas/excedentes/stale do estado.
+2026-03-03 21:14:28 INFO     TubeWrangler  Status Verificação Principal: 15 streams — 1 live, 9 upcoming, 5 vod/ended
+2026-03-03 21:14:28 INFO     TubeWrangler  --- Scheduler: 1 live PÓS-EVENTO ---
+2026-03-03 21:14:28 INFO     TubeWrangler  Buscando detalhes para 1 video(s) específicos... (em batches)
+2026-03-03 21:14:28 INFO     TubeWrangler  Recebidos detalhes de 1 video(s).
+2026-03-03 21:14:28 INFO     TubeWrangler  Update Streams: Adicionados 0, Atualizados 1
+2026-03-03 21:14:28 INFO     TubeWrangler  Status Verificação Alta Frequência: 15 streams — 1 live, 9 upcoming, 5 vod/ended
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8888 (Press CTRL+C to quit)
+2026-03-03 21:14:29 INFO     uvicorn.access  127.0.0.1:33346 - "GET / HTTP/1.1" 200
+2026-03-03 21:14:34 INFO     uvicorn.access  192.168.20.1:50142 - "GET / HTTP/1.1" 200
+2026-03-03 21:14:35 INFO     uvicorn.access  192.168.20.1:50142 - "GET /favicon.ico HTTP/1.1" 404
+2026-03-03 21:14:59 INFO     uvicorn.access  127.0.0.1:49254 - "GET / HTTP/1.1" 200
+2026-03-03 21:15:29 INFO     uvicorn.access  127.0.0.1:60236 - "GET / HTTP/1.1" 200
+2026-03-03 21:15:59 INFO     uvicorn.access  127.0.0.1:39718 - "GET / HTTP/1.1" 200
+2026-03-03 21:16:29 INFO     uvicorn.access  127.0.0.1:60062 - "GET / HTTP/1.1" 200
+2026-03-03 21:17:00 INFO     uvicorn.access  127.0.0.1:33156 - "GET / HTTP/1.1" 200
+2026-03-03 21:17:30 INFO     uvicorn.access  127.0.0.1:48232 - "GET / HTTP/1.1" 200
+2026-03-03 21:18:00 INFO     uvicorn.access  127.0.0.1:34024 - "GET / HTTP/1.1" 200
+2026-03-03 21:18:05 INFO     uvicorn.access  192.168.20.1:60230 - "GET /proxy HTTP/1.1" 200
+2026-03-03 21:18:05 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:07 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:09 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:11 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:13 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:15 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:17 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:19 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:21 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:23 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:25 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:27 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:29 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:30 INFO     uvicorn.access  127.0.0.1:36374 - "GET / HTTP/1.1" 200
+2026-03-03 21:18:31 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:33 INFO     uvicorn.access  192.168.20.1:49866 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:18:33 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:35 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:37 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:39 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:41 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:43 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:45 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:47 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:49 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:51 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:53 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:55 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:55 INFO     uvicorn.access  192.168.20.1:63663 - "GET /playlist/upcoming-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:18:57 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:18:59 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:00 INFO     uvicorn.access  127.0.0.1:38036 - "GET / HTTP/1.1" 200
+2026-03-03 21:19:01 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:03 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:05 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:07 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:09 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:10 INFO     uvicorn.access  192.168.20.1:54927 - "GET /playlist/vod-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:11 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:13 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:15 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:17 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:17 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:19 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:21 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:23 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:24 INFO     uvicorn.access  192.168.20.1:62773 - "GET /playlist/upcoming-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:24 INFO     uvicorn.access  192.168.20.1:62946 - "GET /playlist/upcoming-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:25 INFO     uvicorn.access  192.168.20.1:62773 - "GET /playlist/upcoming-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:25 INFO     uvicorn.access  192.168.20.1:62946 - "GET /playlist/upcoming-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:26 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:27 INFO     uvicorn.access  192.168.20.1:62946 - "GET /playlist/upcoming-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:28 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:28 INFO     TubeWrangler  --- Scheduler: 1 live PÓS-EVENTO ---
+2026-03-03 21:19:28 INFO     TubeWrangler  Buscando detalhes para 1 video(s) específicos... (em batches)
+2026-03-03 21:19:28 INFO     TubeWrangler  Recebidos detalhes de 1 video(s).
+2026-03-03 21:19:28 INFO     TubeWrangler  Update Streams: Adicionados 0, Atualizados 1
+2026-03-03 21:19:28 INFO     TubeWrangler  Status Verificação Alta Frequência: 15 streams — 1 live, 9 upcoming, 5 vod/ended
+2026-03-03 21:19:30 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:30 INFO     uvicorn.access  127.0.0.1:43382 - "GET / HTTP/1.1" 200
+2026-03-03 21:19:32 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:34 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:36 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:38 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:39 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:41 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:42 INFO     uvicorn.access  192.168.20.1:62125 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:42 INFO     uvicorn.access  192.168.20.1:53528 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:42 INFO     uvicorn.access  192.168.20.1:62125 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:42 INFO     uvicorn.access  192.168.20.1:53528 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:44 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:45 INFO     uvicorn.access  192.168.20.1:53528 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-03 21:19:46 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:48 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:50 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:52 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:53 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:55 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-03 21:19:57 INFO     uvicorn.access  192.168.20.1:60230 - "GET /api/proxy/status HTTP/1.1" 200
