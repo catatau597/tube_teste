@@ -6,6 +6,8 @@ dado o status do stream. Retorna (cmd: List[str], temp_files: List[str]).
 Regras:
 - Nenhum subprocess sincrono que envolva rede (subprocess.run bloquearia o event loop).
 - resolve_vod_url_async() e build_vod_cmd() sao a unica fonte de verdade para status="none".
+- resolve_live_hls_url_async() e build_live_hls_ffmpeg_cmd() sao o fallback para status="live"
+  quando o streamlink falha (fast-fail).
 - build_player_command() e build_player_command_async() sao os pontos de entrada publicos.
 """
 import asyncio
@@ -18,19 +20,26 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger("TubeWrangler.player_router")
 
-# User-Agent completo que imita browser Edge moderno.
-# Usado como default em todos os builders de comando.
-# Resolve o fallback android_vr do yt-dlp (que causava geo-bloqueio)
-# pois com um UA de browser o yt-dlp usa o web player JS.
+# User-Agent Edge moderno — usado para ffmpeg, yt-dlp e placeholder.
+# NAO e passado ao streamlink: o plugin YouTube >=8.1.2 usa useragents.CHROME
+# internamente para o POST em youtubei/v1/player (clientName=ANDROID).
+# Sobrescrever com --http-header User-Agent quebraria essa autenticacao.
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0"
 )
 
-# Duração em segundos de cada segmento do placeholder.
+# Duracao em segundos de cada segmento do placeholder.
 # Deve ser igual ao PLACEHOLDER_SEGMENT_DURATION em proxy_manager.py.
 PLACEHOLDER_SEGMENT_DURATION = 30
+
+# Timeout para yt-dlp resolver URL HLS de live stream (fallback).
+# Lives retornam rapido (~2-5s); timeout generoso para redes lentas.
+LIVE_HLS_RESOLVE_TIMEOUT_S = 15
+
+# Timeout para yt-dlp resolver URL de VOD.
+VOD_RESOLVE_TIMEOUT_S = 20
 
 
 # ---------------------------------------------------------------------------
@@ -69,14 +78,70 @@ def _get_texts_from_cache(video_id: str, texts_cache_path: Path) -> Dict[str, st
 # Builders de comandos (sincronos, retornam List[str])
 # ---------------------------------------------------------------------------
 
-def build_streamlink_cmd(watch_url: str, user_agent: str = DEFAULT_USER_AGENT) -> List[str]:
-    """Retorna comando streamlink para stream ao vivo (status=live)."""
+def build_streamlink_cmd(watch_url: str) -> List[str]:
+    """Retorna comando streamlink para stream ao vivo (status=live).
+
+    IMPORTANTE — por que nao passamos User-Agent:
+    O plugin YouTube do streamlink >=8.1.2 (fix PR #6777) configura
+    internamente useragents.CHROME via session.http.headers antes de fazer
+    o POST para youtubei/v1/player com clientName=ANDROID. Passar
+    --http-header User-Agent=<outro-UA> via CLI sobrescreve esse header e
+    pode quebrar a autenticacao da API, causando 400 Bad Request.
+
+    Flags utilizadas:
+    - --no-config: ignora qualquer ~/.streamlinkrc ou /etc/streamlink/config
+      que possa adicionar flags conflitantes (ex: --hls-segment-threads).
+    - --no-plugin-sideloading: ignora plugins de terceiros no filesystem.
+    - --http-no-ssl-verify: evita erros SSL em ambientes de container sem
+      CA bundle completo.
+    - --loglevel info: diagnostico adequado sem verbosidade excessiva.
+    """
     return [
-        "streamlink", "--stdout",
-        "--http-header", f"User-Agent={user_agent}",
-        "--config", "/dev/null",
+        "streamlink",
+        "--no-config",
         "--no-plugin-sideloading",
-        watch_url, "best",
+        "--http-no-ssl-verify",
+        "--loglevel", "info",
+        "--stdout",
+        watch_url,
+        "best",
+    ]
+
+
+def build_live_hls_ffmpeg_cmd(
+    hls_url: str,
+    user_agent: str = DEFAULT_USER_AGENT,
+) -> List[str]:
+    """Retorna comando ffmpeg para consumir URL HLS de live stream.
+
+    Usado como fallback quando streamlink falha (fast-fail em web/main.py).
+    A URL HLS e resolvida previamente por resolve_live_hls_url_async().
+
+    Confirmado em testes (log novo-28.txt): yt-dlp -g retorna HLS muxado
+    de manifest.googlevideo.com com itag/96, 1920x1080, H264+AAC.
+
+    Flags de reconnect garantem resiliencia durante o live:
+    - -reconnect 1: reconecta se a conexao cair (HTTP drops).
+    - -reconnect_streamed 1: reconecta em streams HLS/DASH ja iniciados.
+    - -reconnect_delay_max 5: espera maximo 5s entre tentativas.
+
+    Args:
+        hls_url:    URL HLS do manifest (googlevideo.com ou similar).
+        user_agent: User-Agent para os requests HTTP do ffmpeg.
+
+    Returns:
+        Lista de strings pronta para asyncio.create_subprocess_exec(*cmd).
+    """
+    return [
+        "ffmpeg", "-loglevel", "error",
+        "-user_agent", user_agent,
+        "-reconnect", "1",
+        "-reconnect_streamed", "1",
+        "-reconnect_delay_max", "5",
+        "-i", hls_url,
+        "-c", "copy",
+        "-f", "mpegts",
+        "pipe:1",
     ]
 
 
@@ -115,7 +180,8 @@ def build_vod_cmd(
     q_url = shlex.quote(watch_url)
     fallback = (
         "set -o pipefail; "
-        f"yt-dlp -f b -o - --no-playlist --user-agent {q_ua} {q_url} "
+        f"yt-dlp -f 'bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best' "
+        f"--js-runtimes node --no-playlist -o - --user-agent {q_ua} {q_url} "
         "| ffmpeg -loglevel error -i pipe:0 -c copy -f mpegts pipe:1"
     )
     logger.info(f"VOD via fallback yt-dlp|ffmpeg: {watch_url}")
@@ -196,7 +262,7 @@ def build_ffmpeg_placeholder_cmd(
         "-filter_complex", video_filter,
         "-map", "[v]", "-map", "1:a",
         "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-        # 1fps saida + todo frame keyframe → seek instantaneo no player
+        # 1fps saida + todo frame keyframe -> seek instantaneo no player
         "-r", "1", "-g", "1",
         "-c:a", "aac", "-b:a", "32k",
         "-tune", "stillimage",
@@ -206,18 +272,90 @@ def build_ffmpeg_placeholder_cmd(
 
 
 # ---------------------------------------------------------------------------
+# Resolucao assincrona de URL de live stream (fallback quando streamlink falha)
+# ---------------------------------------------------------------------------
+
+async def resolve_live_hls_url_async(
+    watch_url: str,
+    user_agent: str = DEFAULT_USER_AGENT,
+    timeout: int = LIVE_HLS_RESOLVE_TIMEOUT_S,
+) -> str:
+    """Resolve URL HLS de live stream via yt-dlp -g de forma assincrona.
+
+    Usado como fallback quando streamlink falha (fast-fail em web/main.py).
+
+    Comportamento confirmado em testes (log novo-28.txt):
+    - yt-dlp -g retorna URL HLS muxada de manifest.googlevideo.com
+    - itag/96: video H264 1920x1080 + audio AAC, sem necessidade de muxing
+    - Node.js instalado no container resolve o warning de JS runtime
+
+    Args:
+        watch_url:  URL do video YouTube (live).
+        user_agent: User-Agent HTTP.
+        timeout:    Segundos maximos de espera (default 15).
+
+    Returns:
+        URL HLS como string, ou "" em falha/timeout.
+    """
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "yt-dlp",
+            "-g",
+            "--no-playlist",
+            "--js-runtimes", "node",
+            "--user-agent", user_agent,
+            watch_url,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        if proc.returncode != 0:
+            err_msg = err.decode("utf-8", errors="replace").strip() if err else ""
+            logger.warning(
+                f"[resolve_live_hls] yt-dlp falhou rc={proc.returncode} | {err_msg[:200]}"
+            )
+            return ""
+        text = out.decode("utf-8", errors="replace").strip()
+        url = text.splitlines()[0] if text else ""
+        if url:
+            logger.info(f"[resolve_live_hls] HLS URL resolvida: {url[:80]}...")
+        return url
+
+    except asyncio.TimeoutError:
+        logger.warning(f"[resolve_live_hls] timeout ({timeout}s) para {watch_url}")
+        if proc is not None:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+        return ""
+
+    except Exception as exc:
+        logger.warning(f"[resolve_live_hls] erro inesperado para {watch_url}: {exc}")
+        return ""
+
+
+# ---------------------------------------------------------------------------
 # Resolucao assincrona de URL VOD (unica fonte de verdade)
 # ---------------------------------------------------------------------------
 
 async def resolve_vod_url_async(
     watch_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
-    timeout: int = 20,
+    timeout: int = VOD_RESOLVE_TIMEOUT_S,
 ) -> str:
     """Resolve a URL CDN real de um VOD via yt-dlp --get-url de forma assincrona.
 
     Nao bloqueia o event loop. Em timeout ou falha retorna string vazia,
     e o chamador deve usar build_vod_cmd(cdn_url="") para acionar o fallback.
+
+    Flags utilizadas:
+    - --js-runtimes node: usa Node.js instalado no container para executar
+      o JS player do YouTube, evitando o warning de JS runtime e garantindo
+      acesso a todos os formatos.
+    - -f bestvideo+bestaudio/best: seleciona melhor qualidade disponivel.
 
     Args:
         watch_url:  URL do video YouTube.
@@ -226,18 +364,15 @@ async def resolve_vod_url_async(
 
     Returns:
         URL CDN como string, ou "" em falha/timeout.
-
-    Exemplo:
-        cdn = await resolve_vod_url_async("https://youtube.com/watch?v=abc")
-        cmd = build_vod_cmd(cdn, "https://youtube.com/watch?v=abc")
     """
     proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             "yt-dlp",
-            "-f", "b",
+            "-f", "bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             "--get-url",
             "--no-playlist",
+            "--js-runtimes", "node",
             "--user-agent", user_agent,
             watch_url,
             stdout=asyncio.subprocess.PIPE,
@@ -286,12 +421,16 @@ def build_player_command(
     Para status="none" (VOD), use build_player_command_async() que resolve
     a URL CDN de forma assincrona sem bloquear o event loop.
 
+    Para status="live" em producao, o fast-fail deve ser tratado em
+    web/main.py: se streamlink encerrar com erro em < 8s, chamar
+    resolve_live_hls_url_async() + build_live_hls_ffmpeg_cmd() como fallback.
+
     Args:
         video_id:         ID do video YouTube.
         status:           "live", "upcoming", None ou qualquer outro valor.
         watch_url:        URL completa do video.
         thumbnail_url:    URL ou path local da thumbnail para placeholder.
-        user_agent:       User-Agent HTTP.
+        user_agent:       User-Agent HTTP (nao repassado ao streamlink).
         font_path:        Path da fonte TrueType no container.
         texts_cache_path: Path para JSON de textos de overlay.
 
@@ -300,7 +439,7 @@ def build_player_command(
     """
     if status == "live":
         logger.debug(f"[{video_id}] modo live -> streamlink")
-        return build_streamlink_cmd(watch_url, user_agent), []
+        return build_streamlink_cmd(watch_url), []
 
     # status "none" nao deve chegar aqui em producao
     if status == "none":
