@@ -339,6 +339,40 @@ _TOGGLE_STYLE = Style("""
         font-size: 0.9rem;
         color: #e6edf3;
     }
+    .api-method-toggle {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .api-method-toggle button {
+        flex: 1;
+        min-width: 220px;
+        padding: 12px 18px;
+        border: 2px solid #30363d;
+        border-radius: 8px;
+        background: transparent;
+        color: #8b949e;
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .api-method-toggle button.active {
+        border-color: #388bfd;
+        background: #1f6feb;
+        color: #fff;
+    }
+    .api-method-toggle button .method-title {
+        display: block;
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+    }
+    .api-method-toggle button .method-desc {
+        display: block;
+        font-size: 0.75rem;
+        opacity: 0.8;
+    }
 """)
 
 _TOGGLE_JS = Script("""
@@ -348,6 +382,11 @@ _TOGGLE_JS = Script("""
         hidden.value = isOn ? 'false' : 'true';
         btn.textContent = isOn ? 'Desligado' : 'Ligado';
         btn.className   = 'toggle-pill ' + (isOn ? 'off' : 'on');
+    }
+    function _selectApiMethod(value) {
+        document.getElementById('hidden_use_playlist_items').value = value;
+        document.querySelectorAll('.api-method-toggle button').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-api-' + value).classList.add('active');
     }
 """)
 
@@ -547,13 +586,17 @@ def config_redirect():
 @app.get("/config/credentials")
 def config_credentials(saved: str = ""):
     if not _config:
-        return _page_shell("Credenciais", "config_credentials", P("Config n\u00e3o inicializado."))
+        return _page_shell("API & Credenciais", "config_credentials", P("Config n\u00e3o inicializado."))
     alert = Div("\u2705 Configura\u00e7\u00f5es salvas com sucesso.",
                 cls="alert alert-success") if saved == "1" else ""
     api_keys_val = _config.get_raw("youtube_api_keys")
+    use_playlist_items = _config.get_bool("use_playlist_items")
+    method_val = "true" if use_playlist_items else "false"
     return _page_shell(
-        "Credenciais", "config_credentials",
+        "API & Credenciais", "config_credentials",
         alert,
+        _TOGGLE_STYLE,
+        _TOGGLE_JS,
         Div(
             Form(
                 Label(
@@ -562,6 +605,34 @@ def config_credentials(saved: str = ""):
                     Input(name="youtube_api_keys", value=api_keys_val,
                           type="text", id="field_youtube_api_keys",
                           placeholder="AIzaSy..., AIzaSy..."),
+                ),
+                H3("M\u00e9todo de API", style="margin-top:24px;margin-bottom:10px;"),
+                P(
+                    "Escolha como buscar v\u00eddeos dos canais. O m\u00e9todo playlistItems \u00e9 mais eficiente "
+                    "e economiza quota da API, mas alguns canais podem n\u00e3o funcionar.",
+                    cls="text-muted",
+                    style="font-size:0.85rem;margin-bottom:12px;",
+                ),
+                Input(type="hidden", name="use_playlist_items", value=method_val,
+                      id="hidden_use_playlist_items"),
+                Div(
+                    Button(
+                        Span("playlistItems", cls="method-title"),
+                        Span("\u2705 Menos chamadas \u2022 Mais eficiente \u2022 Recomendado", cls="method-desc"),
+                        type="button",
+                        id="btn-api-true",
+                        cls="active" if use_playlist_items else "",
+                        onclick="_selectApiMethod('true')",
+                    ),
+                    Button(
+                        Span("search.list", cls="method-title"),
+                        Span("\u26a0\ufe0f Mais chamadas \u2022 Fallback/legado", cls="method-desc"),
+                        type="button",
+                        id="btn-api-false",
+                        cls="active" if not use_playlist_items else "",
+                        onclick="_selectApiMethod('false')",
+                    ),
+                    cls="api-method-toggle",
                 ),
                 Div(Button("Salvar", type="submit"), style="margin-top:20px;"),
                 method="post",
@@ -576,7 +647,7 @@ def config_credentials(saved: str = ""):
 async def config_credentials_save(req):
     form = await req.form()
     if _config:
-        data = {k: v for k, v in dict(form).items() if k == "youtube_api_keys"}
+        data = {k: v for k, v in dict(form).items() if k in ("youtube_api_keys", "use_playlist_items")}
         _config.update_many(data)
     return RedirectResponse("/config/credentials?saved=1", status_code=303)
 
@@ -594,17 +665,59 @@ async def config_scheduler_save(req):
     return RedirectResponse("/config/scheduler?saved=1", status_code=303)
 
 
-@app.get("/config/output")
-def config_output(saved: str = ""):
-    return _config_page("output", "Output", "config_output", saved == "1")
+@app.get("/config/playlist")
+def config_playlist_page(saved: str = ""):
+    if not _config:
+        return _page_shell("Playlist", "config_playlist", P("Config n\u00e3o inicializado."))
+    alert = Div("\u2705 Configura\u00e7\u00f5es salvas com sucesso.",
+                cls="alert alert-success") if saved == "1" else ""
+    use_invisible = _config.get_bool("use_invisible_placeholder")
+    placeholder_url = _config.get_raw("placeholder_image_url")
+    thumb_dir = _config.get_raw("thumbnail_cache_directory")
+    return _page_shell(
+        "Playlist", "config_playlist",
+        alert,
+        _TOGGLE_STYLE,
+        _TOGGLE_JS,
+        Div(
+            Form(
+                _bool_toggle("use_invisible_placeholder", use_invisible,
+                             "Usar placeholder invis\u00edvel no M3U"),
+                Label(
+                    Span("URL da imagem placeholder para streams sem thumb",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="placeholder_image_url", value=placeholder_url, type="text"),
+                ),
+                Label(
+                    Span("Diret\u00f3rio de cache de thumbnails",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(value=thumb_dir, type="text", disabled=True,
+                          style="background:#161b22;color:#8b949e;cursor:not-allowed;"),
+                    P(
+                        "\ud83d\udd12 Padr\u00e3o do sistema gerenciado automaticamente. "
+                        "N\u00e3o recomendamos alterar este valor.",
+                        cls="text-muted",
+                        style="font-size:0.78rem;margin-top:4px;margin-bottom:0;",
+                    ),
+                ),
+                Div(Button("Salvar", type="submit"), style="margin-top:20px;"),
+                method="post",
+                action="/config/playlist",
+            ),
+            cls="card",
+        ),
+    )
 
 
-@app.post("/config/output")
-async def config_output_save(req):
+@app.post("/config/playlist")
+async def config_playlist_save(req):
     form = await req.form()
     if _config:
-        _config.update_many(_apply_bool_defaults(dict(form), "output"))
-    return RedirectResponse("/config/output?saved=1", status_code=303)
+        data = _apply_bool_defaults(dict(form), "playlist_output")
+        # Remove thumbnail_cache_directory do form se vier (não deve, pois disabled)
+        data.pop("thumbnail_cache_directory", None)
+        _config.update_many(data)
+    return RedirectResponse("/config/playlist?saved=1", status_code=303)
 
 
 @app.get("/config/technical")
@@ -841,7 +954,7 @@ async def config_title_format_save(req):
     _config.update_many({"title_components_enabled": ",".join(enabled)})
 
     # Colchetes por componente
-    brackets = [c for c in all_comps if form.get(f"comp_brackets_{comp}", "false") == "true"
+    brackets = [c for c in all_comps if form.get(f"comp_brackets_{c}", "false") == "true"
                 for comp in [c]]
     _config.update_many({"title_components_brackets": ",".join(brackets)})
 
