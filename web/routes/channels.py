@@ -6,7 +6,8 @@ from web.layout import _page_shell
 
 
 def channels_page(state, scheduler):
-    channels = state.get_all_channels() if state else {}
+    # Usa o novo método que retorna thumbnail junto
+    channels_list = state.get_all_channels_with_thumbnail() if state else []
     frozen   = getattr(state, "frozen_channels", set()) if state else set()
     streams  = list(state.get_all_streams()) if state else []
 
@@ -24,33 +25,42 @@ def channels_page(state, scheduler):
             counts[cid]["vod"] += 1
 
     rows = []
-    for cid, title in channels.items():
+    for ch in channels_list:
+        cid   = ch["cid"]
+        title = ch["title"]
+        thumb = ch["thumbnail_url"]   # URL direta — sem proxy
         c      = counts.get(cid, {"live": 0, "upcoming": 0, "vod": 0})
         is_frz = cid in frozen
         status_label = "Congelado" if is_frz else "Ativo"
         status_cls   = "badge badge-frozen" if is_frz else "badge badge-active"
         short_id     = cid[:18] + "..." if len(cid) > 18 else cid
-        # Avatar: thumbnail via /api/thumbnail/{cid} (servido localmente)
-        # fallback para inicial colorida
-        thumb_src = f"/api/thumbnail/{cid}"
-        initial   = (title[0].upper() if title else "?")
+        initial      = (title[0].upper() if title else "?")
+
+        if thumb:
+            avatar = Img(
+                src=thumb,
+                alt=title,
+                onerror="this.style.display='none';this.nextElementSibling.style.display='flex';",
+                style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;",
+            )
+        else:
+            avatar = ""
+
+        fallback_avatar = Div(
+            initial,
+            style=(
+                f"{'display:none' if thumb else 'display:flex'};"
+                "width:32px;height:32px;border-radius:50%;"
+                "background:#238636;color:#fff;font-weight:700;font-size:0.9rem;"
+                "align-items:center;justify-content:center;flex-shrink:0;"
+            ),
+        )
+
         rows.append(Tr(
             Td(
                 Div(
-                    Img(
-                        src=thumb_src,
-                        alt=title,
-                        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';",
-                        style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;",
-                    ),
-                    Div(
-                        initial,
-                        style=(
-                            "display:none;width:32px;height:32px;border-radius:50%;"
-                            "background:#238636;color:#fff;font-weight:700;font-size:0.9rem;"
-                            "align-items:center;justify-content:center;flex-shrink:0;"
-                        ),
-                    ),
+                    avatar,
+                    fallback_avatar,
                     Div(
                         Span(title, style="font-weight:600;line-height:1.2;"),
                         Br(),

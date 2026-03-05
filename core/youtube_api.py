@@ -24,7 +24,6 @@ logger = logging.getLogger("TubeWrangler")
 
 class YouTubeAPI:
     def __init__(self, api_keys):
-        # Aceita str (legado) ou list
         if isinstance(api_keys, str):
             self._keys = [k.strip() for k in api_keys.split(",") if k.strip()]
         else:
@@ -45,30 +44,16 @@ class YouTubeAPI:
         else:
             logger.warning("YouTube API key ausente. API desativada ate configuracao no /config.")
 
-    # ------------------------------------------------------------------
-    # Gerenciamento de chaves
-    # ------------------------------------------------------------------
-
     def _build_client(self):
-        """(Re)constrói o cliente com a chave no índice atual."""
         self.api_key = self._keys[self._key_index]
         self.youtube = build("youtube", "v3", developerKey=self.api_key)
 
     def rotate_key(self):
-        """
-        Avança para a próxima chave em round-robin.
-        Chame antes de cada operação de busca para distribuir as chamadas.
-        Se houver apenas 1 chave, não faz nada.
-        """
         if len(self._keys) <= 1:
             return
         self._key_index = (self._key_index + 1) % len(self._keys)
         self._build_client()
         logger.debug(f"YouTubeAPI: usando chave [{self._key_index + 1}/{len(self._keys)}]")
-
-    # ------------------------------------------------------------------
-    # Métodos públicos
-    # ------------------------------------------------------------------
 
     def resolve_channel_handles_to_ids(self, handles: List[str], state) -> Dict[str, str]:
         if not self.youtube:
@@ -86,8 +71,10 @@ class YouTubeAPI:
                     cid = rh['channelId']
                     title = rh.get('channelTitle')
                     if cid and title is not None:
-                        if state.channels.get(cid) != title:
-                            state.channels[cid] = title
+                        state.update_channels({cid: {
+                            "title": title,
+                            "thumbnail_url": rh.get('thumbnail_url', ''),
+                        }})
                         resolved_this_run[cid] = title
                         need_resolve = False
             if not need_resolve:
@@ -100,10 +87,20 @@ class YouTubeAPI:
                 if items:
                     channel_id = items[0]["id"]["channelId"]
                     channel_title = items[0]["snippet"].get("channelTitle")
+                    # search.list snippet não traz thumbnail do canal; buscamos via channels.list
+                    thumb = self._fetch_channel_thumbnail(channel_id)
                     if channel_id and channel_title is not None:
                         resolved_this_run[channel_id] = channel_title
-                        state.meta.setdefault('resolved_handles', {})[handle] = {"channelId": channel_id, "channelTitle": channel_title, "resolved_at": now}
-                        state.channels[channel_id] = channel_title
+                        state.meta.setdefault('resolved_handles', {})[handle] = {
+                            "channelId": channel_id,
+                            "channelTitle": channel_title,
+                            "thumbnail_url": thumb,
+                            "resolved_at": now,
+                        }
+                        state.update_channels({channel_id: {
+                            "title": channel_title,
+                            "thumbnail_url": thumb,
+                        }})
                         logger.info(f"Handle '{handle}' -> {channel_id} ({channel_title})")
                     else:
                         logger.warning(f"API retornou dados incompletos para handle '{handle}'")
@@ -114,14 +111,35 @@ class YouTubeAPI:
         logger.info(f"Resolvido/cacheado via handle {len(resolved_this_run)} canais nesta execução.")
         return resolved_this_run
 
+    def _fetch_channel_thumbnail(self, channel_id: str) -> str:
+        """Busca thumbnail do canal via channels().list snippet. Retorna URL ou ''."""
+        if not self.youtube or not channel_id:
+            return ""
+        try:
+            self.rotate_key()
+            req = self.youtube.channels().list(part="snippet", id=channel_id)
+            res = req.execute()
+            items = res.get("items", [])
+            if items:
+                thumbs = items[0].get("snippet", {}).get("thumbnails", {})
+                return (
+                    thumbs.get("default", {}).get("url")
+                    or thumbs.get("medium", {}).get("url")
+                    or thumbs.get("high", {}).get("url")
+                    or ""
+                )
+        except HttpError as e:
+            logger.warning(f"Não foi possível buscar thumbnail para {channel_id}: {e}")
+        return ""
+
     def ensure_channel_titles(self, target_channel_ids: Set[str], state) -> Dict[str, str]:
         if not self.youtube:
             logger.warning("ensure_channel_titles ignorado: YouTube API desativada (sem key).")
-            return {cid: state.channels.get(cid, "Título não encontrado") for cid in target_channel_ids if cid in state.channels}
-        ids_without_title = {cid for cid in target_channel_ids if cid not in state.channels or not state.channels[cid]}
+            return {cid: state.get_channel_title(cid) for cid in target_channel_ids if state.get_channel_title(cid)}
+        ids_without_title = {cid for cid in target_channel_ids if not state.get_channel_title(cid)}
         if not ids_without_title:
             logger.debug("Todos os IDs de canal alvo já possuem títulos no estado.")
-            return {cid: state.channels.get(cid, "Título não encontrado") for cid in target_channel_ids if cid in state.channels}
+            return {cid: state.get_channel_title(cid) for cid in target_channel_ids if state.get_channel_title(cid)}
         logger.info(f"Buscando títulos para {len(ids_without_title)} IDs de canal faltantes...")
         fetched_titles = {}
         ids_list = list(ids_without_title)
@@ -133,24 +151,25 @@ class YouTubeAPI:
                 res = req.execute()
                 for item in res.get("items", []):
                     cid = item.get("id")
-                    title = item.get("snippet", {}).get("title")
+                    snippet = item.get("snippet", {})
+                    title = snippet.get("title")
+                    thumbs = snippet.get("thumbnails", {})
+                    thumb = (
+                        thumbs.get("default", {}).get("url")
+                        or thumbs.get("medium", {}).get("url")
+                        or thumbs.get("high", {}).get("url")
+                        or ""
+                    )
                     if cid and title:
                         fetched_titles[cid] = title
-                        state.channels[cid] = title
+                        state.update_channels({cid: {"title": title, "thumbnail_url": thumb}})
                         logger.info(f"Título encontrado para ID {cid}: {title}")
             except HttpError as e:
                 logger.error(f"Erro ao buscar títulos para o lote de IDs: {e}")
         still_missing = ids_without_title - set(fetched_titles.keys())
         if still_missing:
             logger.warning(f"Não foi possível obter títulos para {len(still_missing)} IDs: {still_missing}")
-        final_channels_dict = {}
-        for cid in target_channel_ids:
-            title = state.channels.get(cid)
-            if title:
-                final_channels_dict[cid] = title
-            else:
-                logger.warning(f"ID de canal alvo {cid} sem título associado após busca.")
-        return final_channels_dict
+        return {cid: state.get_channel_title(cid) for cid in target_channel_ids if state.get_channel_title(cid)}
 
     def fetch_streams_by_ids(self, video_ids: List[str], channels_dict: Dict[str, str]) -> List[Dict[str, Any]]:
         if not self.youtube:
@@ -224,7 +243,6 @@ class YouTubeAPI:
         if published_after:
             try:
                 published_after_dt = datetime.fromisoformat(published_after.replace('Z', '+00:00'))
-                logger.debug(f"Fetch using playlists: Filtro published_after_dt={published_after_dt}")
             except Exception as e:
                 logger.error(f"Erro ao parsear published_after '{published_after}': {e}")
                 published_after_dt = None
@@ -276,7 +294,6 @@ class YouTubeAPI:
                                 if pa_dt <= published_after_dt:
                                     stop_pagination = True
                                     stopped_early = True
-                                    logger.debug(f"Playlist {playlist_id} (Canal {cid}): Stop pagination at video {vid} (published: {pa_dt})")
                                     break
                             except Exception as e:
                                 logger.warning(f"Erro ao parsear publishedAt '{publishedAt}' para video {vid}: {e}")
@@ -288,10 +305,6 @@ class YouTubeAPI:
                     if stop_pagination:
                         break
                     if items and all_too_old:
-                        logger.debug(
-                            f"Early-stop paginação {playlist_id}: todos os itens da página "
-                            f"anteriores ao stale_cutoff"
-                        )
                         break
                     page_token = res.get('nextPageToken')
                     if not page_token:
