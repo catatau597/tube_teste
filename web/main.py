@@ -33,6 +33,7 @@ from web.routes.playlist_dashboard import playlist_dashboard_page
 from web.routes.channels import channels_page as _channels_page
 from web.routes.eventos import eventos_page as _eventos_page
 from web.routes.title_format import title_format_page as _title_format_page
+from web.routes.proxy_dashboard import scheduler_cards, active_streams_card, dashboard_js
 from web.layout import _page_shell
 
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
@@ -434,16 +435,17 @@ def _apply_bool_defaults(form_data: dict, section_key: str) -> dict:
 
 @app.get("/")
 def home(request: Request):
-    streams  = _state.get_all_streams() if _state else []
-    channels = _state.get_all_channels() if _state else {}
+    streams  = list(_state.get_all_streams()) if _state else []
+    channels = _state.get_all_channels()      if _state else {}
 
     n_live = sum(1 for s in streams if s.get("status") == "live")
     n_up   = sum(1 for s in streams if s.get("status") == "upcoming")
     n_vod  = sum(1 for s in streams if s.get("status") in ("vod", "recorded"))
-
     channel_count = len(channels)
+
     return _page_shell(
         "Dashboard", "dashboard",
+        # --- cards de contagem ---
         Div(
             H2("Vis\u00e3o Geral"),
             Div(
@@ -478,12 +480,19 @@ def home(request: Request):
             P(
                 A("\U0001f4c5 Ver todos os Eventos \u2192", href="/eventos"),
                 "   ",
-                A("\U0001f4c1 Playlists e Proxy \u2192", href="/playlist"),
+                A("\U0001f4c1 Playlists \u2192", href="/playlist"),
                 cls="text-muted",
                 style="margin-top:4px;",
             ),
             cls="card",
+            style="margin-bottom:20px;",
         ),
+        # --- card do scheduler ---
+        scheduler_cards(_scheduler),
+        # --- tabela de proxy ativos ---
+        active_streams_card(),
+        # --- JS do dashboard ---
+        dashboard_js(),
     )
 
 
@@ -505,7 +514,7 @@ def force_sync():
 
 
 # ---------------------------------------------------------------------------
-# Rotas HTML — Playlist (antigo /proxy)
+# Rotas HTML — Playlist
 # ---------------------------------------------------------------------------
 
 @app.get("/playlist")
@@ -840,23 +849,19 @@ async def config_title_format_save(req):
 
     form = dict(await req.form())
 
-    # Ordem: campo oculto title_components_order
     order_raw = form.get("title_components_order", "channel,status,title")
     _config.update_many({"title_components_order": order_raw})
 
-    # Componentes habilitados: ler cada comp_enabled_* e montar lista
     all_comps = [c.strip() for c in order_raw.split(",") if c.strip()]
     enabled   = []
     for comp in all_comps:
         val = form.get(f"comp_enabled_{comp}", "false")
         if val == "true":
             enabled.append(comp)
-    # title é sempre obrigatório
     if "title" not in enabled:
         enabled.append("title")
     _config.update_many({"title_components_enabled": ",".join(enabled)})
 
-    # Brackets toggle
     brackets_val = form.get("title_use_brackets", "false")
     _config.update_many({"title_use_brackets": brackets_val})
 
@@ -944,6 +949,43 @@ def api_channels_freeze(channel_id: str):
     _state.save_to_disk()
     logger.info(f"Canal {'congelado' if frozen else 'descongelado'} via UI: {channel_id}")
     return JSONResponse({"ok": True, "channel_id": channel_id, "frozen": frozen})
+
+
+# ---------------------------------------------------------------------------
+# API JSON — scheduler
+# ---------------------------------------------------------------------------
+
+@app.get("/api/scheduler/status")
+def api_scheduler_status():
+    if _scheduler is None:
+        return JSONResponse({"error": "Scheduler n\u00e3o dispon\u00edvel"}, status_code=503)
+    paused   = getattr(_scheduler, "paused",   False)
+    next_run = getattr(_scheduler, "next_run", None)
+    return JSONResponse({
+        "paused":   paused,
+        "next_run": next_run.timestamp() if next_run and hasattr(next_run, "timestamp") else None,
+    })
+
+
+@app.post("/api/scheduler/force")
+def api_scheduler_force():
+    if _scheduler is None:
+        return JSONResponse({"error": "Scheduler n\u00e3o dispon\u00edvel"}, status_code=503)
+    _scheduler.trigger_now()
+    logger.info("Busca global for\u00e7ada via Dashboard.")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/scheduler/pause")
+def api_scheduler_pause():
+    if _scheduler is None:
+        return JSONResponse({"error": "Scheduler n\u00e3o dispon\u00edvel"}, status_code=503)
+    if not hasattr(_scheduler, "paused"):
+        _scheduler.paused = False
+    _scheduler.paused = not _scheduler.paused
+    state = _scheduler.paused
+    logger.info(f"Scheduler {'pausado' if state else 'retomado'} via Dashboard.")
+    return JSONResponse({"ok": True, "paused": state})
 
 
 # ---------------------------------------------------------------------------
