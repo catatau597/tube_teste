@@ -168,7 +168,7 @@ def _sidebar(active: str = "") -> Div:
     """
     active keys: dashboard, canais, playlist, eventos,
                  config_credentials, config_scheduler, config_filters,
-                 config_title_format, config_output, config_technical, logs
+                 config_title_format, config_playlist, config_technical, logs
     """
     def nav_item(label, href, key):
         cls = "nav-item active" if active == key else "nav-item"
@@ -186,15 +186,15 @@ def _sidebar(active: str = "") -> Div:
             nav_item("\U0001f4c1  Playlist",   "/playlist",  "playlist"),
             nav_item("\U0001f4c5  Eventos",    "/eventos",   "eventos"),
 
-            Span("Configura\u00e7\u00f5es", cls="nav-group-label"),
-            nav_sub("\U0001f511  Credenciais",    "/config/credentials",  "config_credentials"),
-            nav_sub("\U0001f550  Agendador",      "/config/scheduler",    "config_scheduler"),
-            nav_sub("\U0001f39b\ufe0f   Filtros",        "/config/filters",      "config_filters"),
-            nav_sub("\U0001f3a8  Formato de T\u00edtulo", "/config/title-format", "config_title_format"),
-            nav_sub("\U0001f4e4  Output",          "/config/output",       "config_output"),
-            nav_sub("\U0001f527  T\u00e9cnico",     "/config/technical",    "config_technical"),
+            Span("Configurações", cls="nav-group-label"),
+            nav_sub("🔑  API & Credenciais",  "/config/credentials",  "config_credentials"),
+            nav_sub("🕐  Agendador",           "/config/scheduler",    "config_scheduler"),
+            nav_sub("🎛️  Filtros",             "/config/filters",      "config_filters"),
+            nav_sub("🎨  Formato de Título",   "/config/title-format", "config_title_format"),
+            nav_sub("📋  Playlist",            "/config/playlist",     "config_playlist"),
+            nav_sub("🔧  Técnico",             "/config/technical",    "config_technical"),
 
-            nav_item("\U0001f4cb  Logs",           "/logs",   "logs"),
+            nav_item("📋  Logs",           "/logs",   "logs"),
         ),
         Div("TubeWrangler v3.x", cls="sidebar-footer"),
         id="sidebar",
@@ -206,7 +206,7 @@ def _page_shell(title: str, active: str, *content) -> Any:
         Head(
             Meta(charset="utf-8"),
             Meta(name="viewport", content="width=device-width, initial-scale=1"),
-            Title(f"{title} \u2014 TubeWrangler"),
+            Title(f"{title} — TubeWrangler"),
             Link(rel="stylesheet",
                  href="https://cdn.jsdelivr.net/npm/pico.css@2/css/pico.min.css"),
             Style(_SIDEBAR_CSS),

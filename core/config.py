@@ -28,8 +28,7 @@ _OBSOLETE_KEYS = [
     "smart_player_log_level",
     "smart_player_log_to_file",
     "local_timezone",
-    "youtube_api_key",  # migrado para youtube_api_keys (lista)
-    # Migradas para title_format
+    "youtube_api_key",
     "prefix_title_with_channel_name",
     "prefix_title_with_status",
 ]
@@ -38,10 +37,11 @@ _OBSOLETE_KEYS = [
 # Formato: "chave": ("default", "seção", "descrição", "tipo")
 # tipos: "str" | "int" | "bool" | "list" | "mapping"
 DEFAULTS: dict = {
-    # --- Credenciais ---
+    # --- API & Credenciais ---
     "youtube_api_keys":              ("", "credentials", "Chaves de API do YouTube (vírgula para múltiplas)", "list"),
     "target_channel_handles":        ("", "credentials", "Handles de canais separados por vírgula", "list"),
     "target_channel_ids":            ("", "credentials", "IDs diretos de canais separados por vírgula", "list"),
+    "use_playlist_items":            ("true", "credentials", "Método de API: playlistItems (menos chamadas) vs search.list (mais chamadas)", "bool"),
 
     # --- Agendador ---
     "scheduler_main_interval_hours":         ("4",  "scheduler", "Intervalo principal em horas", "int"),
@@ -75,40 +75,26 @@ DEFAULTS: dict = {
     "shorts_block_words":            ("#shorts,#short", "filters", "Palavras no título/tags que identificam Shorts", "list"),
 
     # --- Formato de Título ---
-    # Ordem dos componentes separada por vírgula: channel, status, title
     "title_components_order":        ("channel,status,title", "title_format", "Ordem dos componentes do título (vírgula)", "list"),
-    # Quais componentes estão habilitados (vírgula)
     "title_components_enabled":      ("channel,status,title",  "title_format", "Componentes habilitados (vírgula)", "list"),
-    # Usar marcadores [ ] ao redor de channel e status
     "title_use_brackets":            ("true", "title_format", "Usar marcadores [ ] nos componentes de prefixo", "bool"),
-    # Expressões a remover dos títulos (case-insensitive) — uma por padrão
-    "title_filter_expressions":      (
-        "ao vivo,com imagens,cortes,react,ge.globo,#live,ge tv,jogo completo",
-        "title_format", "Expressões a remover dos títulos — case-insensitive (vírgula)", "list"),
-    # Remover emojis e caracteres especiais dos títulos
+    "title_filter_expressions":      ("", "title_format", "Expressões a remover dos títulos — case-insensitive (vírgula)", "list"),
     "title_strip_emojis":            ("false", "title_format", "Remover emojis e símbolos especiais dos títulos", "bool"),
 
     # --- Canais ---
-    "channel_name_mappings":         (
-        "FAF TV | @fafalagoas|FAF TV,Canal GOAT|GOAT,"
-        "Federação de Futebol de Mato Grosso do Sul|FFMS,"
-        "Federação Paranaense de Futebol|FPF TV,"
-        "Federação Catarinense de Futebol|FCF TV,"
-        "Jovem Pan Esportes|J. Pan Esportes,TNT Sports Brasil|TNT Sports",
-        "channels", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
+    "channel_name_mappings":         ("", "channels", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
 
-    # --- Saída ---
+    # --- Playlist Output ---
+    "use_invisible_placeholder":     ("true", "playlist_output", "Usar placeholder invisível no M3U", "bool"),
     "placeholder_image_url":         (
         "https://i.ibb.co/9kZStw28/placeholder-sports.png",
-        "output", "URL da imagem placeholder para streams sem thumb", "str"),
-    "use_invisible_placeholder":     ("true", "output", "Usar placeholder invisível no M3U", "bool"),
-    "thumbnail_cache_directory":     ("/data/thumbnails", "output", "Diretório de cache de thumbnails", "str"),
+        "playlist_output", "URL da imagem placeholder para streams sem thumb", "str"),
+    "thumbnail_cache_directory":     ("/data/thumbnails", "playlist_output", "Diretório de cache de thumbnails (padrão do sistema)", "str"),
 
     # --- Técnico ---
     "http_port":                     ("8888",             "technical", "Porta HTTP do servidor web", "int"),
     "state_cache_filename":          ("state_cache.json", "technical", "Nome do arquivo JSON de estado", "str"),
     "stale_hours":                   ("6",                "technical", "Horas para considerar stream stale", "int"),
-    "use_playlist_items":            ("true",             "technical", "Usar playlistItems API (vs search.list)", "bool"),
     "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
 
     # --- Logs ---
@@ -130,7 +116,7 @@ class AppConfig:
         self._ensure_table()
         self._migrate_api_key()
         self._migrate_prefix_keys()
-        self._migrate_title_filter_section()
+        self._migrate_sections()
         self._cleanup_obsolete_keys()
         self._cache: dict = {}
         self.reload()
@@ -176,7 +162,7 @@ class AppConfig:
             ch_rows = list(self._db.t.config.rows_where("key = ?", ["prefix_title_with_channel_name"]))
             st_rows = list(self._db.t.config.rows_where("key = ?", ["prefix_title_with_status"]))
             if not ch_rows and not st_rows:
-                return  # já migrado ou nunca existiu
+                return
 
             ch_on = ch_rows[0]["value"].lower() == "true" if ch_rows else True
             st_on = st_rows[0]["value"].lower() == "true" if st_rows else True
@@ -186,9 +172,8 @@ class AppConfig:
                 enabled_components.append("channel")
             if st_on:
                 enabled_components.append("status")
-            enabled_components.append("title")  # título sempre presente
+            enabled_components.append("title")
 
-            # Só atualiza title_components_enabled se ainda está no default
             cur_enabled = list(self._db.t.config.rows_where("key = ?", ["title_components_enabled"]))
             if cur_enabled and cur_enabled[0]["value"] == "channel,status,title":
                 new_val = ",".join(enabled_components)
@@ -196,17 +181,20 @@ class AppConfig:
         except Exception:
             pass
 
-    def _migrate_title_filter_section(self):
+    def _migrate_sections(self):
         """
-        Migra title_filter_expressions de seção 'filters' para 'title_format'
-        e channel_name_mappings de 'filters' para 'channels', se ainda estiverem
-        com a seção antiga no banco.
+        Migra chaves de seções antigas para novas quando a estrutura muda.
         """
+        migrations = [
+            ("title_filter_expressions", "title_format"),
+            ("channel_name_mappings", "channels"),
+            ("use_playlist_items", "credentials"),
+            ("use_invisible_placeholder", "playlist_output"),
+            ("placeholder_image_url", "playlist_output"),
+            ("thumbnail_cache_directory", "playlist_output"),
+        ]
         try:
-            for key, new_section in [
-                ("title_filter_expressions", "title_format"),
-                ("channel_name_mappings", "channels"),
-            ]:
+            for key, new_section in migrations:
                 rows = list(self._db.t.config.rows_where("key = ?", [key]))
                 if rows and rows[0].get("section") != new_section:
                     self._db.t.config.update({"key": key, "section": new_section})
