@@ -30,6 +30,7 @@ from core.state_manager import StateManager
 from core.thumbnail_manager import ThumbnailManager
 from core.youtube_api import YouTubeAPI
 from web.routes.proxy_dashboard import proxy_dashboard_page
+from web.routes.channels import channels_page as _channels_page
 from web.layout import _page_shell
 
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
@@ -64,10 +65,6 @@ _buffer_handler.setFormatter(_LOG_FMT)
 
 
 class _AccessLogFilter(logging.Filter):
-    """
-    Filtro para uvicorn.access: suprime entradas de rotas muito frequentes
-    (ex: GET / HTTP/1.1) que poluem os logs sem agregar valor.
-    """
     _SUPPRESS_PATTERNS = [
         re.compile(r'"GET / HTTP'),
         re.compile(r'"GET /api/logs/stream HTTP'),
@@ -182,7 +179,7 @@ async def lifespan(app):
         final_channels = scraper.ensure_channel_titles(all_target_ids, _state)
         logger.info(f"Canais prontos: {len(final_channels)}")
     else:
-        logger.warning("Nenhum canal alvo. Verifique target_channel_handles / target_channel_ids no /config.")
+        logger.warning("Nenhum canal alvo. Verifique /canais ou /config/credentials.")
 
     _force_event = asyncio.Event()
     _scheduler = Scheduler(_config, scraper, _state)
@@ -301,10 +298,9 @@ for _old, _new in _LEGACY_REDIRECTS.items():
 
 
 # ---------------------------------------------------------------------------
-# Helpers de formulário de config — pill toggle para campos bool
+# Helpers de formulário de config
 # ---------------------------------------------------------------------------
 
-# CSS global para os toggles (injetado uma vez por página via _TOGGLE_STYLE)
 _TOGGLE_STYLE = Style("""
     .bool-toggle {
         display: inline-flex;
@@ -353,7 +349,6 @@ _TOGGLE_JS = Script("""
 
 
 def _bool_toggle(key: str, value: bool, label: str) -> Div:
-    """Renderiza um pill toggle liga/desliga para um campo bool."""
     hidden_id  = f"hidden_{key}"
     pill_cls   = "toggle-pill on" if value else "toggle-pill off"
     pill_label = "Ligado" if value else "Desligado"
@@ -371,7 +366,6 @@ def _bool_toggle(key: str, value: bool, label: str) -> Div:
 
 
 def _bool_keys_for_section(section_key: str) -> list[str]:
-    """Retorna todas as chaves bool de uma seção, para corrigir o POST."""
     return [
         k for k, (_, sec, _, vtype) in DEFAULTS.items()
         if sec == section_key and vtype == "bool"
@@ -379,7 +373,6 @@ def _bool_keys_for_section(section_key: str) -> list[str]:
 
 
 def _config_form_fields(rows: list, section: str) -> list:
-    """Gera campos de formulário genéricos para uma seção de config."""
     fields = []
     for row in rows:
         key   = row["key"]
@@ -399,11 +392,10 @@ def _config_form_fields(rows: list, section: str) -> list:
 
 
 def _config_page(section_key: str, title: str, active_key: str, saved: bool = False):
-    """Renderiza página genérica de config para uma seção."""
     sections = _config.get_all_by_section() if _config else {}
     rows = sections.get(section_key, [])
     fields = _config_form_fields(rows, section_key)
-    alert = Div("✅ Configurações salvas com sucesso.",
+    alert = Div("\u2705 Configura\u00e7\u00f5es salvas com sucesso.",
                 cls="alert alert-success") if saved else ""
     return _page_shell(
         title, active_key,
@@ -426,7 +418,6 @@ def _config_page(section_key: str, title: str, active_key: str, saved: bool = Fa
 
 
 def _apply_bool_defaults(form_data: dict, section_key: str) -> dict:
-    """Garante que chaves bool ausentes no POST recebam 'false'."""
     updates = dict(form_data)
     for k in _bool_keys_for_section(section_key):
         if k not in updates:
@@ -465,12 +456,16 @@ def home(request: Request):
             Td(A("\u25b6", href=url, target="_blank")),
         ))
 
-    channel_items = [Li(f"{name} ({cid})") for cid, name in channels.items()]
+    channel_count = len(channels)
     return _page_shell(
         "Dashboard", "dashboard",
         Div(
             H2("Canais monitorados"),
-            Ul(*channel_items) if channel_items else P("Nenhum canal.", cls="text-muted"),
+            P(
+                f"{channel_count} canal(is) — ",
+                A("Gerenciar Canais \u2192", href="/canais"),
+                cls="text-muted",
+            ),
             H2(f"Streams ({len(streams)})"),
             P(A("Ver Playlists e Proxy \u2192", href="/proxy"), cls="text-muted"),
             Table(
@@ -482,6 +477,23 @@ def home(request: Request):
             ),
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Rotas HTML — Canais
+# ---------------------------------------------------------------------------
+
+@app.get("/canais")
+def canais_page():
+    return _channels_page(_state, _scheduler)
+
+
+@app.get("/force-sync")
+def force_sync():
+    if _scheduler:
+        _scheduler.trigger_now()
+        logger.info("Force-sync acionado pelo usuario.")
+    return RedirectResponse("/", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +510,7 @@ def proxy_page(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Rotas HTML — Config (redirect + sub-páginas)
+# Rotas HTML — Config
 # ---------------------------------------------------------------------------
 
 @app.get("/config")
@@ -508,14 +520,42 @@ def config_redirect():
 
 @app.get("/config/credentials")
 def config_credentials(saved: str = ""):
-    return _config_page("credentials", "Credenciais", "config_credentials", saved == "1")
+    """Exibe apenas a chave de API do YouTube — handles/IDs agora são gerenciados em /canais."""
+    if not _config:
+        return _page_shell("Credenciais", "config_credentials", P("Config não inicializado."))
+    alert = Div("\u2705 Configura\u00e7\u00f5es salvas com sucesso.",
+                cls="alert alert-success") if saved == "1" else ""
+    api_keys_val = _config.get_raw("youtube_api_keys")
+    return _page_shell(
+        "Credenciais", "config_credentials",
+        alert,
+        Div(
+            Form(
+                Label(
+                    Span("Chaves de API do YouTube (v\u00edrgula para m\u00faltiplas)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="youtube_api_keys", value=api_keys_val,
+                          type="text", id="field_youtube_api_keys",
+                          placeholder="AIzaSy..., AIzaSy..."),
+                ),
+                Div(
+                    Button("Salvar", type="submit"),
+                    style="margin-top:20px;",
+                ),
+                method="post",
+                action="/config/credentials",
+            ),
+            cls="card",
+        ),
+    )
 
 
 @app.post("/config/credentials")
 async def config_credentials_save(req):
     form = await req.form()
     if _config:
-        _config.update_many(_apply_bool_defaults(dict(form), "credentials"))
+        data = {k: v for k, v in dict(form).items() if k == "youtube_api_keys"}
+        _config.update_many(data)
     return RedirectResponse("/config/credentials?saved=1", status_code=303)
 
 
@@ -547,7 +587,7 @@ async def config_output_save(req):
 
 @app.get("/config/technical")
 def config_technical(saved: str = ""):
-    return _config_page("technical", "Técnico", "config_technical", saved == "1")
+    return _config_page("technical", "T\u00e9cnico", "config_technical", saved == "1")
 
 
 @app.post("/config/technical")
@@ -559,16 +599,16 @@ async def config_technical_save(req):
 
 
 # ---------------------------------------------------------------------------
-# Rota HTML — /config/filters (UI dedicada)
+# Rota HTML — /config/filters
 # ---------------------------------------------------------------------------
 
 @app.get("/config/filters")
 def config_filters(saved: str = ""):
     if not _config:
-        return _page_shell("Filtros", "config_filters", P("Config não inicializado."))
+        return _page_shell("Filtros", "config_filters", P("Config n\u00e3o inicializado."))
 
     cfg = _config
-    alert = Div("✅ Filtros salvos com sucesso.", cls="alert alert-success") if saved == "1" else ""
+    alert = Div("\u2705 Filtros salvos com sucesso.", cls="alert alert-success") if saved == "1" else ""
 
     filter_by_cat       = cfg.get_bool("filter_by_category")
     allowed_ids         = cfg.get_raw("allowed_category_ids")
@@ -667,12 +707,12 @@ def config_filters(saved: str = ""):
                   cls="text-muted"),
                 _bool_toggle("filter_by_category", filter_by_cat, "Ativar filtro por categoria"),
                 Label(
-                    Span("IDs permitidos (vírgula) — ex: 17,22,25",
+                    Span("IDs permitidos (v\u00edrgula) \u2014 ex: 17,22,25",
                          style="display:block;margin-bottom:4px;"),
                     Input(name="allowed_category_ids", value=allowed_ids, type="text"),
                 ),
                 Label(
-                    Span("Renomear categorias: ID|Nome (vírgula) — não filtra, só exibe",
+                    Span("Renomear categorias: ID|Nome (v\u00edrgula) \u2014 n\u00e3o filtra, s\u00f3 exibe",
                          style="display:block;margin-bottom:4px;"),
                     Input(name="category_mappings", value=cat_mappings, type="text"),
                 ),
@@ -681,52 +721,52 @@ def config_filters(saved: str = ""):
             Div(
                 H2("Filtro de Shorts"),
                 P(
-                    "Shorts com duração conhecida são bloqueados pelo campo de segundos. "
-                    "Para upcoming/live (duração ainda desconhecida), use palavras-chave.",
+                    "Shorts com dura\u00e7\u00e3o conhecida s\u00e3o bloqueados pelo campo de segundos. "
+                    "Para upcoming/live (dura\u00e7\u00e3o ainda desconhecida), use palavras-chave.",
                     cls="text-muted",
                 ),
                 Label(
-                    Span("Duração máxima (s) — 0 = desativado",
+                    Span("Dura\u00e7\u00e3o m\u00e1xima (s) \u2014 0 = desativado",
                          style="display:block;margin-bottom:4px;"),
                     Input(name="shorts_max_duration_s", value=shorts_max_s,
                           type="number", style="width:140px;"),
                 ),
                 Label(
-                    Span("Palavras bloqueadas (título/tags)",
+                    Span("Palavras bloqueadas (t\u00edtulo/tags)",
                          style="display:block;margin-bottom:4px;"),
                     _tag_list_with_input(shorts_words, "new_short_word", "shorts_block_words"),
                 ),
                 cls="card",
             ),
             Div(
-                H2("Títulos"),
+                H2("T\u00edtulos"),
                 Label(
-                    Span("Expressões a remover dos títulos",
+                    Span("Express\u00f5es a remover dos t\u00edtulos",
                          style="display:block;margin-bottom:4px;"),
                     _tag_list_with_input(title_exprs, "new_title_expr", "title_filter_expressions"),
                 ),
                 Div(style="margin-top:14px;"),
-                _bool_toggle("prefix_title_with_channel_name", prefix_channel, "Prefixar título com nome do canal"),
-                _bool_toggle("prefix_title_with_status", prefix_status, "Prefixar título com status [Ao Vivo] / [Agendado]"),
+                _bool_toggle("prefix_title_with_channel_name", prefix_channel, "Prefixar t\u00edtulo com nome do canal"),
+                _bool_toggle("prefix_title_with_status", prefix_status, "Prefixar t\u00edtulo com status [Ao Vivo] / [Agendado]"),
                 Label(
-                    Span("Mapeamento de nomes de canal: Nome Longo|Nome Curto (vírgula)",
+                    Span("Mapeamento de nomes de canal: Nome Longo|Nome Curto (v\u00edrgula)",
                          style="display:block;margin-bottom:4px;"),
                     Input(name="channel_name_mappings", value=channel_mappings, type="text"),
                 ),
                 cls="card",
             ),
             Div(
-                H2("VOD / Gravações"),
+                H2("VOD / Grava\u00e7\u00f5es"),
                 _bool_toggle("keep_recorded_streams", keep_recorded, "Manter streams gravados (ex-live) na playlist VOD"),
-                _bool_toggle("epg_description_cleanup", epg_cleanup, "Manter apenas o primeiro parágrafo da descrição no EPG"),
+                _bool_toggle("epg_description_cleanup", epg_cleanup, "Manter apenas o primeiro par\u00e1grafo da descri\u00e7\u00e3o no EPG"),
                 Label(
-                    Span("Máximo de gravações por canal",
+                    Span("M\u00e1ximo de grava\u00e7\u00f5es por canal",
                          style="display:block;margin-bottom:4px;"),
                     Input(name="max_recorded_per_channel", value=max_recorded,
                           type="number", style="width:100px;"),
                 ),
                 Label(
-                    Span("Dias de retenção de gravados",
+                    Span("Dias de reten\u00e7\u00e3o de gravados",
                          style="display:block;margin-bottom:4px;"),
                     Input(name="recorded_retention_days", value=retention_days,
                           type="number", style="width:100px;"),
@@ -742,7 +782,7 @@ def config_filters(saved: str = ""):
                           type="number", style="width:100px;"),
                 ),
                 Label(
-                    Span("Máximo de agendamentos por canal",
+                    Span("M\u00e1ximo de agendamentos por canal",
                          style="display:block;margin-bottom:4px;"),
                     Input(name="max_upcoming_per_channel", value=max_upcoming,
                           type="number", style="width:100px;"),
@@ -770,29 +810,7 @@ async def config_filters_save(req):
 
 
 # ---------------------------------------------------------------------------
-# Rotas HTML — Canais e Force-sync
-# ---------------------------------------------------------------------------
-
-@app.get("/channels")
-def channels_page():
-    channels = _state.get_all_channels() if _state else {}
-    return _page_shell(
-        "Canais", "dashboard",
-        Ul(*[Li(f"{cid}: {title}") for cid, title in channels.items()])
-        if channels else P("Nenhum canal.", cls="text-muted"),
-    )
-
-
-@app.get("/force-sync")
-def force_sync():
-    if _scheduler:
-        _scheduler.trigger_now()
-        logger.info("Force-sync acionado pelo usuario.")
-    return RedirectResponse("/", status_code=303)
-
-
-# ---------------------------------------------------------------------------
-# API JSON — channels
+# API JSON — channels (lista, adiciona, deleta, sync, freeze)
 # ---------------------------------------------------------------------------
 
 @app.get("/api/channels")
@@ -812,13 +830,77 @@ async def api_channels_create(req):
     return JSONResponse({"ok": True, "id": cid})
 
 
+@app.post("/api/channels/add")
+async def api_channels_add(req):
+    """
+    Adiciona canal por handle (@handle) ou Channel ID (UC...).
+    Resolve o handle para ID via YouTube API se necessario.
+    """
+    if _state is None or _config is None:
+        return JSONResponse({"error": "Servidor ainda inicializando"}, status_code=503)
+    body   = await req.json()
+    cid    = body.get("id",     "").strip()
+    handle = body.get("handle", "").strip().lstrip("@")
+
+    if not cid and not handle:
+        return JSONResponse({"error": "Forneça id ou handle"}, status_code=400)
+
+    api_keys = _config.get_list("youtube_api_keys")
+    scraper  = YouTubeAPI(api_keys)
+
+    if handle and not cid:
+        resolved = scraper.resolve_channel_handles_to_ids([handle], _state)
+        if not resolved:
+            return JSONResponse({"error": f"Handle @{handle} não encontrado"}, status_code=404)
+        cid = list(resolved.keys())[0]
+
+    # Garante que temos o título
+    titles = scraper.ensure_channel_titles({cid}, _state)
+    title  = titles.get(cid) or cid
+    _state.channels[cid] = title
+    _state.save_to_disk()
+    logger.info(f"Canal adicionado via UI: {cid} ({title})")
+    return JSONResponse({"ok": True, "id": cid, "title": title})
+
+
 @app.delete("/api/channels/{channel_id}")
 def api_channels_delete(channel_id: str):
-    if channel_id not in _state.channels:
+    if _state is None or channel_id not in _state.channels:
         return JSONResponse({"error": "nao encontrado"}, status_code=404)
     del _state.channels[channel_id]
+    frozen = getattr(_state, "frozen_channels", set())
+    frozen.discard(channel_id)
     _state.save_to_disk()
+    logger.info(f"Canal deletado via UI: {channel_id}")
     return JSONResponse({"ok": True})
+
+
+@app.post("/api/channels/{channel_id}/sync")
+def api_channels_sync(channel_id: str):
+    """Força uma sincronização imediata (trigger_now) para todos os canais."""
+    if _scheduler is None:
+        return JSONResponse({"error": "Scheduler não disponível"}, status_code=503)
+    _scheduler.trigger_now()
+    logger.info(f"Sync forçado via UI para canal: {channel_id}")
+    return JSONResponse({"ok": True, "channel_id": channel_id})
+
+
+@app.post("/api/channels/{channel_id}/freeze")
+def api_channels_freeze(channel_id: str):
+    """Alterna o estado de congelamento de um canal."""
+    if _state is None:
+        return JSONResponse({"error": "State não disponível"}, status_code=503)
+    if not hasattr(_state, "frozen_channels"):
+        _state.frozen_channels = set()
+    if channel_id in _state.frozen_channels:
+        _state.frozen_channels.discard(channel_id)
+        frozen = False
+    else:
+        _state.frozen_channels.add(channel_id)
+        frozen = True
+    _state.save_to_disk()
+    logger.info(f"Canal {'congelado' if frozen else 'descongelado'} via UI: {channel_id}")
+    return JSONResponse({"ok": True, "channel_id": channel_id, "frozen": frozen})
 
 
 # ---------------------------------------------------------------------------
@@ -1130,7 +1212,7 @@ def api_thumbnail(video_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Logs SSE + página /logs com painel de configuração inline
+# Logs SSE + página /logs
 # ---------------------------------------------------------------------------
 
 @app.get("/api/logs/stream")
@@ -1165,7 +1247,7 @@ async def api_logs_level_set(req):
     body  = await req.json()
     level = body.get("level", "INFO").upper()
     if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
-        return JSONResponse({"error": "Nível inválido"}, status_code=400)
+        return JSONResponse({"error": "N\u00edvel inv\u00e1lido"}, status_code=400)
     hide_access = _config.get_bool("hide_access_logs") if _config else True
     _setup_logging(level, hide_access=hide_access)
     if _config:
@@ -1173,13 +1255,12 @@ async def api_logs_level_set(req):
             _config.update("log_level", level)
         except Exception:
             pass
-    logger.info(f"Nível de log alterado para {level} via UI.")
+    logger.info(f"N\u00edvel de log alterado para {level} via UI.")
     return JSONResponse({"ok": True, "level": level})
 
 
 @app.post("/api/logs/hide-access")
 async def api_logs_hide_access_set(req):
-    """Toggle hide_access_logs via fetch — chamado pelo checkbox na página /logs."""
     body        = await req.json()
     hide_access = bool(body.get("hide_access", True))
     if _config:
@@ -1198,12 +1279,12 @@ def logs_page():
     logging_panel = Div(
         Details(
             Summary(
-                "🔧 Configuração de Logging",
+                "\U0001f527 Configura\u00e7\u00e3o de Logging",
                 style="cursor:pointer;font-weight:600;color:#58a6ff;font-size:0.95rem;",
             ),
             Div(
                 P(
-                    "Nível atual: ",
+                    "N\u00edvel atual: ",
                     Strong(current_level, id="current-level-badge",
                            style="color:#58a6ff;"),
                     cls="text-muted", style="margin-bottom:12px;",
@@ -1227,7 +1308,6 @@ def logs_page():
                     id="level-buttons",
                     style="margin-bottom:14px;",
                 ),
-                # --- toggle ocultar access logs ---
                 _TOGGLE_STYLE,
                 _TOGGLE_JS,
                 Div(
@@ -1345,7 +1425,7 @@ def logs_page():
                     if (d.ok) {
                         document.getElementById('current-level-badge').textContent = d.level;
                         document.getElementById('level-feedback').textContent =
-                            '\\u2705 Nível alterado para ' + d.level;
+                            '\\u2705 N\u00edvel alterado para ' + d.level;
                         document.querySelectorAll('[id^="btn-level-"]').forEach(b => {
                             b.style.borderColor = '';
                             b.style.color = '';
@@ -1356,7 +1436,7 @@ def logs_page():
                     }
                 })
                 .catch(() => {
-                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao alterar nível.';
+                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao alterar n\u00edvel.';
                     document.getElementById('level-feedback').style.color = '#f85149';
                 });
             }
@@ -1370,13 +1450,13 @@ def logs_page():
                 .then(r => r.json())
                 .then(d => {
                     if (d.ok) {
-                        const msg = hide ? '\\u2705 Logs de acesso ocultados.' : '\\u2705 Logs de acesso visíveis.';
+                        const msg = hide ? '\\u2705 Logs de acesso ocultados.' : '\\u2705 Logs de acesso vis\u00edveis.';
                         document.getElementById('level-feedback').textContent = msg;
                         setTimeout(() => { document.getElementById('level-feedback').textContent=''; }, 3000);
                     }
                 })
                 .catch(() => {
-                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao salvar preferência.';
+                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao salvar prefer\u00eancia.';
                     document.getElementById('level-feedback').style.color = '#f85149';
                 });
             }
