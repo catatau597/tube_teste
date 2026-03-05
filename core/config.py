@@ -29,6 +29,9 @@ _OBSOLETE_KEYS = [
     "smart_player_log_to_file",
     "local_timezone",
     "youtube_api_key",  # migrado para youtube_api_keys (lista)
+    # Migradas para title_format
+    "prefix_title_with_channel_name",
+    "prefix_title_with_status",
 ]
 
 # Todas as variáveis do projeto.
@@ -59,8 +62,6 @@ DEFAULTS: dict = {
         "ao vivo,AO VIVO,AO VIVO E COM IMAGRENS,ao vivo e com imagens,com imagens,"
         "COM IMAGRENS,cortes,react,ge.globo,#live,!,:,ge tv,JOGO COMPLETO",
         "filters", "Expressões a remover dos títulos (vírgula)", "list"),
-    "prefix_title_with_channel_name": ("true", "filters", "Prefixar título com nome do canal", "bool"),
-    "prefix_title_with_status":       ("true", "filters", "Prefixar título com status [Ao Vivo] etc", "bool"),
     "epg_description_cleanup":        ("true", "filters", "Manter apenas primeiro parágrafo da descrição EPG", "bool"),
     "keep_recorded_streams":          ("true", "filters", "Manter streams gravados (ex-live) no cache", "bool"),
     "max_recorded_per_channel":       ("2",   "filters", "Máximo de gravações mantidas por canal", "int"),
@@ -83,6 +84,14 @@ DEFAULTS: dict = {
     # --- Filtros de Shorts ---
     "shorts_max_duration_s":         ("62",       "filters", "Duracão máxima (s) para bloquear Shorts (0=off)", "int"),
     "shorts_block_words":            ("#shorts,#short", "filters", "Palavras no título/tags que identificam Shorts", "list"),
+
+    # --- Formato de Título ---
+    # Ordem dos componentes separada por vírgula: channel, status, title
+    "title_components_order":        ("channel,status,title", "title_format", "Ordem dos componentes do título (vírgula)", "list"),
+    # Quais componentes estão habilitados (vírgula)
+    "title_components_enabled":      ("channel,status,title",  "title_format", "Componentes habilitados (vírgula)", "list"),
+    # Usar marcadores [ ] ao redor de channel e status
+    "title_use_brackets":            ("true", "title_format", "Usar marcadores [ ] nos componentes de prefixo", "bool"),
 
     # --- Saída ---
     "placeholder_image_url":         (
@@ -116,6 +125,7 @@ class AppConfig:
         self._db = database(db_path)
         self._ensure_table()
         self._migrate_api_key()
+        self._migrate_prefix_keys()
         self._cleanup_obsolete_keys()
         self._cache: dict = {}
         self.reload()
@@ -145,10 +155,39 @@ class AppConfig:
             if rows:
                 old_value = rows[0]["value"]
                 if old_value:
-                    # Copia o valor antigo para a nova chave se a nova estiver vazia
                     new_rows = list(self._db.t.config.rows_where("key = ?", ["youtube_api_keys"]))
                     if new_rows and not new_rows[0]["value"]:
                         self._db.t.config.update({"key": "youtube_api_keys", "value": old_value})
+        except Exception:
+            pass
+
+    def _migrate_prefix_keys(self):
+        """
+        Migra prefix_title_with_channel_name e prefix_title_with_status
+        (seção filters) para os novos campos title_components_enabled/order
+        (seção title_format), se ainda existirem no banco.
+        """
+        try:
+            ch_rows = list(self._db.t.config.rows_where("key = ?", ["prefix_title_with_channel_name"]))
+            st_rows = list(self._db.t.config.rows_where("key = ?", ["prefix_title_with_status"]))
+            if not ch_rows and not st_rows:
+                return  # já migrado ou nunca existiu
+
+            ch_on = ch_rows[0]["value"].lower() == "true" if ch_rows else True
+            st_on = st_rows[0]["value"].lower() == "true" if st_rows else True
+
+            enabled_components = []
+            if ch_on:
+                enabled_components.append("channel")
+            if st_on:
+                enabled_components.append("status")
+            enabled_components.append("title")  # título sempre presente
+
+            # Só atualiza title_components_enabled se ainda está no default
+            cur_enabled = list(self._db.t.config.rows_where("key = ?", ["title_components_enabled"]))
+            if cur_enabled and cur_enabled[0]["value"] == "channel,status,title":
+                new_val = ",".join(enabled_components)
+                self._db.t.config.update({"key": "title_components_enabled", "value": new_val})
         except Exception:
             pass
 

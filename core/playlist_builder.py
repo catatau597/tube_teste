@@ -13,16 +13,11 @@ import socket
 
 logger = logging.getLogger("TubeWrangler")
 
+# Componentes disponíveis para montagem do título
+_ALL_COMPONENTS = ("channel", "status", "title")
+
 
 def _resolve_proxy_base_url(config) -> str:
-    """
-    Resolve a URL base para links dentro de playlists M3U geradas sem request
-    (ex: agendador, API externa).
-    Prioridade:
-      1. proxy_base_url configurado no banco
-      2. Auto-deteccao pelo IP do host
-    NAO usar para paginas web — la usar request.headers["host"].
-    """
     configured = config.get_str("proxy_base_url").strip()
     if configured:
         return configured.rstrip("/")
@@ -58,11 +53,11 @@ class ContentGenerator:
 
     @staticmethod
     def is_vod(stream: dict) -> bool:
-        """VOD = stream encerrado. Aceita status 'none' ou 'completed', com ou sem actualendtimeutc."""
+        """VOD = stream encerrado."""
         status = stream.get("status")
         if ContentGenerator.is_live(stream) or ContentGenerator.is_upcoming(stream):
             return False
-        return status in ("none", "completed") or (
+        return status in ("vod", "none", "completed") or (
             status not in ("live", "upcoming", None)
             and stream.get("actualendtimeutc") is not None
         )
@@ -75,39 +70,55 @@ class ContentGenerator:
             or stream.get("fetchtime")
         )
 
-    def get_display_title(self, stream: dict) -> str:
-        title = stream.get("title") or "Sem titulo"
-
-        for expr in self._config.get_list("title_filter_expressions"):
-            title = title.replace(expr, "").strip()
-
-        title = title.lstrip(": ").strip()
-
-        status_prefix = ""
-        if self._config.get_bool("prefix_title_with_status"):
-            status = stream.get("status", "none")
-            if status == "live":
-                status_prefix = "\U0001f534 AO VIVO"
-            elif status == "upcoming":
-                status_prefix = "\U0001f550 AGENDADO"
-
-        channel_prefix = ""
-        if self._config.get_bool("prefix_title_with_channel_name"):
+    def _get_component_value(self, component: str, stream: dict, use_brackets: bool) -> str:
+        """Retorna o valor formatado de um componente individual."""
+        if component == "channel":
             mappings = self._config.get_mapping("channel_name_mappings")
             channel  = stream.get("channelname", "")
             channel  = mappings.get(channel, channel)
-            if channel:
-                channel_prefix = channel
+            if not channel:
+                return ""
+            return f"[{channel}]" if use_brackets else channel
+
+        if component == "status":
+            status = stream.get("status", "")
+            if status == "live":
+                label = "AO VIVO"
+            elif status == "upcoming":
+                label = "AGENDADO"
+            else:
+                return ""  # VOD/none não exibe tag de status
+            return f"[{label}]" if use_brackets else label
+
+        if component == "title":
+            title = stream.get("title") or "Sem titulo"
+            for expr in self._config.get_list("title_filter_expressions"):
+                title = title.replace(expr, "").strip()
+            title = title.lstrip(": ").strip()
+            return title
+
+        return ""
+
+    def get_display_title(self, stream: dict) -> str:
+        order   = self._config.get_list("title_components_order")
+        enabled = set(self._config.get_list("title_components_enabled"))
+        use_brackets = self._config.get_bool("title_use_brackets")
+
+        # Garante que "title" está sempre presente
+        if "title" not in order:
+            order.append("title")
+        if "title" not in enabled:
+            enabled.add("title")
 
         parts = []
-        if channel_prefix:
-            parts.append(channel_prefix)
-        if status_prefix:
-            parts.append(status_prefix)
-        if parts:
-            title = f"{' | '.join(parts)}: {title}"
+        for comp in order:
+            if comp not in enabled:
+                continue
+            val = self._get_component_value(comp, stream, use_brackets)
+            if val:
+                parts.append(val)
 
-        return title
+        return " ".join(parts) if parts else (stream.get("title") or "Sem titulo")
 
     def get_display_category(self, cat_id: str | None, db: dict) -> str:
         if not cat_id:
@@ -117,12 +128,6 @@ class ContentGenerator:
         return mappings.get(raw, raw)
 
     def filter_streams(self, streams: list, mode: str) -> list:
-        """
-        Filtra streams por modo.
-        - upcoming: aplica apenas limites de horario e max_per_channel
-        - live/vod: category_mappings e so para renomear categorias, NAO para filtrar
-          (todos os streams do modo aparecem independente de categoria)
-        """
         if mode == "upcoming":
             max_hours  = self._config.get_int("max_schedule_hours")
             max_per_ch = self._config.get_int("max_upcoming_per_channel")
@@ -146,8 +151,6 @@ class ContentGenerator:
                 result.extend(ch_streams[:max_per_ch])
             logger.debug(f"filter_streams [upcoming]: {len(candidates)} candidatos -> {len(result)} apos max_per_ch")
             return result
-
-        # live / vod: sem filtro por categoria — category_mappings so renomeia
         return streams
 
 
@@ -208,7 +211,6 @@ class M3UGenerator(ContentGenerator):
                     reverse=True
                 )
                 filtered.extend(ch_streams[:max_per_ch])
-            # vod nao aplica filter_by_category — category_mappings so renomeia
             logger.debug(f"M3U [vod]: {len(candidates)} candidatos -> {len(filtered)} apos max_per_ch")
         else:
             filtered = streams
