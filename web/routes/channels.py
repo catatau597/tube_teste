@@ -1,296 +1,311 @@
 """
-web/routes/channels.py
-----------------------
-Página /canais: gerenciamento de canais YouTube monitorados.
-Permite adicionar por @handle ou Channel ID, sincronizar,
-congelar (pausar busca global) e deletar canais.
+Página /canais — gerenciamento de canais monitorados.
+
+Funcionalidades:
+- Adicionar canal por @handle ou Channel ID (UC...)
+- Listar canais com contadores Live / Up / VOD e status (active / frozen)
+- Ações por canal: Sincronizar, Congelar/Descongelar, Deletar
 """
-
 from fasthtml.common import *
-from starlette.responses import JSONResponse
-
 from web.layout import _page_shell
-
-_CHANNELS_CSS = Style("""
-/* ---------- Channels page ---------- */
-.ch-add-bar {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 28px;
-    align-items: center;
-}
-.ch-add-bar input {
-    flex: 1;
-    margin: 0;
-    padding: 8px 14px;
-    background: #0d1117;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    color: #e6edf3;
-    font-size: 0.9rem;
-}
-.ch-add-bar button {
-    white-space: nowrap;
-    padding: 8px 18px;
-    font-size: 0.9rem;
-}
-
-.ch-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-.ch-table th {
-    text-align: left;
-    padding: 8px 10px;
-    background: #21262d;
-    color: #8b949e;
-    font-weight: 600;
-    border-bottom: 1px solid #30363d;
-}
-.ch-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #21262d;
-    vertical-align: middle;
-}
-.ch-table tr:hover td { background: #161b22; }
-
-.ch-avatar {
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
-    vertical-align: middle;
-    margin-right: 8px;
-    background: #21262d;
-}
-.ch-name-cell { display: flex; align-items: center; }
-
-.ch-id { font-family: monospace; font-size: 0.82rem; color: #8b949e; }
-
-.badge-num {
-    display: inline-block;
-    min-width: 24px;
-    text-align: center;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-size: 0.75rem;
-    font-weight: 700;
-}
-.badge-live-num     { background: #1a7f37; color: #fff; }
-.badge-upcoming-num { background: #9a6700; color: #fff; }
-.badge-vod-num      { background: #1f6feb; color: #fff; }
-.badge-zero         { background: #21262d; color: #8b949e; }
-
-.ch-status-active  { display: inline-flex; align-items:center; gap:5px; color:#3fb950; font-size:0.82rem; }
-.ch-status-frozen  { display: inline-flex; align-items:center; gap:5px; color:#d29922; font-size:0.82rem; }
-.ch-status-dot     { width:8px; height:8px; border-radius:50%; display:inline-block; }
-.dot-active  { background:#3fb950; }
-.dot-frozen  { background:#d29922; }
-
-.ch-actions { display: flex; gap: 6px; }
-.ch-btn {
-    padding: 5px 8px;
-    border-radius: 6px;
-    border: 1px solid #30363d;
-    background: #21262d;
-    color: #e6edf3;
-    cursor: pointer;
-    font-size: 0.82rem;
-    transition: background .15s;
-    min-width: 32px;
-    text-align: center;
-}
-.ch-btn:hover { background: #30363d; }
-.ch-btn-danger { border-color: #da3633; color: #f85149; }
-.ch-btn-danger:hover { background: #da363322; }
-.ch-btn-sync:hover  { background: #1f6feb22; color: #58a6ff; border-color: #1f6feb; }
-.ch-btn-freeze:hover { background: #9a670022; color: #d29922; border-color: #9a6700; }
-
-.ch-feedback {
-    font-size: 0.82rem;
-    min-height: 20px;
-    margin-bottom: 10px;
-    color: #3fb950;
-}
-""")
-
-_CHANNELS_JS = Script("""
-function chAddChannel() {
-    const val = document.getElementById('ch-input').value.trim();
-    if (!val) return;
-    const payload = val.startsWith('UC') && !val.startsWith('@')
-        ? { id: val, handle: '' }
-        : { id: '', handle: val.replace(/^@/, '') };
-    fetch('/api/channels/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-    })
-    .then(r => r.json())
-    .then(d => {
-        if (d.ok) { location.reload(); }
-        else { _chFeedback('\u274c ' + (d.error || 'Erro ao adicionar'), true); }
-    })
-    .catch(() => _chFeedback('\u274c Erro de rede', true));
-}
-
-function chSync(cid) {
-    _chFeedback('\u23f3 Sincronizando ' + cid + '...');
-    fetch('/api/channels/' + encodeURIComponent(cid) + '/sync', { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-        if (d.ok) _chFeedback('\u2705 Sync solicitado para ' + cid);
-        else _chFeedback('\u274c ' + (d.error || 'Erro'), true);
-    })
-    .catch(() => _chFeedback('\u274c Erro de rede', true));
-}
-
-function chFreeze(cid, btn) {
-    fetch('/api/channels/' + encodeURIComponent(cid) + '/freeze', { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-        if (d.ok) { location.reload(); }
-        else _chFeedback('\u274c ' + (d.error || 'Erro'), true);
-    })
-    .catch(() => _chFeedback('\u274c Erro de rede', true));
-}
-
-function chDelete(cid, name) {
-    if (!confirm('Deletar canal "' + name + '"?')) return;
-    fetch('/api/channels/' + encodeURIComponent(cid), { method: 'DELETE' })
-    .then(r => r.json())
-    .then(d => {
-        if (d.ok) location.reload();
-        else _chFeedback('\u274c ' + (d.error || 'Erro'), true);
-    })
-    .catch(() => _chFeedback('\u274c Erro de rede', true));
-}
-
-function _chFeedback(msg, isErr) {
-    const el = document.getElementById('ch-feedback');
-    el.textContent = msg;
-    el.style.color = isErr ? '#f85149' : '#3fb950';
-    if (!isErr) setTimeout(() => { el.textContent = ''; }, 4000);
-}
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && document.activeElement.id === 'ch-input') chAddChannel();
-});
-""")
 
 
 def channels_page(state, scheduler):
-    """
-    Renderiza a página /canais.
-    `state`     — StateManager
-    `scheduler` — Scheduler (para trigger_now)
-    """
-    channels      = state.get_all_channels() if state else {}   # {cid: title}
-    frozen_set    = getattr(state, 'frozen_channels', set())     # set de cids congelados
-    all_streams   = list(state.get_all_streams()) if state else []
+    channels = state.get_all_channels() if state else {}
+    frozen   = getattr(state, "frozen_channels", set()) if state else set()
+    streams  = list(state.get_all_streams()) if state else []
 
-    # contadores por canal
-    counters = {}  # cid -> {live:0, upcoming:0, vod:0}
-    for s in all_streams:
-        cid = s.get('channelid', '')
-        if not cid:
-            continue
-        counters.setdefault(cid, {'live': 0, 'upcoming': 0, 'vod': 0})
-        st = s.get('status', '')
-        if st in ('live', 'upcoming', 'vod'):
-            counters[cid][st] += 1
+    # Contar streams por canal e status
+    counts: dict[str, dict] = {}
+    for s in streams:
+        cid    = s.get("channelid", "")
+        status = s.get("status", "")
+        if cid not in counts:
+            counts[cid] = {"live": 0, "upcoming": 0, "vod": 0}
+        if status == "live":
+            counts[cid]["live"] += 1
+        elif status == "upcoming":
+            counts[cid]["upcoming"] += 1
+        elif status in ("vod", "recorded"):
+            counts[cid]["vod"] += 1
 
     rows = []
     for cid, title in channels.items():
-        is_frozen = cid in frozen_set
-        counts    = counters.get(cid, {'live': 0, 'upcoming': 0, 'vod': 0})
+        c      = counts.get(cid, {"live": 0, "upcoming": 0, "vod": 0})
+        is_frz = cid in frozen
+        status_label = "Congelado" if is_frz else "active"
+        status_cls   = "badge badge-frozen" if is_frz else "badge badge-active"
 
-        def _num_badge(n, cls):
-            c = cls if n > 0 else 'badge-zero'
-            return Span(str(n), cls=f'badge-num {c}')
-
-        status_cell = (
-            Span(Span(cls='ch-status-dot dot-frozen'), 'Congelado', cls='ch-status-frozen')
-            if is_frozen
-            else Span(Span(cls='ch-status-dot dot-active'), 'active', cls='ch-status-active')
-        )
-
-        freeze_label = '\u25a0 Descongelar' if is_frozen else '\u23f8 Congelar'
-
-        safe_title = (title or cid).replace('"', '&quot;')
+        short_id = cid[:18] + "..." if len(cid) > 18 else cid
 
         rows.append(Tr(
+            # Canal
             Td(
-                Div(
-                    Img(src=f'/api/thumbnail/channel/{cid}',
-                        cls='ch-avatar',
-                        onerror="this.style.visibility='hidden'"),
-                    Div(
-                        Span(title or cid, style='font-weight:600;color:#e6edf3;'),
-                        style='display:flex;flex-direction:column;',
-                    ),
-                    cls='ch-name-cell',
-                ),
+                Span(title, style="font-weight:600;"),
+                Br(),
+                Span(f"@{title.lower().replace(' ', '')}",
+                     style="font-size:0.78rem;color:#8b949e;"),
+                style="min-width:160px;",
             ),
-            Td(Span(cid[:20] + '\u2026' if len(cid) > 20 else cid, cls='ch-id', title=cid)),
-            Td(_num_badge(counts['live'],     'badge-live-num')),
-            Td(_num_badge(counts['upcoming'], 'badge-upcoming-num')),
-            Td(_num_badge(counts['vod'],      'badge-vod-num')),
-            Td(status_cell),
+            # Channel ID
             Td(
-                Div(
-                    Button('\U0001f503',
-                           cls='ch-btn ch-btn-sync',
-                           title='Sincronizar este canal',
-                           onclick=f"chSync('{cid}')"),
-                    Button('\u23f8' if not is_frozen else '\u25b6',
-                           cls='ch-btn ch-btn-freeze',
-                           title=freeze_label,
-                           onclick=f"chFreeze('{cid}', this)"),
-                    Button('\U0001f5d1',
-                           cls='ch-btn ch-btn-danger',
-                           title='Deletar canal',
-                           onclick=f"chDelete('{cid}', '{safe_title}')"),
-                    cls='ch-actions',
+                Code(short_id, title=cid,
+                     style="font-size:0.78rem;cursor:default;"),
+            ),
+            # Live
+            Td(
+                Span(str(c["live"]),
+                     style="display:inline-block;min-width:28px;text-align:center;"),
+                style="text-align:center;",
+            ),
+            # Up
+            Td(
+                Span(str(c["upcoming"]),
+                     style="display:inline-block;min-width:28px;text-align:center;"),
+                style="text-align:center;",
+            ),
+            # VOD
+            Td(
+                Span(str(c["vod"]),
+                     style="display:inline-block;min-width:28px;text-align:center;"),
+                style="text-align:center;",
+            ),
+            # Status
+            Td(Span(status_label, cls=status_cls), style="text-align:center;"),
+            # Ações
+            Td(
+                # Sincronizar
+                Button(
+                    "\U0001f504",
+                    title="Sincronizar agora",
+                    cls="btn-icon btn-sync",
+                    onclick=f"channelAction('sync', '{cid}', this)",
                 ),
+                # Congelar / Descongelar
+                Button(
+                    "\u23f8" if not is_frz else "\u25b6",
+                    title="Congelar" if not is_frz else "Descongelar",
+                    cls="btn-icon btn-freeze" + (" btn-frozen" if is_frz else ""),
+                    onclick=f"channelAction('freeze', '{cid}', this)",
+                ),
+                # Deletar
+                Button(
+                    "\U0001f5d1",
+                    title="Deletar canal",
+                    cls="btn-icon btn-delete",
+                    onclick=f"confirmDelete('{cid}', '{title}')",
+                ),
+                style="white-space:nowrap;",
             ),
         ))
 
-    add_bar = Div(
-        Input(
-            id='ch-input',
-            type='text',
-            placeholder='@handle, UC..., ou URL do canal',
-        ),
-        Button('\u2795 Adicionar', onclick='chAddChannel()',
-               style='background:#21262d;border:1px solid #30363d;'),
-    cls='ch-add-bar'
+    table = (
+        Table(
+            Thead(
+                Tr(
+                    Th("Canal"),
+                    Th("Channel ID"),
+                    Th(
+                        Span("\u25cf", style="color:#f85149;"),
+                        " Live",
+                        style="text-align:center;",
+                    ),
+                    Th(
+                        Span("\u25cf", style="color:#d29922;"),
+                        " Up",
+                        style="text-align:center;",
+                    ),
+                    Th(
+                        Span("\u25cf", style="color:#8b949e;"),
+                        " VOD",
+                        style="text-align:center;",
+                    ),
+                    Th("Status", style="text-align:center;"),
+                    Th("A\u00e7\u00f5es"),
+                )
+            ),
+            Tbody(*rows),
+            id="channels-table",
+        )
+        if rows
+        else P("Nenhum canal adicionado.", cls="text-muted")
     )
 
-    table = Div(
-        Table(
-            Thead(Tr(
-                Th('Canal'),
-                Th('Channel ID'),
-                Th(Span('\u25cf', style='color:#f85149;'), ' Live',
-                   style='white-space:nowrap;'),
-                Th(Span('\u25cf', style='color:#d29922;'), ' Up',
-                   style='white-space:nowrap;'),
-                Th(Span('\u25cf', style='color:#58a6ff;'), ' VOD',
-                   style='white-space:nowrap;'),
-                Th('Status'),
-                Th('A\u00e7\u00f5es'),
-            )),
-            Tbody(*rows) if rows else Tbody(
-                Tr(Td('Nenhum canal cadastrado.', colspan=7,
-                      cls='text-muted', style='text-align:center;padding:20px;'))
-            ),
-            cls='ch-table',
-        ),
-        cls='card', style='padding:0;overflow:hidden;'
-    )
+    page_styles = Style("""
+        /* ---- botões de ação ---- */
+        .btn-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 1.5px solid #30363d;
+            background: transparent;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 4px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-sync:hover  { background: #1f6feb22; border-color: #388bfd; }
+        .btn-freeze      { color: #d29922; }
+        .btn-freeze:hover{ background: #d2992222; border-color: #d29922; }
+        .btn-freeze.btn-frozen { border-color: #388bfd; color: #58a6ff; }
+        .btn-delete      { color: #f85149; border-color: #f8514944; }
+        .btn-delete:hover{ background: #f8514922; border-color: #f85149; }
+
+        /* ---- badges ---- */
+        .badge-active {
+            background: #1a3a1a;
+            color: #3fb950;
+            border: 1px solid #238636;
+        }
+        .badge-frozen {
+            background: #1c2a3a;
+            color: #58a6ff;
+            border: 1px solid #1f6feb;
+        }
+
+        /* ---- add-form ---- */
+        #add-channel-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        #add-channel-form input {
+            flex: 1;
+            min-width: 220px;
+        }
+        #add-feedback {
+            font-size: 0.85rem;
+            min-height: 20px;
+            margin-top: 4px;
+        }
+    """)
+
+    page_js = Script("""
+        async function channelAction(action, channelId, btn) {
+            const url = `/api/channels/${encodeURIComponent(channelId)}/${action}`;
+            btn.disabled = true;
+            try {
+                const r = await fetch(url, { method: 'POST' });
+                const d = await r.json();
+                if (!d.ok) { alert('Erro: ' + (d.error || 'desconhecido')); return; }
+                if (action === 'sync') {
+                    showFeedback('\u2705 Sincroniza\u00e7\u00e3o agendada para ' + channelId, 'ok');
+                } else if (action === 'freeze') {
+                    // Recarrega para refletir novo estado
+                    location.reload();
+                }
+            } catch(e) {
+                alert('Erro de comunica\u00e7\u00e3o: ' + e);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function confirmDelete(channelId, title) {
+            if (!confirm(`Deletar o canal "${title}" (${channelId})?\nEssa a\u00e7\u00e3o n\u00e3o pode ser desfeita.`)) return;
+            try {
+                const r = await fetch(`/api/channels/${encodeURIComponent(channelId)}`, { method: 'DELETE' });
+                const d = await r.json();
+                if (d.ok) {
+                    const row = document.querySelector(`[data-cid="${channelId}"]`);
+                    if (row) row.remove();
+                    showFeedback('\u2705 Canal removido.', 'ok');
+                    location.reload();
+                } else {
+                    alert('Erro ao deletar: ' + (d.error || ''));
+                }
+            } catch(e) {
+                alert('Erro: ' + e);
+            }
+        }
+
+        async function addChannel() {
+            const inp = document.getElementById('add-input');
+            const val = inp.value.trim();
+            if (!val) return;
+
+            const btn = document.getElementById('add-btn');
+            btn.disabled = true;
+            showFeedback('Adicionando...', 'info');
+
+            // Detecta se é handle (@...) ou Channel ID (UC...)
+            let payload = {};
+            if (val.startsWith('UC') || val.startsWith('HC')) {
+                payload = { id: val };
+            } else {
+                payload = { handle: val.replace(/^@/, '') };
+            }
+
+            try {
+                const r = await fetch('/api/channels/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const d = await r.json();
+                if (d.ok) {
+                    showFeedback('\u2705 Canal adicionado: ' + d.title, 'ok');
+                    inp.value = '';
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showFeedback('\u274c ' + (d.error || 'Erro ao adicionar.'), 'error');
+                }
+            } catch(e) {
+                showFeedback('\u274c Erro de comunica\u00e7\u00e3o.', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function showFeedback(msg, type) {
+            const el = document.getElementById('add-feedback');
+            el.textContent = msg;
+            el.style.color = type === 'ok' ? '#3fb950' : type === 'error' ? '#f85149' : '#8b949e';
+        }
+
+        // Enter no input
+        document.addEventListener('DOMContentLoaded', () => {
+            const inp = document.getElementById('add-input');
+            if (inp) inp.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); addChannel(); }
+            });
+        });
+    """)
 
     return _page_shell(
-        'Canais', 'channels',
-        _CHANNELS_CSS,
-        Div('', id='ch-feedback', cls='ch-feedback'),
-        add_bar,
-        table,
-        _CHANNELS_JS,
+        "Canais", "canais",
+        page_styles,
+        # Formulário de adição
+        Div(
+            H2("Novo canal"),
+            Div(
+                Input(
+                    id="add-input",
+                    type="text",
+                    placeholder="@handle, UC..., ou URL do canal",
+                    autocomplete="off",
+                    style="flex:1;min-width:240px;",
+                ),
+                Button(
+                    "+ Adicionar",
+                    id="add-btn",
+                    type="button",
+                    onclick="addChannel()",
+                ),
+                id="add-channel-form",
+            ),
+            Div(id="add-feedback"),
+            cls="card",
+        ),
+        # Tabela de canais
+        Div(
+            table,
+            cls="card",
+        ),
+        page_js,
     )
