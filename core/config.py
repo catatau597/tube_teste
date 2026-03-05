@@ -58,10 +58,6 @@ DEFAULTS: dict = {
     # --- Filtros gerais ---
     "max_schedule_hours":            ("72",  "filters", "Limite futuro em horas para agendamentos", "int"),
     "max_upcoming_per_channel":      ("6",   "filters", "Máximo de agendamentos futuros por canal", "int"),
-    "title_filter_expressions":      (
-        "ao vivo,AO VIVO,AO VIVO E COM IMAGRENS,ao vivo e com imagens,com imagens,"
-        "COM IMAGRENS,cortes,react,ge.globo,#live,!,:,ge tv,JOGO COMPLETO",
-        "filters", "Expressões a remover dos títulos (vírgula)", "list"),
     "epg_description_cleanup":        ("true", "filters", "Manter apenas primeiro parágrafo da descrição EPG", "bool"),
     "keep_recorded_streams":          ("true", "filters", "Manter streams gravados (ex-live) no cache", "bool"),
     "max_recorded_per_channel":       ("2",   "filters", "Máximo de gravações mantidas por canal", "int"),
@@ -73,13 +69,6 @@ DEFAULTS: dict = {
     "category_mappings":             (
         "17|ESPORTES,20|JOGOS,22|ESPORTES,25|NOTÍCIAS",
         "filters", "Renomear categorias para exibição: ID|Nome (vírgula) — NÃO filtra", "mapping"),
-    "channel_name_mappings":         (
-        "FAF TV | @fafalagoas|FAF TV,Canal GOAT|GOAT,"
-        "Federação de Futebol de Mato Grosso do Sul|FFMS,"
-        "Federação Paranaense de Futebol|FPF TV,"
-        "Federação Catarinense de Futebol|FCF TV,"
-        "Jovem Pan Esportes|J. Pan Esportes,TNT Sports Brasil|TNT Sports",
-        "filters", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
 
     # --- Filtros de Shorts ---
     "shorts_max_duration_s":         ("62",       "filters", "Duracão máxima (s) para bloquear Shorts (0=off)", "int"),
@@ -92,6 +81,21 @@ DEFAULTS: dict = {
     "title_components_enabled":      ("channel,status,title",  "title_format", "Componentes habilitados (vírgula)", "list"),
     # Usar marcadores [ ] ao redor de channel e status
     "title_use_brackets":            ("true", "title_format", "Usar marcadores [ ] nos componentes de prefixo", "bool"),
+    # Expressões a remover dos títulos (case-insensitive) — uma por padrão
+    "title_filter_expressions":      (
+        "ao vivo,com imagens,cortes,react,ge.globo,#live,ge tv,jogo completo",
+        "title_format", "Expressões a remover dos títulos — case-insensitive (vírgula)", "list"),
+    # Remover emojis e caracteres especiais dos títulos
+    "title_strip_emojis":            ("false", "title_format", "Remover emojis e símbolos especiais dos títulos", "bool"),
+
+    # --- Canais ---
+    "channel_name_mappings":         (
+        "FAF TV | @fafalagoas|FAF TV,Canal GOAT|GOAT,"
+        "Federação de Futebol de Mato Grosso do Sul|FFMS,"
+        "Federação Paranaense de Futebol|FPF TV,"
+        "Federação Catarinense de Futebol|FCF TV,"
+        "Jovem Pan Esportes|J. Pan Esportes,TNT Sports Brasil|TNT Sports",
+        "channels", "Mapeamento nomes canais Longo|Curto (vírgula)", "mapping"),
 
     # --- Saída ---
     "placeholder_image_url":         (
@@ -126,6 +130,7 @@ class AppConfig:
         self._ensure_table()
         self._migrate_api_key()
         self._migrate_prefix_keys()
+        self._migrate_title_filter_section()
         self._cleanup_obsolete_keys()
         self._cache: dict = {}
         self.reload()
@@ -188,6 +193,23 @@ class AppConfig:
             if cur_enabled and cur_enabled[0]["value"] == "channel,status,title":
                 new_val = ",".join(enabled_components)
                 self._db.t.config.update({"key": "title_components_enabled", "value": new_val})
+        except Exception:
+            pass
+
+    def _migrate_title_filter_section(self):
+        """
+        Migra title_filter_expressions de seção 'filters' para 'title_format'
+        e channel_name_mappings de 'filters' para 'channels', se ainda estiverem
+        com a seção antiga no banco.
+        """
+        try:
+            for key, new_section in [
+                ("title_filter_expressions", "title_format"),
+                ("channel_name_mappings", "channels"),
+            ]:
+                rows = list(self._db.t.config.rows_where("key = ?", [key]))
+                if rows and rows[0].get("section") != new_section:
+                    self._db.t.config.update({"key": key, "section": new_section})
         except Exception:
             pass
 

@@ -1,11 +1,12 @@
 """
 Página /canais — gerenciamento de canais monitorados.
+Inclui card de mapeamento de nomes de canal.
 """
 from fasthtml.common import *
 from web.layout import _page_shell
 
 
-def channels_page(state, scheduler):
+def channels_page(state, scheduler, config=None):
     # Usa o novo método que retorna thumbnail junto
     channels_list = state.get_all_channels_with_thumbnail() if state else []
     frozen   = getattr(state, "frozen_channels", set()) if state else set()
@@ -28,18 +29,16 @@ def channels_page(state, scheduler):
     for ch in channels_list:
         cid   = ch["cid"]
         title = ch["title"]
-        thumb = ch["thumbnail_url"]   # URL direta — sem proxy
+        thumb = ch["thumbnail_url"]
         c      = counts.get(cid, {"live": 0, "upcoming": 0, "vod": 0})
         is_frz = cid in frozen
         status_label = "Congelado" if is_frz else "Ativo"
         status_cls   = "badge badge-frozen" if is_frz else "badge badge-active"
-        short_id     = cid[:18] + "..." if len(cid) > 18 else cid
         initial      = (title[0].upper() if title else "?")
 
         if thumb:
             avatar = Img(
-                src=thumb,
-                alt=title,
+                src=thumb, alt=title,
                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';",
                 style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;",
             )
@@ -59,35 +58,34 @@ def channels_page(state, scheduler):
         rows.append(Tr(
             Td(
                 Div(
-                    avatar,
-                    fallback_avatar,
+                    avatar, fallback_avatar,
                     Div(
                         Span(title, style="font-weight:600;line-height:1.2;"),
                         Br(),
-                        Span(
-                            cid,
-                            style="font-size:0.72rem;color:#484f58;font-family:monospace;",
-                        ),
+                        Span(cid, style="font-size:0.72rem;color:#484f58;font-family:monospace;"),
                         style="display:flex;flex-direction:column;justify-content:center;",
                     ),
                     style="display:flex;align-items:center;gap:10px;",
                 ),
                 style="min-width:220px;",
             ),
-            Td(Code(short_id, title=cid, style="font-size:0.78rem;cursor:default;")),
-            Td(Span(str(c["live"]),    style="display:inline-block;min-width:28px;text-align:center;"), style="text-align:center;"),
-            Td(Span(str(c["upcoming"]),style="display:inline-block;min-width:28px;text-align:center;"), style="text-align:center;"),
-            Td(Span(str(c["vod"]),     style="display:inline-block;min-width:28px;text-align:center;"), style="text-align:center;"),
+            Td(Code(cid[:18] + "..." if len(cid) > 18 else cid,
+                    title=cid, style="font-size:0.78rem;cursor:default;")),
+            Td(Span(str(c["live"]),     style="display:inline-block;min-width:28px;text-align:center;"), style="text-align:center;"),
+            Td(Span(str(c["upcoming"]), style="display:inline-block;min-width:28px;text-align:center;"), style="text-align:center;"),
+            Td(Span(str(c["vod"]),      style="display:inline-block;min-width:28px;text-align:center;"), style="text-align:center;"),
             Td(Span(status_label, cls=status_cls), style="text-align:center;"),
             Td(
-                Button("\U0001f504", title="Sincronizar agora",  cls="btn-icon btn-sync",   onclick=f"channelAction('sync',   '{cid}', this)"),
+                Button("\U0001f504", title="Sincronizar agora",
+                       cls="btn-icon btn-sync",   onclick=f"channelAction('sync',   '{cid}', this)"),
                 Button(
                     "\u23f8" if not is_frz else "\u25b6",
                     title="Congelar" if not is_frz else "Descongelar",
                     cls="btn-icon btn-freeze" + (" btn-frozen" if is_frz else ""),
                     onclick=f"channelAction('freeze', '{cid}', this)",
                 ),
-                Button("\U0001f5d1", title="Deletar canal",      cls="btn-icon btn-delete", onclick=f"confirmDelete('{cid}', '{title}')"),
+                Button("\U0001f5d1", title="Deletar canal",
+                       cls="btn-icon btn-delete", onclick=f"confirmDelete('{cid}', '{title}')"),
                 style="white-space:nowrap;",
             ),
         ))
@@ -97,9 +95,9 @@ def channels_page(state, scheduler):
             Thead(Tr(
                 Th("Canal"),
                 Th("Channel ID"),
-                Th(Span("\u25cf", style="color:#f85149;"), " Live",    style="text-align:center;"),
-                Th(Span("\u25cf", style="color:#d29922;"), " Up",      style="text-align:center;"),
-                Th(Span("\u25cf", style="color:#8b949e;"), " VOD",     style="text-align:center;"),
+                Th(Span("\u25cf", style="color:#f85149;"), " Live",  style="text-align:center;"),
+                Th(Span("\u25cf", style="color:#d29922;"), " Up",    style="text-align:center;"),
+                Th(Span("\u25cf", style="color:#8b949e;"), " VOD",   style="text-align:center;"),
                 Th("Status", style="text-align:center;"),
                 Th("A\u00e7\u00f5es"),
             )),
@@ -108,6 +106,11 @@ def channels_page(state, scheduler):
         )
         if rows else P("Nenhum canal adicionado.", cls="text-muted")
     )
+
+    # --- Mapeamento de nomes de canal ---
+    mappings_raw = ""
+    if config and hasattr(config, "get_raw"):
+        mappings_raw = config.get_raw("channel_name_mappings")
 
     page_styles = Style("""
         .btn-icon {
@@ -190,13 +193,42 @@ def channels_page(state, scheduler):
         });
     """)
 
+    mapping_card = Div(
+        H2("Mapeamento de nomes de canal"),
+        P(
+            "Substitui o nome longo do canal por uma versão curta na playlist. "
+            "Formato: ",
+            Code("Nome Longo|Nome Curto"),
+            " separados por vírgula.",
+            cls="text-muted",
+        ),
+        Form(
+            Label(
+                Span("channel_name_mappings",
+                     style="display:block;margin-bottom:4px;font-size:0.78rem;color:#8b949e;font-family:monospace;"),
+                Input(
+                    name="channel_name_mappings",
+                    value=mappings_raw,
+                    type="text",
+                    placeholder="Canal A|A,Canal B|B",
+                    style="width:100%;",
+                ),
+            ),
+            Div(Button("Salvar mapeamento", type="submit"), style="margin-top:12px;"),
+            method="post",
+            action="/config/channels",
+        ),
+        cls="card",
+    )
+
     return _page_shell(
         "Canais", "canais",
         page_styles,
         Div(
             H2("Novo canal"),
             Div(
-                Input(id="add-input", type="text", placeholder="@handle, UC..., ou URL do canal",
+                Input(id="add-input", type="text",
+                      placeholder="@handle, UC..., ou URL do canal",
                       autocomplete="off", style="flex:1;min-width:240px;"),
                 Button("+ Adicionar", id="add-btn", type="button", onclick="addChannel()"),
                 id="add-channel-form",
@@ -205,5 +237,6 @@ def channels_page(state, scheduler):
             cls="card",
         ),
         Div(table, cls="card"),
+        mapping_card,
         page_js,
     )

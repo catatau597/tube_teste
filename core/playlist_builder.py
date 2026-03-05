@@ -9,12 +9,47 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 from typing import Optional
 import logging
+import re
 import socket
+import unicodedata
 
 logger = logging.getLogger("TubeWrangler")
 
 # Componentes disponíveis para montagem do título
 _ALL_COMPONENTS = ("channel", "status", "title")
+
+# Regex que captura emojis e símbolos Unicode especiais
+# Cobre: Emoticons, Misc Symbols, Dingbats, Supplemental Symbols,
+# Transport & Map, Enclosed alphanumerics, etc.
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # misc symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F700-\U0001F77F"  # alchemical
+    "\U0001F780-\U0001F7FF"  # geometric extended
+    "\U0001F800-\U0001F8FF"  # supplemental arrows
+    "\U0001F900-\U0001F9FF"  # supplemental symbols
+    "\U0001FA00-\U0001FA6F"  # chess symbols
+    "\U0001FA70-\U0001FAFF"  # symbols & pictographs extended
+    "\U00002702-\U000027B0"  # dingbats
+    "\U000024C2-\U0001F251"  # enclosed characters
+    "\u200d"                  # zero-width joiner
+    "\ufe0f"                  # variation selector-16
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def _strip_emojis(text: str) -> str:
+    """Remove emojis e símbolos especiais, normaliza espaços."""
+    cleaned = _EMOJI_RE.sub("", text)
+    # Remove também caracteres de controle e surrogates
+    cleaned = "".join(
+        ch for ch in cleaned
+        if unicodedata.category(ch) not in ("Cc", "Cs")
+    )
+    return " ".join(cleaned.split())
 
 
 def _resolve_proxy_base_url(config) -> str:
@@ -92,9 +127,16 @@ class ContentGenerator:
 
         if component == "title":
             title = stream.get("title") or "Sem titulo"
+            # Remoção case-insensitive de expressões configuradas
             for expr in self._config.get_list("title_filter_expressions"):
-                title = title.replace(expr, "").strip()
+                if expr:
+                    title = re.sub(re.escape(expr), "", title, flags=re.IGNORECASE)
             title = title.lstrip(": ").strip()
+            # Remove espaços múltiplos gerados pelas remoções
+            title = " ".join(title.split())
+            # Remoção de emojis se toggle ativo
+            if self._config.get_bool("title_strip_emojis"):
+                title = _strip_emojis(title)
             return title
 
         return ""
