@@ -32,6 +32,7 @@ from core.youtube_api import YouTubeAPI
 from web.routes.playlist_dashboard import playlist_dashboard_page
 from web.routes.channels import channels_page as _channels_page
 from web.routes.eventos import eventos_page as _eventos_page
+from web.routes.title_format import title_format_page as _title_format_page
 from web.layout import _page_shell
 
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
@@ -132,7 +133,6 @@ _LEGACY_REDIRECTS = {
     "/playlist_vod_direct.m3u8":  "/playlist/vod.m3u",
     "/playlist_vod_proxy.m3u8":   "/playlist/vod-proxy.m3u",
     "/youtube_epg.xml":            "/epg.xml",
-    # Redireciona /proxy antigo para /playlist
     "/proxy":                      "/playlist",
 }
 
@@ -445,40 +445,40 @@ def home(request: Request):
     return _page_shell(
         "Dashboard", "dashboard",
         Div(
-            H2("Visão Geral"),
+            H2("Vis\u00e3o Geral"),
             Div(
                 Div(
                     Span(str(channel_count), style="font-size:2rem;font-weight:700;color:#58a6ff;"),
                     Br(),
                     Span("Canais", cls="text-muted"),
                     Br(),
-                    A("Gerenciar →", href="/canais", style="font-size:0.82rem;"),
+                    A("Gerenciar \u2192", href="/canais", style="font-size:0.82rem;"),
                     cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
                 ),
                 Div(
                     Span(str(n_live), style="font-size:2rem;font-weight:700;color:#f85149;"),
                     Br(),
-                    Span("🔴 Live", cls="text-muted"),
+                    Span("\U0001f534 Live", cls="text-muted"),
                     cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
                 ),
                 Div(
                     Span(str(n_up), style="font-size:2rem;font-weight:700;color:#d29922;"),
                     Br(),
-                    Span("🟡 Upcoming", cls="text-muted"),
+                    Span("\U0001f7e1 Upcoming", cls="text-muted"),
                     cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
                 ),
                 Div(
                     Span(str(n_vod), style="font-size:2rem;font-weight:700;color:#8b949e;"),
                     Br(),
-                    Span("📼 VOD", cls="text-muted"),
+                    Span("\U0001f4fc VOD", cls="text-muted"),
                     cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
                 ),
                 style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;",
             ),
             P(
-                A("📅 Ver todos os Eventos →", href="/eventos"),
-                "   ",
-                A("📁 Playlists e Proxy →", href="/playlist"),
+                A("\U0001f4c5 Ver todos os Eventos \u2192", href="/eventos"),
+                "   ",
+                A("\U0001f4c1 Playlists e Proxy \u2192", href="/playlist"),
                 cls="text-muted",
                 style="margin-top:4px;",
             ),
@@ -538,7 +538,7 @@ def config_redirect():
 @app.get("/config/credentials")
 def config_credentials(saved: str = ""):
     if not _config:
-        return _page_shell("Credenciais", "config_credentials", P("Config não inicializado."))
+        return _page_shell("Credenciais", "config_credentials", P("Config n\u00e3o inicializado."))
     alert = Div("\u2705 Configura\u00e7\u00f5es salvas com sucesso.",
                 cls="alert alert-success") if saved == "1" else ""
     api_keys_val = _config.get_raw("youtube_api_keys")
@@ -632,8 +632,6 @@ def config_filters(saved: str = ""):
     shorts_words        = [w.strip() for w in shorts_words_raw.split(",") if w.strip()]
     title_exprs_raw     = cfg.get_raw("title_filter_expressions")
     title_exprs         = [w.strip() for w in title_exprs_raw.split(",") if w.strip()]
-    prefix_channel      = cfg.get_bool("prefix_title_with_channel_name")
-    prefix_status       = cfg.get_bool("prefix_title_with_status")
     epg_cleanup         = cfg.get_bool("epg_description_cleanup")
     keep_recorded       = cfg.get_bool("keep_recorded_streams")
     max_recorded        = cfg.get_raw("max_recorded_per_channel")
@@ -753,14 +751,18 @@ def config_filters(saved: str = ""):
             ),
             Div(
                 H2("T\u00edtulos"),
+                P(
+                    "Express\u00f5es removidas dos t\u00edtulos. Para configurar a ordem e formato dos componentes "
+                    "(canal, status, evento), acesse ",
+                    A("\U0001f3a8 Formato de T\u00edtulo \u2192", href="/config/title-format"),
+                    ".",
+                    cls="text-muted",
+                ),
                 Label(
                     Span("Express\u00f5es a remover dos t\u00edtulos",
                          style="display:block;margin-bottom:4px;"),
                     _tag_list_with_input(title_exprs, "new_title_expr", "title_filter_expressions"),
                 ),
-                Div(style="margin-top:14px;"),
-                _bool_toggle("prefix_title_with_channel_name", prefix_channel, "Prefixar t\u00edtulo com nome do canal"),
-                _bool_toggle("prefix_title_with_status", prefix_status, "Prefixar t\u00edtulo com status [Ao Vivo] / [Agendado]"),
                 Label(
                     Span("Mapeamento de nomes de canal: Nome Longo|Nome Curto (v\u00edrgula)",
                          style="display:block;margin-bottom:4px;"),
@@ -817,6 +819,48 @@ async def config_filters_save(req):
         return RedirectResponse("/config/filters", status_code=303)
     _config.update_many(_apply_bool_defaults(dict(form), "filters"))
     return RedirectResponse("/config/filters?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Rota HTML — /config/title-format
+# ---------------------------------------------------------------------------
+
+@app.get("/config/title-format")
+def config_title_format(saved: str = ""):
+    if not _config:
+        return _page_shell("Formato de T\u00edtulo", "config_title_format",
+                           P("Config n\u00e3o inicializado."))
+    return _title_format_page(_config, saved=saved == "1")
+
+
+@app.post("/config/title-format")
+async def config_title_format_save(req):
+    if not _config:
+        return RedirectResponse("/config/title-format", status_code=303)
+
+    form = dict(await req.form())
+
+    # Ordem: campo oculto title_components_order
+    order_raw = form.get("title_components_order", "channel,status,title")
+    _config.update_many({"title_components_order": order_raw})
+
+    # Componentes habilitados: ler cada comp_enabled_* e montar lista
+    all_comps = [c.strip() for c in order_raw.split(",") if c.strip()]
+    enabled   = []
+    for comp in all_comps:
+        val = form.get(f"comp_enabled_{comp}", "false")
+        if val == "true":
+            enabled.append(comp)
+    # title é sempre obrigatório
+    if "title" not in enabled:
+        enabled.append("title")
+    _config.update_many({"title_components_enabled": ",".join(enabled)})
+
+    # Brackets toggle
+    brackets_val = form.get("title_use_brackets", "false")
+    _config.update_many({"title_use_brackets": brackets_val})
+
+    return RedirectResponse("/config/title-format?saved=1", status_code=303)
 
 
 # ---------------------------------------------------------------------------
