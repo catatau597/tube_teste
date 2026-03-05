@@ -27,24 +27,24 @@ def channels_page(state, scheduler):
     for cid, title in channels.items():
         c      = counts.get(cid, {"live": 0, "upcoming": 0, "vod": 0})
         is_frz = cid in frozen
-        status_label = "Congelado" if is_frz else "active"
+        status_label = "Congelado" if is_frz else "Ativo"
         status_cls   = "badge badge-frozen" if is_frz else "badge badge-active"
         short_id     = cid[:18] + "..." if len(cid) > 18 else cid
-        # Ícone: thumbnail padrão do YouTube para o canal
-        thumb_url = f"https://yt3.googleusercontent.com/ytc/{cid}"
-        # fallback: avatar via channel id direto
+        # Avatar: thumbnail via /api/thumbnail/{cid} (servido localmente)
+        # fallback para inicial colorida
+        thumb_src = f"/api/thumbnail/{cid}"
+        initial   = (title[0].upper() if title else "?")
         rows.append(Tr(
-            # Canal com ícone
             Td(
                 Div(
                     Img(
-                        src=thumb_url,
+                        src=thumb_src,
                         alt=title,
                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';",
                         style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;",
                     ),
                     Div(
-                        title[0].upper() if title else "?",
+                        initial,
                         style=(
                             "display:none;width:32px;height:32px;border-radius:50%;"
                             "background:#238636;color:#fff;font-weight:700;font-size:0.9rem;"
@@ -55,14 +55,14 @@ def channels_page(state, scheduler):
                         Span(title, style="font-weight:600;line-height:1.2;"),
                         Br(),
                         Span(
-                            f"@{title.lower().replace(' ', '')}",
-                            style="font-size:0.75rem;color:#8b949e;",
+                            cid,
+                            style="font-size:0.72rem;color:#484f58;font-family:monospace;",
                         ),
                         style="display:flex;flex-direction:column;justify-content:center;",
                     ),
                     style="display:flex;align-items:center;gap:10px;",
                 ),
-                style="min-width:200px;",
+                style="min-width:220px;",
             ),
             Td(Code(short_id, title=cid, style="font-size:0.78rem;cursor:default;")),
             Td(Span(str(c["live"]),    style="display:inline-block;min-width:28px;text-align:center;"), style="text-align:center;"),

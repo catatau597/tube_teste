@@ -4,7 +4,7 @@ playlist_dashboard.py — Página /playlist
 Exibe:
   1. Tabela de playlists com links + botão Copiar URL.
   2. Info do proxy.
-  3. Tabela de streams proxy ativos (polling a cada 2s via JS).
+(A tabela de Streams Proxy Ativos foi movida para o Dashboard.)
 """
 from fasthtml.common import *
 from starlette.responses import Response
@@ -23,7 +23,6 @@ def playlist_dashboard_page(request, playlist_routes: dict, base_url: str) -> Re
                 A(url, href=url, target="_blank",
                   style="font-size:0.82em;word-break:break-all;"),
             ),
-            # Coluna Copiar
             Td(
                 Button(
                     "\U0001f4cb Copiar",
@@ -73,95 +72,47 @@ def playlist_dashboard_page(request, playlist_routes: dict, base_url: str) -> Re
         style="margin-bottom:32px;",
     )
 
-    active_streams = Div(
-        H2("Streams Proxy Ativos"),
-        Div(
-            Button("Atualizar", id="btn-refresh", type="button", cls="btn-secondary",
-                   style="margin-right:8px;font-size:0.85em;"),
-            Span(id="last-update", style="font-size:0.8em;color:#8b949e;"),
-            style="margin-bottom:8px;",
-        ),
-        Div(
-            Table(
-                Thead(Tr(
-                    Th("Video ID"), Th("Buffer (chunks)"), Th("Buffer (MB)"),
-                    Th("Clientes"), Th("PID"), Th("Status"), Th("A\u00e7\u00e3o"),
-                )),
-                Tbody(id="proxy-table-body"),
-            ),
-            P("Nenhum stream proxy ativo.", id="no-streams-msg", cls="text-muted"),
-        ),
-        style="margin-bottom:32px;",
-    )
-
     js = Script("""
         function copyUrl(btn) {
             const url = btn.getAttribute('data-url');
-            navigator.clipboard.writeText(url).then(() => {
-                const fb = document.getElementById('copy-feedback');
-                fb.textContent = '\u2705 Copiado: ' + url;
-                fb.style.color = '#3fb950';
-                setTimeout(() => { fb.textContent = ''; }, 3000);
-            }).catch(() => {
-                prompt('Copie manualmente:', url);
-            });
-        }
-
-        function statusBadge(alive) {
-            const s = document.createElement('span');
-            s.className = alive ? 'badge badge-live' : 'badge badge-none';
-            s.textContent = alive ? '\u2705 ativo' : '\u274c parado';
-            return s.outerHTML;
-        }
-
-        function renderStreams(data) {
-            const tbody = document.getElementById('proxy-table-body');
-            const noMsg = document.getElementById('no-streams-msg');
-            tbody.innerHTML = '';
-            if (!data.streams || data.streams.length === 0) {
-                noMsg.style.display = ''; return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showCopyFeedback('\u2705 Copiado: ' + url);
+                }).catch(() => fallbackCopy(url));
+            } else {
+                fallbackCopy(url);
             }
-            noMsg.style.display = 'none';
-            data.streams.forEach(s => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><code>${s.video_id}</code></td>
-                    <td>${s.buffer_index} (${s.buffer_chunks} no deque)</td>
-                    <td>${s.buffer_mb}</td>
-                    <td>${s.clients}</td>
-                    <td>${s.process_pid || '\u2014'}</td>
-                    <td>${statusBadge(s.process_alive)}</td>
-                    <td><button onclick="stopStream('${s.video_id}')"
-                        style="font-size:0.8em;padding:2px 8px;cursor:pointer;">Parar</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-            document.getElementById('last-update').textContent =
-                'Atualizado: ' + new Date().toLocaleTimeString();
         }
 
-        function fetchStatus() {
-            fetch('/api/proxy/status').then(r => r.json()).then(renderStreams)
-                .catch(e => console.error('Erro ao buscar status:', e));
+        function fallbackCopy(url) {
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.position = 'fixed';
+            ta.style.opacity  = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showCopyFeedback('\u2705 Copiado: ' + url);
+            } catch (e) {
+                prompt('Copie manualmente:', url);
+            }
+            document.body.removeChild(ta);
         }
 
-        function stopStream(videoId) {
-            if (!confirm('Parar stream ' + videoId + '?')) return;
-            fetch('/api/proxy/' + videoId, { method: 'DELETE' })
-                .then(r => r.json())
-                .then(d => { alert(d.ok ? 'Stream parado.' : 'Erro: ' + (d.error||'?')); fetchStatus(); })
-                .catch(e => alert('Erro: ' + e));
+        function showCopyFeedback(msg) {
+            const fb = document.getElementById('copy-feedback');
+            if (!fb) return;
+            fb.textContent = msg;
+            fb.style.color = '#3fb950';
+            setTimeout(() => { fb.textContent = ''; }, 3000);
         }
-
-        document.getElementById('btn-refresh').onclick = fetchStatus;
-        fetchStatus();
-        setInterval(fetchStatus, 2000);
     """)
 
     return _page_shell(
         "Playlist", "playlist",
         playlist_table,
         proxy_info,
-        active_streams,
         js,
     )
