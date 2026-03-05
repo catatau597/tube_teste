@@ -5,7 +5,8 @@ dado o status do stream. Retorna (cmd: List[str], temp_files: List[str]).
 
 Regras:
 - Nenhum subprocess sincrono que envolva rede (subprocess.run bloquearia o event loop).
-- resolve_vod_url_async() e build_vod_cmd() sao a unica fonte de verdade para status="none".
+- resolve_vod_url_async() e build_vod_cmd() sao a unica fonte de verdade para
+  status in ("none", "vod", "ended").
 - resolve_live_hls_url_async() e build_live_hls_ffmpeg_cmd() sao o fallback para status="live"
   quando o streamlink falha (fast-fail).
 - build_player_command() e build_player_command_async() sao os pontos de entrada publicos.
@@ -48,6 +49,9 @@ LIVE_HLS_RESOLVE_TIMEOUT_S = 15
 
 # Timeout para yt-dlp resolver URL de VOD.
 VOD_RESOLVE_TIMEOUT_S = 20
+
+# Conjunto de status que representam conteudo VOD (live encerrada ou status legado).
+_VOD_STATUSES = frozenset({"none", "vod", "ended"})
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +170,7 @@ def build_vod_cmd(
     watch_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
 ) -> List[str]:
-    """Retorna comando para reproducao de VOD (status=none).
+    """Retorna comando para reproducao de VOD (status in _VOD_STATUSES).
 
     Se cdn_url estiver preenchida (resolvida por resolve_vod_url_async),
     usa ffmpeg direto na URL CDN. Caso contrario, usa pipeline bash
@@ -451,8 +455,10 @@ def build_player_command(
 ) -> tuple[list[str], list[str]]:
     """Retorna (cmd, temp_files) para status live ou placeholder.
 
-    Para status="none" (VOD), use build_player_command_async() que resolve
-    a URL CDN de forma assincrona sem bloquear o event loop.
+    Para status in ('none', 'vod', 'ended') use build_player_command_async(),
+    que resolve a URL CDN de forma assincrona sem bloquear o event loop.
+    Esta funcao aceita esses status como fallback de emergencia (yt-dlp|ffmpeg
+    sem pre-resolucao), mas NAO deve ser chamada em producao para VOD.
 
     Para status="live" em producao, o fast-fail deve ser tratado em
     web/main.py: se streamlink encerrar com erro em < 8s, chamar
@@ -460,7 +466,7 @@ def build_player_command(
 
     Args:
         video_id:         ID do video YouTube.
-        status:           "live", "upcoming", None ou qualquer outro valor.
+        status:           "live", "upcoming", "vod", "ended", "none" ou outro.
         watch_url:        URL completa do video.
         thumbnail_url:    URL ou path local da thumbnail para placeholder.
         user_agent:       User-Agent HTTP (nao repassado ao streamlink).
@@ -474,10 +480,11 @@ def build_player_command(
         logger.debug(f"[{video_id}] modo live -> streamlink")
         return build_streamlink_cmd(watch_url), []
 
-    # status "none" nao deve chegar aqui em producao
-    if status == "none":
+    # VOD: status 'vod' e 'ended' sao lives encerradas; 'none' e o valor legado.
+    # Em producao use build_player_command_async() para pre-resolver a URL CDN.
+    if status in _VOD_STATUSES:
         logger.warning(
-            f"[{video_id}] build_player_command() chamado com status=none — "
+            f"[{video_id}] build_player_command() chamado com status={status!r} — "
             "use build_player_command_async() para resolucao assincrona"
         )
         return build_vod_cmd(cdn_url="", watch_url=watch_url, user_agent=user_agent), []
@@ -502,10 +509,16 @@ async def build_player_command_async(
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     texts_cache_path: Optional[Path] = None,
 ) -> tuple[list[str], list[str]]:
-    """Versao assincrona de build_player_command — obrigatoria para status=none.
+    """Versao assincrona de build_player_command — obrigatoria para VOD.
 
-    Para status=none resolve a URL CDN via resolve_vod_url_async() sem bloquear
-    o event loop. Para os demais status delega ao build_player_command() sincrono.
+    Para status in ('none', 'vod', 'ended') resolve a URL CDN via
+    resolve_vod_url_async() sem bloquear o event loop. Para os demais
+    status delega ao build_player_command() sincrono.
+
+    Status VOD reconhecidos:
+    - 'vod':   live encerrada, confirmado pelo scheduler YouTube API.
+    - 'ended': alias equivalente a 'vod' (compatibilidade futura).
+    - 'none':  valor legado (mantido por compatibilidade).
 
     Raises:
         GeoBlockedError: propagada de resolve_vod_url_async() quando o video
@@ -527,8 +540,8 @@ async def build_player_command_async(
             texts_cache_path=TEXTS_CACHE_PATH,
         )
     """
-    if status == "none":
-        logger.debug(f"[{video_id}] modo VOD -> resolve_vod_url_async")
+    if status in _VOD_STATUSES:
+        logger.debug(f"[{video_id}] modo VOD (status={status!r}) -> resolve_vod_url_async")
         cdn_url = await resolve_vod_url_async(watch_url, user_agent)
         if cdn_url:
             logger.debug(f"[{video_id}] CDN resolvida: {cdn_url[:80]}...")
