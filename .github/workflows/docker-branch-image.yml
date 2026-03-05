@@ -5,6 +5,12 @@ on:
     branches:
       - dev
       - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        required: false
+        default: 'dev'
 
 permissions:
   contents: read
