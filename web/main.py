@@ -29,8 +29,9 @@ from core.scheduler import Scheduler
 from core.state_manager import StateManager
 from core.thumbnail_manager import ThumbnailManager
 from core.youtube_api import YouTubeAPI
-from web.routes.proxy_dashboard import proxy_dashboard_page
+from web.routes.playlist_dashboard import playlist_dashboard_page
 from web.routes.channels import channels_page as _channels_page
+from web.routes.eventos import eventos_page as _eventos_page
 from web.layout import _page_shell
 
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
@@ -131,6 +132,8 @@ _LEGACY_REDIRECTS = {
     "/playlist_vod_direct.m3u8":  "/playlist/vod.m3u",
     "/playlist_vod_proxy.m3u8":   "/playlist/vod-proxy.m3u",
     "/youtube_epg.xml":            "/epg.xml",
+    # Redireciona /proxy antigo para /playlist
+    "/proxy":                      "/playlist",
 }
 
 
@@ -434,47 +437,52 @@ def home(request: Request):
     streams  = _state.get_all_streams() if _state else []
     channels = _state.get_all_channels() if _state else {}
 
-    rows = []
-    for s in streams:
-        vid      = s.get("videoid", "")
-        url      = s.get("watchurl") or f"https://www.youtube.com/watch?v={vid}"
-        cat_id   = str(s.get("categoryoriginal") or "")
-        cat_name = (_categories_db or {}).get(cat_id, "") if cat_id else ""
-        if not cat_name and _config is not None and cat_id:
-            cat_name = _config.get_mapping("category_mappings").get(cat_id, "")
-        cat_cell = f"{cat_id} | {cat_name}" if cat_name else (cat_id or "\u2014")
-        status   = s.get("status") or "none"
-        channel  = (s.get("channelname") or "")[:30] or "\u2014"
-        title    = (s.get("title")       or "")[:70] or f"[{vid}]"
-        badge_cls = f"badge badge-{status}" if status in ("live","upcoming","vod") else "badge badge-none"
-        rows.append(Tr(
-            Td(channel),
-            Td(title),
-            Td(Code(vid)),
-            Td(Span(status, cls=badge_cls)),
-            Td(cat_cell),
-            Td(A("\u25b6", href=url, target="_blank")),
-        ))
+    n_live = sum(1 for s in streams if s.get("status") == "live")
+    n_up   = sum(1 for s in streams if s.get("status") == "upcoming")
+    n_vod  = sum(1 for s in streams if s.get("status") in ("vod", "recorded"))
 
     channel_count = len(channels)
     return _page_shell(
         "Dashboard", "dashboard",
         Div(
-            H2("Canais monitorados"),
+            H2("Visão Geral"),
+            Div(
+                Div(
+                    Span(str(channel_count), style="font-size:2rem;font-weight:700;color:#58a6ff;"),
+                    Br(),
+                    Span("Canais", cls="text-muted"),
+                    Br(),
+                    A("Gerenciar →", href="/canais", style="font-size:0.82rem;"),
+                    cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
+                ),
+                Div(
+                    Span(str(n_live), style="font-size:2rem;font-weight:700;color:#f85149;"),
+                    Br(),
+                    Span("🔴 Live", cls="text-muted"),
+                    cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
+                ),
+                Div(
+                    Span(str(n_up), style="font-size:2rem;font-weight:700;color:#d29922;"),
+                    Br(),
+                    Span("🟡 Upcoming", cls="text-muted"),
+                    cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
+                ),
+                Div(
+                    Span(str(n_vod), style="font-size:2rem;font-weight:700;color:#8b949e;"),
+                    Br(),
+                    Span("📼 VOD", cls="text-muted"),
+                    cls="card", style="text-align:center;padding:16px 24px;min-width:120px;",
+                ),
+                style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;",
+            ),
             P(
-                f"{channel_count} canal(is) — ",
-                A("Gerenciar Canais \u2192", href="/canais"),
+                A("📅 Ver todos os Eventos →", href="/eventos"),
+                "   ",
+                A("📁 Playlists e Proxy →", href="/playlist"),
                 cls="text-muted",
+                style="margin-top:4px;",
             ),
-            H2(f"Streams ({len(streams)})"),
-            P(A("Ver Playlists e Proxy \u2192", href="/proxy"), cls="text-muted"),
-            Table(
-                Thead(Tr(
-                    Th("Canal"), Th("Evento"), Th("Video ID"),
-                    Th("Status"), Th("Categoria"), Th(""),
-                )),
-                Tbody(*rows),
-            ),
+            cls="card",
         ),
     )
 
@@ -497,16 +505,25 @@ def force_sync():
 
 
 # ---------------------------------------------------------------------------
-# Rotas HTML — Proxy
+# Rotas HTML — Playlist (antigo /proxy)
 # ---------------------------------------------------------------------------
 
-@app.get("/proxy")
-def proxy_page(request: Request):
-    return proxy_dashboard_page(
+@app.get("/playlist")
+def playlist_page(request: Request):
+    return playlist_dashboard_page(
         request=request,
         playlist_routes=_PLAYLIST_ROUTES,
         base_url=_get_base_url(request),
     )
+
+
+# ---------------------------------------------------------------------------
+# Rotas HTML — Eventos
+# ---------------------------------------------------------------------------
+
+@app.get("/eventos")
+def eventos_page_route():
+    return _eventos_page(_state)
 
 
 # ---------------------------------------------------------------------------
@@ -520,7 +537,6 @@ def config_redirect():
 
 @app.get("/config/credentials")
 def config_credentials(saved: str = ""):
-    """Exibe apenas a chave de API do YouTube — handles/IDs agora são gerenciados em /canais."""
     if not _config:
         return _page_shell("Credenciais", "config_credentials", P("Config não inicializado."))
     alert = Div("\u2705 Configura\u00e7\u00f5es salvas com sucesso.",
@@ -538,10 +554,7 @@ def config_credentials(saved: str = ""):
                           type="text", id="field_youtube_api_keys",
                           placeholder="AIzaSy..., AIzaSy..."),
                 ),
-                Div(
-                    Button("Salvar", type="submit"),
-                    style="margin-top:20px;",
-                ),
+                Div(Button("Salvar", type="submit"), style="margin-top:20px;"),
                 method="post",
                 action="/config/credentials",
             ),
@@ -789,10 +802,7 @@ def config_filters(saved: str = ""):
                 ),
                 cls="card",
             ),
-            Div(
-                Button("Salvar filtros", type="submit"),
-                style="margin-top:8px;",
-            ),
+            Div(Button("Salvar filtros", type="submit"), style="margin-top:8px;"),
             method="post",
             action="/config/filters",
         ),
@@ -810,7 +820,7 @@ async def config_filters_save(req):
 
 
 # ---------------------------------------------------------------------------
-# API JSON — channels (lista, adiciona, deleta, sync, freeze)
+# API JSON — channels
 # ---------------------------------------------------------------------------
 
 @app.get("/api/channels")
@@ -832,29 +842,20 @@ async def api_channels_create(req):
 
 @app.post("/api/channels/add")
 async def api_channels_add(req):
-    """
-    Adiciona canal por handle (@handle) ou Channel ID (UC...).
-    Resolve o handle para ID via YouTube API se necessario.
-    """
     if _state is None or _config is None:
         return JSONResponse({"error": "Servidor ainda inicializando"}, status_code=503)
     body   = await req.json()
     cid    = body.get("id",     "").strip()
     handle = body.get("handle", "").strip().lstrip("@")
-
     if not cid and not handle:
-        return JSONResponse({"error": "Forneça id ou handle"}, status_code=400)
-
+        return JSONResponse({"error": "Forne\u00e7a id ou handle"}, status_code=400)
     api_keys = _config.get_list("youtube_api_keys")
     scraper  = YouTubeAPI(api_keys)
-
     if handle and not cid:
         resolved = scraper.resolve_channel_handles_to_ids([handle], _state)
         if not resolved:
-            return JSONResponse({"error": f"Handle @{handle} não encontrado"}, status_code=404)
+            return JSONResponse({"error": f"Handle @{handle} n\u00e3o encontrado"}, status_code=404)
         cid = list(resolved.keys())[0]
-
-    # Garante que temos o título
     titles = scraper.ensure_channel_titles({cid}, _state)
     title  = titles.get(cid) or cid
     _state.channels[cid] = title
@@ -877,19 +878,17 @@ def api_channels_delete(channel_id: str):
 
 @app.post("/api/channels/{channel_id}/sync")
 def api_channels_sync(channel_id: str):
-    """Força uma sincronização imediata (trigger_now) para todos os canais."""
     if _scheduler is None:
-        return JSONResponse({"error": "Scheduler não disponível"}, status_code=503)
+        return JSONResponse({"error": "Scheduler n\u00e3o dispon\u00edvel"}, status_code=503)
     _scheduler.trigger_now()
-    logger.info(f"Sync forçado via UI para canal: {channel_id}")
+    logger.info(f"Sync for\u00e7ado via UI para canal: {channel_id}")
     return JSONResponse({"ok": True, "channel_id": channel_id})
 
 
 @app.post("/api/channels/{channel_id}/freeze")
 def api_channels_freeze(channel_id: str):
-    """Alterna o estado de congelamento de um canal."""
     if _state is None:
-        return JSONResponse({"error": "State não disponível"}, status_code=503)
+        return JSONResponse({"error": "State n\u00e3o dispon\u00edvel"}, status_code=503)
     if not hasattr(_state, "frozen_channels"):
         _state.frozen_channels = set()
     if channel_id in _state.frozen_channels:
