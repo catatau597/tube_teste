@@ -12,7 +12,7 @@ from fasthtml.common import *
 from starlette.routing import Route
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 
-from core.config import AppConfig
+from core.config import AppConfig, DEFAULTS
 from core.player_router import (
     build_player_command_async,
     build_live_hls_ffmpeg_cmd,
@@ -301,8 +301,82 @@ for _old, _new in _LEGACY_REDIRECTS.items():
 
 
 # ---------------------------------------------------------------------------
-# Helpers de formulário de config
+# Helpers de formulário de config — pill toggle para campos bool
 # ---------------------------------------------------------------------------
+
+# CSS global para os toggles (injetado uma vez por página via _TOGGLE_STYLE)
+_TOGGLE_STYLE = Style("""
+    .bool-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        cursor: pointer;
+        user-select: none;
+    }
+    .bool-toggle .toggle-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 14px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        border: 1.5px solid transparent;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        cursor: pointer;
+    }
+    .bool-toggle .toggle-pill.on {
+        background: #1f6feb;
+        color: #fff;
+        border-color: #388bfd;
+    }
+    .bool-toggle .toggle-pill.off {
+        background: transparent;
+        color: #8b949e;
+        border-color: #30363d;
+    }
+    .bool-toggle .toggle-label {
+        font-size: 0.9rem;
+        color: #e6edf3;
+    }
+""")
+
+_TOGGLE_JS = Script("""
+    function _toggleBool(btn, hiddenId) {
+        const hidden = document.getElementById(hiddenId);
+        const isOn   = hidden.value === 'true';
+        hidden.value = isOn ? 'false' : 'true';
+        btn.textContent = isOn ? 'Desligado' : 'Ligado';
+        btn.className   = 'toggle-pill ' + (isOn ? 'off' : 'on');
+    }
+""")
+
+
+def _bool_toggle(key: str, value: bool, label: str) -> Div:
+    """Renderiza um pill toggle liga/desliga para um campo bool."""
+    hidden_id  = f"hidden_{key}"
+    pill_cls   = "toggle-pill on" if value else "toggle-pill off"
+    pill_label = "Ligado" if value else "Desligado"
+    return Div(
+        Input(type="hidden", name=key, value="true" if value else "false", id=hidden_id),
+        Button(
+            pill_label,
+            type="button",
+            cls=pill_cls,
+            onclick=f"_toggleBool(this, '{hidden_id}')",
+        ),
+        Span(label, cls="toggle-label"),
+        cls="bool-toggle",
+    )
+
+
+def _bool_keys_for_section(section_key: str) -> list[str]:
+    """Retorna todas as chaves bool de uma seção, para corrigir o POST."""
+    return [
+        k for k, (_, sec, _, vtype) in DEFAULTS.items()
+        if sec == section_key and vtype == "bool"
+    ]
+
 
 def _config_form_fields(rows: list, section: str) -> list:
     """Gera campos de formulário genéricos para uma seção de config."""
@@ -313,15 +387,7 @@ def _config_form_fields(rows: list, section: str) -> list:
         desc  = row.get("description", "")
         vtype = row.get("value_type", "str")
         if vtype == "bool":
-            checked = value.lower() == "true"
-            fields.append(
-                Label(
-                    Input(type="checkbox", name=key, value="true",
-                          checked=checked, id=f"field_{key}"),
-                    f" {desc or key}",
-                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
-                )
-            )
+            fields.append(_bool_toggle(key, value.lower() == "true", desc or key))
         else:
             fields.append(
                 Label(
@@ -342,6 +408,8 @@ def _config_page(section_key: str, title: str, active_key: str, saved: bool = Fa
     return _page_shell(
         title, active_key,
         alert,
+        _TOGGLE_STYLE,
+        _TOGGLE_JS,
         Div(
             Form(
                 *fields,
@@ -355,6 +423,15 @@ def _config_page(section_key: str, title: str, active_key: str, saved: bool = Fa
             cls="card",
         ),
     )
+
+
+def _apply_bool_defaults(form_data: dict, section_key: str) -> dict:
+    """Garante que chaves bool ausentes no POST recebam 'false'."""
+    updates = dict(form_data)
+    for k in _bool_keys_for_section(section_key):
+        if k not in updates:
+            updates[k] = "false"
+    return updates
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +515,7 @@ def config_credentials(saved: str = ""):
 async def config_credentials_save(req):
     form = await req.form()
     if _config:
-        _config.update_many(dict(form))
+        _config.update_many(_apply_bool_defaults(dict(form), "credentials"))
     return RedirectResponse("/config/credentials?saved=1", status_code=303)
 
 
@@ -451,7 +528,7 @@ def config_scheduler(saved: str = ""):
 async def config_scheduler_save(req):
     form = await req.form()
     if _config:
-        _config.update_many(dict(form))
+        _config.update_many(_apply_bool_defaults(dict(form), "scheduler"))
     return RedirectResponse("/config/scheduler?saved=1", status_code=303)
 
 
@@ -464,7 +541,7 @@ def config_output(saved: str = ""):
 async def config_output_save(req):
     form = await req.form()
     if _config:
-        _config.update_many(dict(form))
+        _config.update_many(_apply_bool_defaults(dict(form), "output"))
     return RedirectResponse("/config/output?saved=1", status_code=303)
 
 
@@ -477,7 +554,7 @@ def config_technical(saved: str = ""):
 async def config_technical_save(req):
     form = await req.form()
     if _config:
-        _config.update_many(dict(form))
+        _config.update_many(_apply_bool_defaults(dict(form), "technical"))
     return RedirectResponse("/config/technical?saved=1", status_code=303)
 
 
@@ -576,35 +653,19 @@ def config_filters(saved: str = ""):
                 }
             });
         });
-
-        document.querySelectorAll('form input[type=checkbox]').forEach(cb => {
-            const form = cb.closest('form');
-            form.addEventListener('submit', () => {
-                if (!cb.checked) {
-                    const hidden = document.createElement('input');
-                    hidden.type  = 'hidden';
-                    hidden.name  = cb.name;
-                    hidden.value = 'false';
-                    form.appendChild(hidden);
-                }
-            });
-        });
     """)
 
     return _page_shell(
         "Filtros", "config_filters",
         alert,
+        _TOGGLE_STYLE,
+        _TOGGLE_JS,
         Form(
             Div(
                 H2("Filtro de Categoria"),
                 P("Quando ativo, apenas streams com IDs de categoria permitidos entram na playlist.",
                   cls="text-muted"),
-                Label(
-                    Input(type="checkbox", name="filter_by_category", value="true",
-                          checked=filter_by_cat, id="field_filter_by_category"),
-                    " Ativar filtro por categoria",
-                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
-                ),
+                _bool_toggle("filter_by_category", filter_by_cat, "Ativar filtro por categoria"),
                 Label(
                     Span("IDs permitidos (vírgula) — ex: 17,22,25",
                          style="display:block;margin-bottom:4px;"),
@@ -644,18 +705,9 @@ def config_filters(saved: str = ""):
                          style="display:block;margin-bottom:4px;"),
                     _tag_list_with_input(title_exprs, "new_title_expr", "title_filter_expressions"),
                 ),
-                Label(
-                    Input(type="checkbox", name="prefix_title_with_channel_name", value="true",
-                          checked=prefix_channel, id="field_prefix_channel"),
-                    " Prefixar título com nome do canal",
-                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;margin-top:14px;",
-                ),
-                Label(
-                    Input(type="checkbox", name="prefix_title_with_status", value="true",
-                          checked=prefix_status, id="field_prefix_status"),
-                    " Prefixar título com status [Ao Vivo] / [Agendado]",
-                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
-                ),
+                Div(style="margin-top:14px;"),
+                _bool_toggle("prefix_title_with_channel_name", prefix_channel, "Prefixar título com nome do canal"),
+                _bool_toggle("prefix_title_with_status", prefix_status, "Prefixar título com status [Ao Vivo] / [Agendado]"),
                 Label(
                     Span("Mapeamento de nomes de canal: Nome Longo|Nome Curto (vírgula)",
                          style="display:block;margin-bottom:4px;"),
@@ -665,18 +717,8 @@ def config_filters(saved: str = ""):
             ),
             Div(
                 H2("VOD / Gravações"),
-                Label(
-                    Input(type="checkbox", name="keep_recorded_streams", value="true",
-                          checked=keep_recorded, id="field_keep_recorded"),
-                    " Manter streams gravados (ex-live) na playlist VOD",
-                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
-                ),
-                Label(
-                    Input(type="checkbox", name="epg_description_cleanup", value="true",
-                          checked=epg_cleanup, id="field_epg_cleanup"),
-                    " Manter apenas o primeiro parágrafo da descrição no EPG",
-                    style="display:flex;align-items:center;gap:8px;margin-bottom:14px;",
-                ),
+                _bool_toggle("keep_recorded_streams", keep_recorded, "Manter streams gravados (ex-live) na playlist VOD"),
+                _bool_toggle("epg_description_cleanup", epg_cleanup, "Manter apenas o primeiro parágrafo da descrição no EPG"),
                 Label(
                     Span("Máximo de gravações por canal",
                          style="display:block;margin-bottom:4px;"),
@@ -723,20 +765,7 @@ async def config_filters_save(req):
     form = await req.form()
     if not _config:
         return RedirectResponse("/config/filters", status_code=303)
-
-    bool_keys = [
-        "filter_by_category",
-        "prefix_title_with_channel_name",
-        "prefix_title_with_status",
-        "epg_description_cleanup",
-        "keep_recorded_streams",
-    ]
-    updates = dict(form)
-    for k in bool_keys:
-        if k not in updates:
-            updates[k] = "false"
-
-    _config.update_many(updates)
+    _config.update_many(_apply_bool_defaults(dict(form), "filters"))
     return RedirectResponse("/config/filters?saved=1", status_code=303)
 
 
@@ -1198,18 +1227,23 @@ def logs_page():
                     id="level-buttons",
                     style="margin-bottom:14px;",
                 ),
-                # --- checkbox ocultar access logs ---
-                Label(
-                    Input(
-                        type="checkbox",
-                        id="chk-hide-access",
-                        checked=hide_access,
-                        style="margin-right:6px;width:auto;display:inline;",
-                        onchange="toggleHideAccess(this.checked)",
+                # --- toggle ocultar access logs ---
+                _TOGGLE_STYLE,
+                _TOGGLE_JS,
+                Div(
+                    Input(type="hidden", id="hidden_hide_access_logs",
+                          value="true" if hide_access else "false"),
+                    Button(
+                        "Ligado" if hide_access else "Desligado",
+                        type="button",
+                        cls="toggle-pill " + ("on" if hide_access else "off"),
+                        onclick="_toggleBool(this, 'hidden_hide_access_logs'); toggleHideAccess(document.getElementById('hidden_hide_access_logs').value === 'true')",
                     ),
-                    "Ocultar logs de acesso HTTP (GET / e /api/logs/stream)",
-                    style="display:inline-flex;align-items:center;font-size:0.85rem;"
-                          "color:#8b949e;cursor:pointer;margin-bottom:10px;",
+                    Span("Ocultar logs de acesso HTTP (GET / e /api/logs/stream)",
+                         cls="toggle-label",
+                         style="font-size:0.85rem;color:#8b949e;"),
+                    cls="bool-toggle",
+                    style="margin-bottom:10px;",
                 ),
                 Div(id="level-feedback", style="font-size:0.82rem;color:#3fb950;min-height:18px;"),
                 style="padding:12px 0 4px;",
