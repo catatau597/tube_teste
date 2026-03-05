@@ -253,7 +253,7 @@ code {
 def _sidebar(active: str = "") -> Div:
     """
     Sidebar fixa com navegação.
-    `active` deve ser uma das chaves: dashboard, proxy, config,
+    `active` deve ser uma das chaves: dashboard, channels, proxy, config,
     config_credentials, config_scheduler, config_filters,
     config_output, config_technical, logs
     """
@@ -266,19 +266,20 @@ def _sidebar(active: str = "") -> Div:
         return A(label, href=href, cls=cls)
 
     return Div(
-        A("⚡ TubeWrangler", href="/", cls="brand"),
+        A("\u26a1 TubeWrangler", href="/", cls="brand"),
         Nav(
-            nav_item("🏠  Dashboard",  "/",     "dashboard"),
-            nav_item("📡  Proxy",       "/proxy", "proxy"),
+            nav_item("\U0001f3e0  Dashboard",  "/",        "dashboard"),
+            nav_item("\U0001f4fa  Canais",     "/canais",  "channels"),
+            nav_item("\U0001f4e1  Proxy",       "/proxy",   "proxy"),
 
             Span("Configurações", cls="nav-group-label"),
-            nav_sub("🔑  Credenciais",  "/config/credentials", "config_credentials"),
-            nav_sub("🕐  Agendador",    "/config/scheduler",   "config_scheduler"),
-            nav_sub("🎛️   Filtros",      "/config/filters",     "config_filters"),
-            nav_sub("📤  Output",        "/config/output",      "config_output"),
-            nav_sub("🔧  Técnico",       "/config/technical",   "config_technical"),
+            nav_sub("\U0001f511  Credenciais",  "/config/credentials", "config_credentials"),
+            nav_sub("\U0001f550  Agendador",    "/config/scheduler",   "config_scheduler"),
+            nav_sub("\U0001f39b\ufe0f   Filtros",      "/config/filters",     "config_filters"),
+            nav_sub("\U0001f4e4  Output",        "/config/output",      "config_output"),
+            nav_sub("\U0001f527  Técnico",       "/config/technical",   "config_technical"),
 
-            nav_item("📋  Logs",         "/logs",  "logs"),
+            nav_item("\U0001f4cb  Logs",         "/logs",   "logs"),
         ),
         Div("TubeWrangler v3.x", cls="sidebar-footer"),
         id="sidebar",
