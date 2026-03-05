@@ -1,292 +1,318 @@
 """
-web/routes/title_format.py — Página /config/title-format
+web/routes/title_format.py
+--------------------------
+Página /config/title-format
 
-Permite configurar a ordem e ativação dos componentes do título
-da playlist via drag-and-drop + toggles.
+Permite ao usuário configurar:
+  - Quais componentes (canal, status, evento) aparecem no título
+  - A ordem de exibição via drag-and-drop
+  - Se componentes opcionais usam colchetes ou outro separador
 
-Componentes disponíveis:
-  channel  → Nome do Canal (ex: CazéTV)
-  status   → Status do evento (ex: AO VIVO / AGENDADO)
-  title    → Título do vídeo (sempre presente)
-
-Exemplo de saída com ordem [channel, status, title] e brackets=true:
-  [CazéTV] [AO VIVO] Final da Copa
+Chaves de config usadas:
+  title_components_order   -> "channel,status,title"  (csv, ordem)
+  title_components_enabled -> "channel,status,title"  (csv, ativos)
+  title_use_brackets       -> "true" / "false"
 """
 from fasthtml.common import *
 from web.layout import _page_shell
 
-# Metadados fixos de cada componente
-_COMPONENT_META = {
-    "channel": {"label": "[NOME DO CANAL]",  "emoji": "📺", "removable": True},
-    "status":  {"label": "[STATUS]",          "emoji": "🔴", "removable": True},
-    "title":   {"label": "[NOME DO EVENTO]",  "emoji": "📝", "removable": False},
-}
+_ALL_COMPONENTS = [
+    ("channel", "Nome do Canal",    "Ex: ÜPTV Brasil"),
+    ("status",  "Status",           "Ex: [Ao Vivo] ou [Agendado]"),
+    ("title",   "Título do Evento", "Texto original do vídeo (sempre presente)"),
+]
 
-_ALL_COMPONENTS = ["channel", "status", "title"]
+_TOGGLE_STYLE = Style("""
+    .bool-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        cursor: pointer;
+        user-select: none;
+    }
+    .bool-toggle .toggle-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 14px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        border: 1.5px solid transparent;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        cursor: pointer;
+    }
+    .bool-toggle .toggle-pill.on  { background:#1f6feb; color:#fff; border-color:#388bfd; }
+    .bool-toggle .toggle-pill.off { background:transparent; color:#8b949e; border-color:#30363d; }
+    .bool-toggle .toggle-label    { font-size:0.9rem; color:#e6edf3; }
 
+    /* drag-and-drop list */
+    .dnd-list {
+        list-style: none;
+        padding: 0;
+        margin: 16px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 520px;
+    }
+    .dnd-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        background: #21262d;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        cursor: grab;
+        user-select: none;
+        transition: border-color .15s;
+    }
+    .dnd-item.dragging {
+        opacity: 0.5;
+        border-color: #58a6ff;
+        cursor: grabbing;
+    }
+    .dnd-item.drag-over {
+        border-color: #58a6ff;
+        background: #1c2a3a;
+    }
+    .dnd-handle { color: #484f58; font-size: 1.1rem; flex-shrink: 0; }
+    .dnd-enable { flex-shrink: 0; }
+    .dnd-info   { flex: 1; }
+    .dnd-info strong { font-size: 0.9rem; color: #e6edf3; }
+    .dnd-info small  { display:block; color: #8b949e; font-size: 0.78rem; margin-top:2px; }
+    .dnd-required {
+        font-size: 0.72rem;
+        color: #3fb950;
+        border: 1px solid #238636;
+        border-radius: 10px;
+        padding: 1px 8px;
+        margin-left: auto;
+    }
 
-def _build_preview(order: list[str], enabled: set[str], use_brackets: bool) -> str:
-    """Gera exemplo estático de como ficará o título."""
-    parts = []
-    for comp in order:
-        if comp not in enabled:
-            continue
-        if comp == "channel":
-            val = "[CazéTV]" if use_brackets else "CazéTV"
-        elif comp == "status":
-            val = "[AO VIVO]" if use_brackets else "AO VIVO"
-        elif comp == "title":
-            val = "Final da Copa"
-        else:
-            continue
-        parts.append(val)
-    return " ".join(parts) if parts else "Final da Copa"
+    .preview-box {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 10px 16px;
+        font-size: 0.88rem;
+        color: #e6edf3;
+        margin-top: 14px;
+        min-height: 36px;
+        font-family: monospace;
+    }
+""")
+
+_TOGGLE_JS = Script("""
+    function _toggleBool(btn, hiddenId) {
+        const hidden = document.getElementById(hiddenId);
+        const isOn   = hidden.value === 'true';
+        hidden.value = isOn ? 'false' : 'true';
+        btn.textContent = isOn ? 'Desligado' : 'Ligado';
+        btn.className   = 'toggle-pill ' + (isOn ? 'off' : 'on');
+        _updatePreview();
+    }
+""")
+
+_DND_JS = Script("""
+    let _dragged = null;
+
+    function _initDnd() {
+        const list = document.getElementById('dnd-list');
+        list.querySelectorAll('.dnd-item').forEach(item => {
+            item.addEventListener('dragstart', e => {
+                _dragged = item;
+                setTimeout(() => item.classList.add('dragging'), 0);
+            });
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                list.querySelectorAll('.dnd-item').forEach(i => i.classList.remove('drag-over'));
+                _syncOrder();
+                _updatePreview();
+            });
+            item.addEventListener('dragover', e => {
+                e.preventDefault();
+                if (item !== _dragged) {
+                    list.querySelectorAll('.dnd-item').forEach(i => i.classList.remove('drag-over'));
+                    item.classList.add('drag-over');
+                    const rect = item.getBoundingClientRect();
+                    const mid  = rect.top + rect.height / 2;
+                    if (e.clientY < mid) {
+                        list.insertBefore(_dragged, item);
+                    } else {
+                        list.insertBefore(_dragged, item.nextSibling);
+                    }
+                }
+            });
+        });
+    }
+
+    function _syncOrder() {
+        const list  = document.getElementById('dnd-list');
+        const items = list.querySelectorAll('.dnd-item');
+        const order = Array.from(items).map(i => i.dataset.comp);
+        document.getElementById('title_components_order').value = order.join(',');
+    }
+
+    function _updatePreview() {
+        const list    = document.getElementById('dnd-list');
+        const items   = list.querySelectorAll('.dnd-item');
+        const brackets = document.getElementById('hidden_title_use_brackets').value === 'true';
+        const parts   = [];
+        items.forEach(item => {
+            const comp    = item.dataset.comp;
+            const enabled = item.querySelector('input[type=checkbox]').checked;
+            if (!enabled) return;
+            const labels  = { channel: 'Canal', status: 'Ao Vivo', title: 'Nome do Evento' };
+            const lbl     = labels[comp] || comp;
+            if (comp === 'title') {
+                parts.push(lbl);
+            } else {
+                parts.push(brackets ? '[' + lbl + ']' : lbl);
+            }
+        });
+        document.getElementById('preview-output').textContent =
+            parts.length ? parts.join(' \u2014 ') : '(vazio)';
+
+        // sync enabled hidden inputs
+        items.forEach(item => {
+            const comp    = item.dataset.comp;
+            const checked = item.querySelector('input[type=checkbox]').checked;
+            const hid     = document.getElementById('hidden_comp_enabled_' + comp);
+            if (hid) hid.value = checked ? 'true' : 'false';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        _initDnd();
+        _updatePreview();
+        document.querySelectorAll('.dnd-item input[type=checkbox]').forEach(cb => {
+            cb.addEventListener('change', _updatePreview);
+        });
+    });
+""")
 
 
 def title_format_page(config, saved: bool = False):
-    order   = config.get_list("title_components_order")
-    enabled = set(config.get_list("title_components_enabled"))
-    use_brackets = config.get_bool("title_use_brackets")
+    order_raw   = config.get_raw("title_components_order")   if hasattr(config, "get_raw") else "channel,status,title"
+    enabled_raw = config.get_raw("title_components_enabled") if hasattr(config, "get_raw") else "channel,status,title"
+    use_brackets = config.get_bool("title_use_brackets")     if hasattr(config, "get_bool") else False
 
-    # Garante que todos os componentes conhecidos estão na ordem
-    # (adiciona ao final os que estiverem faltando)
-    for c in _ALL_COMPONENTS:
-        if c not in order:
-            order.append(c)
+    # Fallback de defaults
+    if not order_raw.strip():
+        order_raw = "channel,status,title"
+    if not enabled_raw.strip():
+        enabled_raw = "channel,status,title"
 
-    preview_text = _build_preview(order, enabled, use_brackets)
+    order_list   = [c.strip() for c in order_raw.split(",")   if c.strip()]
+    enabled_set  = {c.strip() for c in enabled_raw.split(",") if c.strip()}
+
+    # Garante que todos os componentes estão na ordem (adiciona os ausentes no fim)
+    all_comp_keys = [k for k, _, _ in _ALL_COMPONENTS]
+    for key in all_comp_keys:
+        if key not in order_list:
+            order_list.append(key)
+
+    # Mapa label/desc por chave
+    _info = {k: (lbl, desc) for k, lbl, desc in _ALL_COMPONENTS}
+
+    # Constrói itens drag-and-drop na ordem salva
+    dnd_items = []
+    for comp in order_list:
+        lbl, desc = _info.get(comp, (comp, ""))
+        is_enabled  = comp in enabled_set
+        is_required = comp == "title"
+        dnd_items.append(
+            Li(
+                Span("☰", cls="dnd-handle"),
+                # checkbox de habilitar (desabilitado para 'title')
+                Input(
+                    type="checkbox",
+                    cls="dnd-enable",
+                    checked=is_enabled,
+                    disabled=is_required,
+                    title="Sempre ativo" if is_required else "",
+                ) if True else None,
+                Div(
+                    Strong(lbl),
+                    Small(desc),
+                    cls="dnd-info",
+                ),
+                *([
+                    Span("obrigatório", cls="dnd-required")
+                ] if is_required else []),
+                # hidden para sync
+                Input(type="hidden",
+                      name=f"comp_enabled_{comp}",
+                      id=f"hidden_comp_enabled_{comp}",
+                      value="true" if is_enabled else "false"),
+                draggable="true",
+                data_comp=comp,
+                cls="dnd-item",
+            )
+        )
 
     alert = Div("✅ Formato de título salvo com sucesso.",
                 cls="alert alert-success") if saved else ""
 
-    # ── Componentes drag-and-drop ──────────────────────────────────
-    component_items = []
-    for comp in order:
-        meta    = _COMPONENT_META.get(comp, {"label": comp, "emoji": "❓", "removable": True})
-        is_on   = comp in enabled
-        pill_cls   = "toggle-pill on" if is_on else "toggle-pill off"
-        pill_label = "Ligado" if is_on else "Desligado"
-        hidden_id  = f"toggle_hidden_{comp}"
-
-        component_items.append(
-            Div(
-                # Handle de drag
-                Span("≡", style="cursor:grab;color:#484f58;font-size:1.2rem;margin-right:12px;user-select:none;",
-                     cls="drag-handle"),
-                # Toggle ligado/desligado (desabilitado para title)
-                Input(type="hidden", name=f"comp_enabled_{comp}",
-                      value="true" if is_on else "false", id=hidden_id),
-                Button(
-                    pill_label,
-                    type="button",
-                    cls=pill_cls,
-                    **(  {"onclick": f"_toggleBool(this, '{hidden_id}'); updatePreview()"}
-                          if meta["removable"]
-                          else {"disabled": True, "title": "O título do evento é sempre obrigatório"}
-                    ),
-                    style="min-width:80px;" + ("opacity:0.5;cursor:not-allowed;" if not meta["removable"] else ""),
-                ),
-                # Label
-                Span(
-                    f"{meta['emoji']} {meta['label']}",
-                    style="margin-left:12px;font-size:0.95rem;color:#e6edf3;",
-                ),
-                # data-comp para leitura pelo JS
-                cls="component-row",
-                **{"data-comp": comp},
-                style=(
-                    "display:flex;align-items:center;"
-                    "padding:12px 16px;"
-                    "background:#0d1117;"
-                    "border:1px solid #30363d;"
-                    "border-radius:8px;"
-                    "margin-bottom:8px;"
-                ),
-            )
-        )
-
-    # Campo hidden que guarda a ordem final (atualizado pelo JS)
-    order_hidden = Input(
-        type="hidden",
-        name="title_components_order",
-        id="title_components_order",
-        value=",".join(order),
-    )
-
-    # Campo hidden que guarda os enabled (atualizado pelo JS no submit)
-    # (já são enviados via comp_enabled_* individuais)
-
-    # Toggle de brackets
-    brackets_hidden_id = "hidden_title_use_brackets"
-    brackets_pill_cls   = "toggle-pill on" if use_brackets else "toggle-pill off"
-    brackets_pill_label = "Ligado" if use_brackets else "Desligado"
-    brackets_toggle = Div(
-        Input(type="hidden", name="title_use_brackets",
-              value="true" if use_brackets else "false", id=brackets_hidden_id),
-        Button(
-            brackets_pill_label,
-            type="button",
-            cls=brackets_pill_cls,
-            onclick=f"_toggleBool(this, '{brackets_hidden_id}'); updatePreview()",
-        ),
-        Span("Usar marcadores [ ] nos componentes de prefixo",
-             cls="toggle-label"),
-        cls="bool-toggle",
-    )
-
-    page_style = Style("""
-        #components-list { list-style: none; padding: 0; margin: 0; }
-        .component-row.drag-over { border-color: #58a6ff !important; background: #161b22 !important; }
-        .component-row.dragging  { opacity: 0.4; }
-        .toggle-pill {
-            display: inline-flex; align-items: center;
-            padding: 4px 14px; border-radius: 999px;
-            font-size: 0.82rem; font-weight: 600;
-            border: 1.5px solid transparent;
-            transition: background 0.15s, color 0.15s;
-            cursor: pointer;
-        }
-        .toggle-pill.on  { background: #1f6feb; color: #fff; border-color: #388bfd; }
-        .toggle-pill.off { background: transparent; color: #8b949e; border-color: #30363d; }
-        .bool-toggle { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 14px; cursor: pointer; }
-        .toggle-label { font-size: 0.9rem; color: #e6edf3; }
-        #preview-box {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            font-size: 1.05rem;
-            color: #e6edf3;
-            letter-spacing: 0.01em;
-            margin-top: 4px;
-        }
-    """)
-
-    page_js = Script("""
-        // --- Toggle ligado/desligado (reusado do layout global) ---
-        function _toggleBool(btn, hiddenId) {
-            const hidden = document.getElementById(hiddenId);
-            const isOn   = hidden.value === 'true';
-            hidden.value = isOn ? 'false' : 'true';
-            btn.textContent = isOn ? 'Desligado' : 'Ligado';
-            btn.className   = 'toggle-pill ' + (isOn ? 'off' : 'on');
-        }
-
-        // --- Drag and Drop ---
-        let dragSrc = null;
-
-        function initDrag() {
-            document.querySelectorAll('.component-row').forEach(row => {
-                row.setAttribute('draggable', 'true');
-                row.addEventListener('dragstart', e => {
-                    dragSrc = row;
-                    row.classList.add('dragging');
-                    e.dataTransfer.effectAllowed = 'move';
-                });
-                row.addEventListener('dragend', e => {
-                    row.classList.remove('dragging');
-                    document.querySelectorAll('.component-row').forEach(r => r.classList.remove('drag-over'));
-                    syncOrder();
-                    updatePreview();
-                });
-                row.addEventListener('dragover', e => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    if (row !== dragSrc) row.classList.add('drag-over');
-                });
-                row.addEventListener('dragleave', e => { row.classList.remove('drag-over'); });
-                row.addEventListener('drop', e => {
-                    e.preventDefault();
-                    row.classList.remove('drag-over');
-                    if (dragSrc && dragSrc !== row) {
-                        const list = row.parentNode;
-                        const allRows = [...list.querySelectorAll('.component-row')];
-                        const srcIdx = allRows.indexOf(dragSrc);
-                        const dstIdx = allRows.indexOf(row);
-                        if (srcIdx < dstIdx) {
-                            list.insertBefore(dragSrc, row.nextSibling);
-                        } else {
-                            list.insertBefore(dragSrc, row);
-                        }
-                    }
-                });
-            });
-        }
-
-        function syncOrder() {
-            const rows  = document.querySelectorAll('.component-row');
-            const order = [...rows].map(r => r.dataset.comp).filter(Boolean);
-            document.getElementById('title_components_order').value = order.join(',');
-        }
-
-        function updatePreview() {
-            const rows  = [...document.querySelectorAll('.component-row')];
-            const order = rows.map(r => r.dataset.comp).filter(Boolean);
-            const useBrackets = document.getElementById('hidden_title_use_brackets').value === 'true';
-
-            const labels = {
-                channel: useBrackets ? '[CazéTV]'   : 'CazéTV',
-                status:  useBrackets ? '[AO VIVO]'  : 'AO VIVO',
-                title:   'Final da Copa'
-            };
-
-            const parts = [];
-            for (const comp of order) {
-                const hiddenId = 'toggle_hidden_' + comp;
-                const hidden   = document.getElementById(hiddenId);
-                const isOn     = !hidden || hidden.value === 'true';
-                if (isOn && labels[comp]) parts.push(labels[comp]);
-            }
-            document.getElementById('preview-text').textContent =
-                parts.length ? parts.join(' ') : 'Final da Copa';
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initDrag();
-            updatePreview();
-        });
-    """)
-
     return _page_shell(
         "Formato de Título", "config_title_format",
-        page_style,
         alert,
+        _TOGGLE_STYLE,
+        _TOGGLE_JS,
+        _DND_JS,
+        Div(
+            P(
+                "Defina quais componentes aparecem no título do canal/evento na playlist M3U/EPG, "
+                "e arraste para mudar a ordem. O componente ",
+                Strong("Título do Evento"),
+                " é sempre exibido.",
+                cls="text-muted",
+            ),
+            cls="card",
+            style="margin-bottom:8px;",
+        ),
         Form(
+            # hidden: ordem
+            Input(type="hidden", name="title_components_order",
+                  id="title_components_order",
+                  value=",".join(order_list)),
+
             Div(
                 H2("Componentes e Ordem"),
-                P("Arraste os itens para reordenar. Ative ou desative os componentes que aparecerão no título final.",
-                  cls="text-muted"),
-                Div(*component_items, id="components-list"),
-                order_hidden,
-                style="margin-bottom: 4px;",
+                Ul(*dnd_items, id="dnd-list", cls="dnd-list"),
                 cls="card",
             ),
+
             Div(
-                brackets_toggle,
-                cls="card",
-                style="padding: 16px 24px;",
-            ),
-            Div(
-                H2("Pré-visualização"),
-                P("Como o título aparecerá na playlist:", cls="text-muted"),
+                H2("Opções de Formatação"),
+                # Toggle colchetes
+                Input(type="hidden", id="hidden_title_use_brackets",
+                      name="title_use_brackets",
+                      value="true" if use_brackets else "false"),
                 Div(
-                    Span(preview_text, id="preview-text"),
-                    id="preview-box",
+                    Button(
+                        "Ligado" if use_brackets else "Desligado",
+                        type="button",
+                        cls="toggle-pill " + ("on" if use_brackets else "off"),
+                        onclick="_toggleBool(this, 'hidden_title_use_brackets')",
+                    ),
+                    Span("Envolver componentes opcionais em colchetes — ex: [Ao Vivo] em vez de Ao Vivo",
+                         cls="toggle-label"),
+                    cls="bool-toggle",
                 ),
-                P(
-                    "Nota: A playlist do YouTube só aparecerá se a informação estiver disponível na API para o evento específico.",
-                    cls="text-muted",
-                    style="font-size:0.78rem;margin-top:8px;",
-                ),
+                H3("Prévia"),
+                P("Como o título ficará na playlist:", cls="text-muted"),
+                Div(id="preview-output", cls="preview-box"),
                 cls="card",
             ),
+
             Div(
-                Button("Salvar Alterações", type="submit"),
-                style="margin-top: 8px;",
+                Button("Salvar", type="submit"),
+                style="margin-top:8px;",
             ),
             method="post",
             action="/config/title-format",
         ),
-        page_js,
     )
