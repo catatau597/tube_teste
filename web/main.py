@@ -697,7 +697,7 @@ def config_playlist_page(saved: str = ""):
                     Input(value=thumb_dir, type="text", disabled=True,
                           style="background:#161b22;color:#8b949e;cursor:not-allowed;"),
                     P(
-                        "\ud83d\udd12 Padr\u00e3o do sistema gerenciado automaticamente. "
+                        "[BLOQUEADO] Padr\u00e3o do sistema gerenciado automaticamente. "
                         "N\u00e3o recomendamos alterar este valor.",
                         cls="text-muted",
                         style="font-size:0.78rem;margin-top:4px;margin-bottom:0;",
