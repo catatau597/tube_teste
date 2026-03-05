@@ -502,7 +502,7 @@ def home(request: Request):
 
 @app.get("/canais")
 def canais_page():
-    return _channels_page(_state, _scheduler)
+    return _channels_page(_state, _scheduler, config=_config)
 
 
 @app.get("/force-sync")
@@ -635,12 +635,9 @@ def config_filters(saved: str = ""):
     filter_by_cat       = cfg.get_bool("filter_by_category")
     allowed_ids         = cfg.get_raw("allowed_category_ids")
     cat_mappings        = cfg.get_raw("category_mappings")
-    channel_mappings    = cfg.get_raw("channel_name_mappings")
     shorts_max_s        = cfg.get_raw("shorts_max_duration_s")
     shorts_words_raw    = cfg.get_raw("shorts_block_words")
     shorts_words        = [w.strip() for w in shorts_words_raw.split(",") if w.strip()]
-    title_exprs_raw     = cfg.get_raw("title_filter_expressions")
-    title_exprs         = [w.strip() for w in title_exprs_raw.split(",") if w.strip()]
     epg_cleanup         = cfg.get_bool("epg_description_cleanup")
     keep_recorded       = cfg.get_bool("keep_recorded_streams")
     max_recorded        = cfg.get_raw("max_recorded_per_channel")
@@ -759,27 +756,6 @@ def config_filters(saved: str = ""):
                 cls="card",
             ),
             Div(
-                H2("T\u00edtulos"),
-                P(
-                    "Express\u00f5es removidas dos t\u00edtulos. Para configurar a ordem e formato dos componentes "
-                    "(canal, status, evento), acesse ",
-                    A("\U0001f3a8 Formato de T\u00edtulo \u2192", href="/config/title-format"),
-                    ".",
-                    cls="text-muted",
-                ),
-                Label(
-                    Span("Express\u00f5es a remover dos t\u00edtulos",
-                         style="display:block;margin-bottom:4px;"),
-                    _tag_list_with_input(title_exprs, "new_title_expr", "title_filter_expressions"),
-                ),
-                Label(
-                    Span("Mapeamento de nomes de canal: Nome Longo|Nome Curto (v\u00edrgula)",
-                         style="display:block;margin-bottom:4px;"),
-                    Input(name="channel_name_mappings", value=channel_mappings, type="text"),
-                ),
-                cls="card",
-            ),
-            Div(
                 H2("VOD / Grava\u00e7\u00f5es"),
                 _bool_toggle("keep_recorded_streams", keep_recorded, "Manter streams gravados (ex-live) na playlist VOD"),
                 _bool_toggle("epg_description_cleanup", epg_cleanup, "Manter apenas o primeiro par\u00e1grafo da descri\u00e7\u00e3o no EPG"),
@@ -849,9 +825,11 @@ async def config_title_format_save(req):
 
     form = dict(await req.form())
 
+    # Ordem dos componentes
     order_raw = form.get("title_components_order", "channel,status,title")
     _config.update_many({"title_components_order": order_raw})
 
+    # Componentes habilitados
     all_comps = [c.strip() for c in order_raw.split(",") if c.strip()]
     enabled   = []
     for comp in all_comps:
@@ -862,10 +840,34 @@ async def config_title_format_save(req):
         enabled.append("title")
     _config.update_many({"title_components_enabled": ",".join(enabled)})
 
-    brackets_val = form.get("title_use_brackets", "false")
-    _config.update_many({"title_use_brackets": brackets_val})
+    # Colchetes por componente
+    brackets = [c for c in all_comps if form.get(f"comp_brackets_{comp}", "false") == "true"
+                for comp in [c]]
+    _config.update_many({"title_components_brackets": ",".join(brackets)})
+
+    # Expressoes a remover (campo hidden sincronizado pelo JS de tags)
+    exprs_raw = form.get("title_filter_expressions", "")
+    _config.update_many({"title_filter_expressions": exprs_raw})
+
+    # Toggle strip emojis
+    strip_emojis = form.get("title_strip_emojis", "false")
+    _config.update_many({"title_strip_emojis": strip_emojis})
 
     return RedirectResponse("/config/title-format?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Rota HTML — /config/channels  (mapeamento de nomes de canal)
+# ---------------------------------------------------------------------------
+
+@app.post("/config/channels")
+async def config_channels_save(req):
+    if not _config:
+        return RedirectResponse("/canais", status_code=303)
+    form = dict(await req.form())
+    mapping_val = form.get("channel_name_mappings", "")
+    _config.update_many({"channel_name_mappings": mapping_val})
+    return RedirectResponse("/canais?saved=1", status_code=303)
 
 
 # ---------------------------------------------------------------------------
