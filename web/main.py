@@ -669,11 +669,14 @@ async def config_scheduler_save(req):
 def config_playlist_page(saved: str = ""):
     if not _config:
         return _page_shell("Playlist", "config_playlist", P("Config n\u00e3o inicializado."))
+    
     alert = Div("\u2705 Configura\u00e7\u00f5es salvas com sucesso.",
                 cls="alert alert-success") if saved == "1" else ""
+    
     use_invisible = _config.get_bool("use_invisible_placeholder")
     placeholder_url = _config.get_raw("placeholder_image_url")
     thumb_dir = _config.get_raw("thumbnail_cache_directory")
+    
     return _page_shell(
         "Playlist", "config_playlist",
         alert,
@@ -1656,7 +1659,7 @@ def logs_page():
                     }
                 })
                 .catch(() => {
-                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao salvar prefer\u00eancia.';
+                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao salvar prefer\\u00eancia.';
                     document.getElementById('level-feedback').style.color = '#f85149';
                 });
             }
