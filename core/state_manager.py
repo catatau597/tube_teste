@@ -9,6 +9,9 @@ Filtros aplicados em update_streams (em ordem):
   1. Categoria: se filter_by_category=true, apenas IDs em allowed_category_ids passam.
   2. Shorts por palavra: se título ou tags contêm shorts_block_words, descarta.
   3. Shorts por duração: se duration_iso <= shorts_max_duration_s, descarta.
+  4. status=none:
+     - Se já existia como live/upcoming → promove para vod (evento encerrado).
+     - Se nunca foi visto (VOD puro) → descarta.
 """
 import json
 import logging
@@ -109,6 +112,22 @@ class StateManager:
                     for vid, s in source_streams.items()
                     if isinstance(s, dict)
                 }
+                # Migração: normaliza streams antigos com status="none" que já existem no
+                # cache em disco. Se tinham actualEndTime → promove para "vod".
+                # Se nunca foram live/upcoming (sem actualStartTime) → remove.
+                _to_remove = []
+                for vid, s in list(self.streams.items()):
+                    if s.get("status") == "none":
+                        if s.get("actualstarttimeutc") or s.get("actualEndTime"):
+                            s["status"] = "vod"
+                            logger.debug(f"[migração] {vid} none→vod (tinha actualStart)")
+                        else:
+                            _to_remove.append(vid)
+                for vid in _to_remove:
+                    self.streams.pop(vid, None)
+                    logger.debug(f"[migração] {vid} removido (none sem histórico live)")
+                if _to_remove:
+                    logger.info(f"Migração cache: removidos {len(_to_remove)} streams 'none' puros.")
                 logger.info(
                     f"Cache carregado do disco: "
                     f"{cache_file.name} | streams={len(self.streams)}"
@@ -158,10 +177,14 @@ class StateManager:
           1. Categoria: descarta se filter_by_category=true e categoria não está em allowed_category_ids.
           2. Shorts por palavras: descarta se título ou tags contêm qualquer palavra de shorts_block_words.
           3. Shorts por duração: descarta se duration_iso <= shorts_max_duration_s (e shorts_max_duration_s > 0).
+          4. status=none:
+             - Se já existia no estado como live/upcoming → promove para "vod" (evento encerrado).
+             - Se já existia como "vod" → atualiza normalmente (mantém vod).
+             - Se nunca foi visto (VOD puro / vídeo antigo) → descarta silenciosamente.
         """
         now = datetime.now(timezone.utc)
         added = updated = 0
-        ign_category = ign_shorts_words = ign_shorts_duration = 0
+        ign_category = ign_shorts_words = ign_shorts_duration = ign_vod_puro = 0
 
         # --- Lê configurações de filtro ---
         filter_by_cat   = self._config.get_bool("filter_by_category")
@@ -181,7 +204,6 @@ class StateManager:
                 cat_id = str(stream.get("categoryoriginal") or "").strip()
                 if cat_id and cat_id not in allowed_cat_ids:
                     logger.debug(f"[filtro:categoria] ignorando {vid} (cat={cat_id})")
-                    # Se já estava no estado, remove para não persistir categoria errada
                     self.streams.pop(vid, None)
                     ign_category += 1
                     continue
@@ -207,8 +229,6 @@ class StateManager:
             # ----------------------------------------------------------------
             if shorts_max_s > 0:
                 duration_s = _parse_duration_seconds(stream.get("durationiso") or "")
-                # duration_s == 0 significa que a API ainda não informou duração
-                # (upcoming/live em andamento) — não bloqueia nesses casos.
                 if 0 < duration_s <= shorts_max_s:
                     logger.debug(
                         f"[filtro:shorts-duracao] ignorando {vid} "
@@ -216,6 +236,33 @@ class StateManager:
                     )
                     self.streams.pop(vid, None)
                     ign_shorts_duration += 1
+                    continue
+
+            # ----------------------------------------------------------------
+            # Filtro 4: status="none" (YouTube: liveBroadcastContent=none)
+            #   - já existia como live/upcoming → promove para vod
+            #   - já existia como vod           → atualiza normalmente
+            #   - nunca visto (VOD puro)        → descarta
+            # ----------------------------------------------------------------
+            if stream.get("status") == "none":
+                existing = self.streams.get(vid)
+                if existing is None:
+                    # Nunca foi monitorado → VOD puro, descarta
+                    logger.debug(f"[filtro:vod-puro] descartando {vid} (nunca foi live/upcoming)")
+                    ign_vod_puro += 1
+                    continue
+                prev_status = existing.get("status", "")
+                if prev_status in ("live", "upcoming"):
+                    # Evento encerrado → promove para vod
+                    stream["status"] = "vod"
+                    logger.info(f"[status] {vid}: {prev_status} → vod")
+                elif prev_status == "vod":
+                    # Já é vod, mantém
+                    stream["status"] = "vod"
+                else:
+                    # none→none ou outro caso inesperado → descarta
+                    logger.debug(f"[filtro:vod-puro] descartando {vid} (status prev={prev_status!r})")
+                    ign_vod_puro += 1
                     continue
 
             # ----------------------------------------------------------------
@@ -234,7 +281,8 @@ class StateManager:
             f"Update Streams: +{added} upd={updated} "
             f"| ign categoria={ign_category} "
             f"shorts(palavra)={ign_shorts_words} "
-            f"shorts(dur)={ign_shorts_duration}"
+            f"shorts(dur)={ign_shorts_duration} "
+            f"vod-puro={ign_vod_puro}"
         )
         self.prune_ended_streams()
 
@@ -243,11 +291,11 @@ class StateManager:
         to_delete = set()
         recorded_by_channel = defaultdict(list)
 
-        keep_recorded          = self._config.get_bool("keep_recorded_streams")
+        keep_recorded            = self._config.get_bool("keep_recorded_streams")
         max_recorded_per_channel = self._config.get_int("max_recorded_per_channel")
-        retention_days         = self._config.get_int("recorded_retention_days")
-        stale_hours            = self._config.get_int("stale_hours")
-        main_interval          = self._config.get_int("scheduler_main_interval_hours")
+        retention_days           = self._config.get_int("recorded_retention_days")
+        stale_hours              = self._config.get_int("stale_hours")
+        main_interval            = self._config.get_int("scheduler_main_interval_hours")
 
         recorded_cutoff = now - timedelta(days=retention_days)
         stale_cutoff    = now - timedelta(hours=max(stale_hours * 2, main_interval * 2))
@@ -262,7 +310,8 @@ class StateManager:
                 to_delete.add(vid)
                 continue
 
-            if status == "none":
+            # Trata "vod" (e "recorded" como alias legado) — nunca mais "none"
+            if status in ("vod", "recorded", "none"):
                 if not keep_recorded:
                     to_delete.add(vid)
                     continue
