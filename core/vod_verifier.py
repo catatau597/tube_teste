@@ -11,7 +11,8 @@ Funcionalidade 1 – Verificação Pós-Live:
 
 Funcionalidade 2 – Health Check Periódico:
   Worker em background que verifica periodicamente se os VODs no cache ainda
-  estão acessíveis. VODs indisponíveis são marcados e removidos das playlists.
+  estão acessíveis. Verifica streams com status "vod" ou "recorded".
+  VODs indisponíveis são marcados e removidos das playlists geradas.
 
 Depende de: YouTubeAPI, StateManager, AppConfig
 NÃO depende de: Flask, FastHTML, os.getenv
