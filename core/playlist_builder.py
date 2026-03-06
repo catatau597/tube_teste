@@ -233,6 +233,9 @@ class M3UGenerator(ContentGenerator):
             for s in streams:
                 if not ContentGenerator.is_vod(s):
                     continue
+                if s.get("vod_unavailable"):
+                    logger.debug(f"M3U [vod]: {s.get('videoid')} excluído (vod_unavailable=True)")
+                    continue
                 ft = s.get("fetchtime")
                 et = s.get("actualendtimeutc")
                 ref_time = et if isinstance(et, datetime) else (ft if isinstance(ft, datetime) else None)

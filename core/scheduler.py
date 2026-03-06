@@ -90,6 +90,7 @@ class Scheduler:
         self._categories_db: dict = {}
         self._force_event: Optional[asyncio.Event] = None
         self._thumbnail_manager = None
+        self._vod_verifier = None
 
         dt_min_utc = datetime.min.replace(tzinfo=timezone.utc)
 
@@ -123,6 +124,9 @@ class Scheduler:
 
     def set_thumbnail_manager(self, thumbnail_manager) -> None:
         self._thumbnail_manager = thumbnail_manager
+
+    def set_vod_verifier(self, vod_verifier) -> None:
+        self._vod_verifier = vod_verifier
 
     def log_current_state(self, origin: str = ""):
         from core.playlist_builder import ContentGenerator
@@ -341,6 +345,11 @@ class Scheduler:
             if ids_to_check:
                 try:
                     current_channels = self._state.get_all_channels()
+                    # Captura IDs que estavam como "live" antes do update
+                    live_before = {
+                        vid for vid, s in self._state.streams.items()
+                        if s.get("status") == "live"
+                    }
                     updated = self._scraper.fetch_streams_by_ids(list(ids_to_check), current_channels)
                     if updated:
                         self._state.update_streams(updated)
@@ -354,6 +363,14 @@ class Scheduler:
                         logger.warning(f"{len(ids_to_mark)} IDs ativos não retornados pela API. Marcando como 'none'.")
                         missing_data = [{"videoid": vid, "status": "none"} for vid in ids_to_mark]
                         self._state.update_streams(missing_data)
+
+                    # Detecta transições live → vod e agenda verificação pós-live
+                    if self._vod_verifier:
+                        for vid in live_before:
+                            stream = self._state.streams.get(vid)
+                            if stream and stream.get("status") == "vod":
+                                self._vod_verifier.schedule_post_live_check(vid)
+
                     self.log_current_state("Verificação Alta Frequência")
                     _save_files(
                         self._state,

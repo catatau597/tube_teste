@@ -168,7 +168,8 @@ def _sidebar(active: str = "") -> Div:
     """
     active keys: dashboard, canais, playlist, eventos,
                  config_credentials, config_scheduler, config_filters,
-                 config_title_format, config_playlist, config_technical, logs
+                 config_title_format, config_playlist, config_technical,
+                 config_vod_verification, logs
     """
     def nav_item(label, href, key):
         cls = "nav-item active" if active == key else "nav-item"
@@ -187,12 +188,13 @@ def _sidebar(active: str = "") -> Div:
             nav_item("\U0001f4c5  Eventos",    "/eventos",   "eventos"),
 
             Span("Configurações", cls="nav-group-label"),
-            nav_sub("🔑  API & Credenciais",  "/config/credentials",  "config_credentials"),
-            nav_sub("🕐  Agendador",           "/config/scheduler",    "config_scheduler"),
-            nav_sub("🎛️  Filtros",             "/config/filters",      "config_filters"),
-            nav_sub("🎨  Formato de Título",   "/config/title-format", "config_title_format"),
-            nav_sub("📋  Playlist",            "/config/playlist",     "config_playlist"),
-            nav_sub("🔧  Técnico",             "/config/technical",    "config_technical"),
+            nav_sub("🔑  API & Credenciais",  "/config/credentials",      "config_credentials"),
+            nav_sub("🕐  Agendador",           "/config/scheduler",        "config_scheduler"),
+            nav_sub("🎛️  Filtros",             "/config/filters",          "config_filters"),
+            nav_sub("🎨  Formato de Título",   "/config/title-format",     "config_title_format"),
+            nav_sub("📋  Playlist",            "/config/playlist",         "config_playlist"),
+            nav_sub("🔧  Técnico",             "/config/technical",        "config_technical"),
+            nav_sub("🎬  Verificação de VODs", "/config/vod-verification", "config_vod_verification"),
 
             nav_item("📋  Logs",           "/logs",   "logs"),
         ),

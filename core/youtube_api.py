@@ -357,3 +357,60 @@ class YouTubeAPI:
 
     def format_stream_data(self, item: dict, channels_dict: dict) -> dict:
         return self._format_stream_data(item, channels_dict)
+
+    def check_vod_availability_batch(self, video_ids: List[str]) -> Dict[str, bool]:
+        """
+        Verifica disponibilidade de VODs via videos.list (part=status,contentDetails).
+
+        Critério de disponibilidade:
+          - status.privacyStatus == "public" ou "unlisted"
+          - status.uploadStatus == "processed"
+
+        Vídeos não retornados pela API (deletados, geo-bloqueados, etc.)
+        são marcados como indisponíveis (False).
+
+        Em caso de quota excedida, assume disponível para evitar falsos negativos.
+
+        Retorna {video_id: True/False}.
+        """
+        if not self.youtube:
+            logger.warning("check_vod_availability_batch ignorado: YouTube API desativada (sem key).")
+            return {vid: True for vid in video_ids}
+
+        result: Dict[str, bool] = {}
+        for i in range(0, len(video_ids), 50):
+            batch = video_ids[i:i + 50]
+            try:
+                self.rotate_key()
+                req = self.youtube.videos().list(
+                    part="status,contentDetails",
+                    id=",".join(batch),
+                )
+                res = req.execute()
+                returned_ids: set = set()
+                for item in res.get("items", []):
+                    vid = item.get("id")
+                    if not vid:
+                        continue
+                    returned_ids.add(vid)
+                    status = item.get("status", {})
+                    privacy = status.get("privacyStatus", "")
+                    upload_status = status.get("uploadStatus", "")
+                    available = privacy in ("public", "unlisted") and upload_status == "processed"
+                    result[vid] = available
+                    logger.debug(
+                        f"[check_vod] {vid}: privacy={privacy} upload={upload_status} "
+                        f"-> {'disponível' if available else 'indisponível'}"
+                    )
+                for vid in batch:
+                    if vid not in returned_ids:
+                        result[vid] = False
+                        logger.debug(f"[check_vod] {vid}: não retornado pela API -> indisponível")
+            except HttpError as e:
+                if "quotaExceeded" in str(e):
+                    logger.warning(f"[YouTubeAPI] Quota excedida durante verificação de VODs: {e}")
+                    for vid in batch:
+                        result.setdefault(vid, True)
+                else:
+                    logger.error(f"[YouTubeAPI] Erro ao verificar disponibilidade de VODs: {e}")
+        return result

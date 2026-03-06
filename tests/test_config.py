@@ -7,7 +7,7 @@ def cfg(tmp_path):
     return AppConfig(db_path=tmp_path / "test.db")
 
 def test_total_de_chaves_retrofit(cfg):
-    assert len(DEFAULTS) == 35
+    assert len(DEFAULTS) == 45
 
 def test_todas_as_chaves_no_banco(cfg):
     for key in DEFAULTS:
