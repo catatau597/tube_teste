@@ -24,6 +24,7 @@ from core.proxy_manager import (
     register_placeholder, restart_placeholder_if_needed,
     _buffers, _managers, _processes,
     INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
+    set_debug_mode, get_debug_mode, get_stream_debug_info,
 )
 from core.scheduler import Scheduler
 from core.state_manager import StateManager
@@ -152,6 +153,10 @@ async def lifespan(app):
     hide_access = _config.get_bool("hide_access_logs")
     _setup_logging(_config.get_str("log_level") or "INFO", hide_access=hide_access)
     logger.info("=== TubeWrangler iniciando ===")
+
+    # Inicializa modo debug de streaming
+    streaming_debug = _config.get_bool("streaming_debug_enabled")
+    set_debug_mode(streaming_debug)
 
     _state = StateManager(_config)
     cache_loaded = _state.load_from_disk()
@@ -1279,6 +1284,15 @@ def api_proxy_status():
     return JSONResponse({"streams": streams_status(), "count": len(_buffers)})
 
 
+@app.get("/api/proxy/debug/{video_id}")
+def api_proxy_debug(video_id: str):
+    """Retorna informações detalhadas de debug para um stream específico."""
+    info = get_stream_debug_info(video_id)
+    if info is None:
+        return JSONResponse({"error": "stream não encontrado"}, status_code=404)
+    return JSONResponse(info)
+
+
 @app.delete("/api/proxy/{video_id}")
 def api_proxy_stop(video_id: str):
     if not is_stream_active(video_id):
@@ -1318,6 +1332,9 @@ async def api_proxy_stream(request):
         if local_thumb.exists():
             thumb_for_ph = str(local_thumb)
 
+        # Obter estado de debug e passar para build_player_command_async
+        debug_enabled = _config.get_bool("streaming_debug_enabled") if _config else False
+
         try:
             cmd, _temp = await build_player_command_async(
                 video_id=video_id,
@@ -1327,6 +1344,7 @@ async def api_proxy_stream(request):
                 user_agent=user_agent,
                 font_path=FONT_PATH,
                 texts_cache_path=TEXTS_CACHE_PATH,
+                debug_enabled=debug_enabled,
             )
         except Exception as exc:
             logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
@@ -1397,11 +1415,12 @@ async def api_proxy_stream(request):
                     local_index       = next_index
                     last_yield_time   = time.monotonic()
                     consecutive_empty = 0
-                    mgr.update_activity(client_id, bytes_sent)
+                    mgr.update_activity(client_id, bytes_sent, local_index)
                 else:
                     consecutive_empty += 1
                     await asyncio.sleep(min(0.05 * consecutive_empty, 1.0))
                     if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
+                        mgr.mark_stall(client_id)
                         break
                     if buf.index - local_index > 100:
                         local_index       = max(0, buf.index - 10)
@@ -1448,6 +1467,8 @@ async def api_player_stream(request):
     if local_thumb.exists():
         thumb_for_ph = str(local_thumb)
 
+    debug_enabled = _config.get_bool("streaming_debug_enabled") if _config else False
+
     async def stream_gen():
         proc_logger = logging.getLogger("TubeWrangler.player")
         temp_files  = []
@@ -1456,6 +1477,7 @@ async def api_player_stream(request):
                 video_id=video_id, status=status, watch_url=watch_url,
                 thumbnail_url=thumb_for_ph, user_agent=user_agent,
                 font_path=FONT_PATH, texts_cache_path=TEXTS_CACHE_PATH,
+                debug_enabled=debug_enabled,
             )
         except Exception as exc:
             proc_logger.error(f"[{video_id}] erro ao montar comando: {exc}")
@@ -1561,6 +1583,12 @@ async def api_logs_level_set(req):
             _config.update("log_level", level)
         except Exception:
             pass
+    
+    # Sincroniza modo debug de streaming quando log_level muda
+    if _config:
+        streaming_debug = _config.get_bool("streaming_debug_enabled")
+        set_debug_mode(streaming_debug)
+    
     logger.info(f"N\u00edvel de log alterado para {level} via UI.")
     return JSONResponse({"ok": True, "level": level})
 
@@ -1577,10 +1605,23 @@ async def api_logs_hide_access_set(req):
     return JSONResponse({"ok": True, "hide_access": hide_access})
 
 
+@app.post("/api/logs/streaming-debug")
+async def api_logs_streaming_debug_set(req):
+    """Ativa/desativa modo debug de streaming."""
+    body = await req.json()
+    debug_enabled = bool(body.get("debug_enabled", False))
+    if _config:
+        _config.update("streaming_debug_enabled", "true" if debug_enabled else "false")
+    set_debug_mode(debug_enabled)
+    logger.info(f"Debug de streaming: {'ATIVADO' if debug_enabled else 'DESATIVADO'}")
+    return JSONResponse({"ok": True, "debug_enabled": debug_enabled})
+
+
 @app.get("/logs")
 def logs_page():
     current_level = logging.getLevelName(logging.getLogger().level)
     hide_access   = _config.get_bool("hide_access_logs") if _config else True
+    streaming_debug = _config.get_bool("streaming_debug_enabled") if _config else False
 
     logging_panel = Div(
         Details(
@@ -1626,6 +1667,21 @@ def logs_page():
                         onclick="_toggleBool(this, 'hidden_hide_access_logs'); toggleHideAccess(document.getElementById('hidden_hide_access_logs').value === 'true')",
                     ),
                     Span("Ocultar logs de acesso HTTP (GET / e /api/logs/stream)",
+                         cls="toggle-label",
+                         style="font-size:0.85rem;color:#8b949e;"),
+                    cls="bool-toggle",
+                    style="margin-bottom:10px;",
+                ),
+                Div(
+                    Input(type="hidden", id="hidden_streaming_debug",
+                          value="true" if streaming_debug else "false"),
+                    Button(
+                        "Ligado" if streaming_debug else "Desligado",
+                        type="button",
+                        cls="toggle-pill " + ("on" if streaming_debug else "off"),
+                        onclick="_toggleBool(this, 'hidden_streaming_debug'); toggleStreamingDebug(document.getElementById('hidden_streaming_debug').value === 'true')",
+                    ),
+                    Span("Debug detalhado de streaming (ffmpeg verbose + métricas de buffer/clientes)",
                          cls="toggle-label",
                          style="font-size:0.85rem;color:#8b949e;"),
                     cls="bool-toggle",
@@ -1763,6 +1819,26 @@ def logs_page():
                 })
                 .catch(() => {
                     document.getElementById('level-feedback').textContent = '\\u274c Erro ao salvar prefer\\u00eancia.';
+                    document.getElementById('level-feedback').style.color = '#f85149';
+                });
+            }
+
+            function toggleStreamingDebug(enabled) {
+                fetch('/api/logs/streaming-debug', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ debug_enabled: enabled }),
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.ok) {
+                        const msg = enabled ? '\\u2705 Debug de streaming ativado.' : '\\u2705 Debug de streaming desativado.';
+                        document.getElementById('level-feedback').textContent = msg;
+                        setTimeout(() => { document.getElementById('level-feedback').textContent=''; }, 3000);
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao salvar configuração.';
                     document.getElementById('level-feedback').style.color = '#f85149';
                 });
             }
