@@ -100,6 +100,7 @@ DEFAULTS: dict = {
     # --- Logs ---
     "log_level":                     ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
     "hide_access_logs":              ("true",  "logging", "Ocultar logs de acesso HTTP (uvicorn.access GET /)", "bool"),
+    "streaming_debug_enabled":       ("false", "logging", "Ativar debug detalhado de streaming (ffmpeg/yt-dlp verbose + métricas)", "bool"),
 
     # --- Verificação de VODs ---
     "vod_post_live_check_enabled":         ("true",       "vod_verification", "Ativar verificação pós-live de VODs", "bool"),
