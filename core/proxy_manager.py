@@ -40,6 +40,30 @@ INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
 # Deve ser igual ao -t passado ao ffmpeg em build_ffmpeg_placeholder_cmd().
 PLACEHOLDER_SEGMENT_DURATION = 30
 
+# ---------------------------------------------------------------------------
+# Modo debug global
+# ---------------------------------------------------------------------------
+
+_debug_enabled: bool = False
+
+
+def set_debug_mode(enabled: bool) -> None:
+    """Ativa/desativa modo debug detalhado de streaming.
+    
+    Quando ativado:
+    - Logs verbose de buffer state (chunks, índices, MB)
+    - Métricas de clientes atrasados e stalls
+    - Estatísticas de taxa de crescimento do buffer
+    """
+    global _debug_enabled
+    _debug_enabled = enabled
+    logger.info(f"Modo debug de streaming: {'ATIVADO' if enabled else 'DESATIVADO'}")
+
+
+def get_debug_mode() -> bool:
+    """Retorna True se modo debug está ativo."""
+    return _debug_enabled
+
 
 # ---------------------------------------------------------------------------
 # StreamBuffer
@@ -54,11 +78,24 @@ class StreamBuffer:
     index:    int   = 0           # índice global (monotônico)
     lock:     threading.Lock = field(default_factory=threading.Lock)
     active:   bool  = True        # False quando o processo encerrou
+    created_at: float = field(default_factory=time.time)  # timestamp de criação
+    last_chunk_at: float = field(default_factory=time.time)  # timestamp do último chunk
 
     def add_chunk(self, data: bytes) -> None:
         with self.lock:
             self.chunks.append(data)
             self.index += 1
+            self.last_chunk_at = time.time()
+            
+            # Debug: log periódico de buffer state (a cada 50 chunks)
+            if _debug_enabled and self.index % 50 == 0:
+                mb = len(self.chunks) * CHUNK_SIZE / 1024 / 1024
+                elapsed = time.time() - self.created_at
+                rate = self.index / elapsed if elapsed > 0 else 0
+                logger.info(
+                    f"[{self.video_id}] 📊 Buffer: index={self.index} chunks={len(self.chunks)} "
+                    f"MB={mb:.2f} rate={rate:.1f}chunks/s"
+                )
 
     def get_chunks(self, start_index: int, count: int = 5) -> Tuple[List[bytes], int]:
         """Retorna até `count` chunks a partir de `start_index`.
@@ -74,6 +111,12 @@ class StreamBuffer:
 
             # cliente muito atrasado → pula para início do buffer
             if start_index < buffer_start:
+                if _debug_enabled:
+                    lag = buffer_start - start_index
+                    logger.warning(
+                        f"[{self.video_id}] ⚠️ Cliente atrasado: pulando {lag} chunks "
+                        f"(de {start_index} para {buffer_start})"
+                    )
                 start_index = buffer_start
 
             offset = start_index - buffer_start
@@ -98,6 +141,8 @@ class ClientInfo:
     connected_at: float
     last_active:  float
     bytes_sent:   int = 0
+    current_index: int = 0  # índice atual do cliente no buffer
+    stall_start: Optional[float] = None  # timestamp quando começou stall
 
 
 class ClientManager:
@@ -128,17 +173,35 @@ class ClientManager:
                 self._last_disconnect = time.time()
         if info:
             duration = time.time() - info.connected_at
-            logger.info(
+            mb_sent = info.bytes_sent / 1024 / 1024
+            bps = info.bytes_sent / duration if duration > 0 else 0
+            kbps = bps / 1024
+            
+            log_msg = (
                 f"[{self.video_id}] cliente desconectado: {client_id}  "
-                f"duração={duration:.1f}s  bytes={info.bytes_sent}  restantes={remaining}"
+                f"duração={duration:.1f}s  MB={mb_sent:.2f}  restantes={remaining}"
             )
+            if _debug_enabled:
+                log_msg += f"  kbps={kbps:.1f}"
+            logger.info(log_msg)
         return remaining
 
-    def update_activity(self, client_id: str, bytes_sent: int) -> None:
+    def update_activity(self, client_id: str, bytes_sent: int, current_index: int = 0) -> None:
         with self._lock:
             if client_id in self._clients:
                 self._clients[client_id].last_active = time.time()
                 self._clients[client_id].bytes_sent  = bytes_sent
+                self._clients[client_id].current_index = current_index
+                # Reset stall se cliente está ativo
+                self._clients[client_id].stall_start = None
+
+    def mark_stall(self, client_id: str) -> None:
+        """Marca que cliente entrou em stall (sem receber chunks)."""
+        with self._lock:
+            if client_id in self._clients and self._clients[client_id].stall_start is None:
+                self._clients[client_id].stall_start = time.time()
+                if _debug_enabled:
+                    logger.warning(f"[{self.video_id}] 🚫 Stall detectado: {client_id}")
 
     @property
     def count(self) -> int:
@@ -164,6 +227,31 @@ class ClientManager:
                 }
                 for c in self._clients.values()
             ]
+    
+    def debug_snapshot(self, buffer_index: int) -> List[dict]:
+        """Retorna snapshot detalhado para debug."""
+        with self._lock:
+            now = time.time()
+            result = []
+            for c in self._clients.values():
+                duration = now - c.connected_at
+                bps = c.bytes_sent / duration if duration > 0 else 0
+                lag = buffer_index - c.current_index
+                stall_time = now - c.stall_start if c.stall_start else 0
+                
+                result.append({
+                    "client_id": c.client_id,
+                    "ip": c.ip,
+                    "connected_at": c.connected_at,
+                    "duration_s": round(duration, 1),
+                    "bytes_sent": c.bytes_sent,
+                    "kbps": round(bps / 1024, 1),
+                    "current_index": c.current_index,
+                    "lag_chunks": lag,
+                    "is_stalled": c.stall_start is not None,
+                    "stall_time_s": round(stall_time, 1) if stall_time > 0 else 0,
+                })
+            return result
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +262,7 @@ class ClientManager:
 _buffers:   Dict[str, StreamBuffer]  = {}
 _managers:  Dict[str, ClientManager] = {}
 _processes: Dict[str, subprocess.Popen] = {}
+_process_start_times: Dict[str, float] = {}  # video_id → timestamp de start
 
 # Registra comandos de placeholder para permitir restart automático.
 # video_id → List[str] cmd (somente para streams do tipo placeholder)
@@ -197,6 +286,7 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     else:
         # Reativa o buffer para um novo segmento de placeholder
         _buffers[video_id].active = True
+        _buffers[video_id].created_at = time.time()
 
     process = subprocess.Popen(
         cmd,
@@ -205,6 +295,7 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
         bufsize=0,
     )
     _processes[video_id] = process
+    _process_start_times[video_id] = time.time()
 
     cmd_str = " ".join(cmd)
     logger.info(f"[{video_id}] processo iniciado  PID={process.pid}")
@@ -213,12 +304,22 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     # Thread: lê stdout → buffer
     def _read_stdout() -> None:
         buf = _buffers[video_id]
+        chunk_count = 0
         try:
             while True:
                 chunk = process.stdout.read(CHUNK_SIZE)
                 if not chunk:
                     break
                 buf.add_chunk(chunk)
+                chunk_count += 1
+                
+                # Debug: log a cada 100 chunks lidos
+                if _debug_enabled and chunk_count % 100 == 0:
+                    mb = chunk_count * CHUNK_SIZE / 1024 / 1024
+                    logger.info(
+                        f"[{video_id}] 💾 stdout thread: {chunk_count} chunks lidos "
+                        f"({mb:.2f} MB)"
+                    )
         except Exception as exc:
             logger.error(f"[{video_id}] erro lendo stdout: {exc}")
         finally:
@@ -323,6 +424,7 @@ def stop_stream(video_id: str) -> None:
 
     _buffers.pop(video_id, None)
     _managers.pop(video_id, None)
+    _process_start_times.pop(video_id, None)
     logger.info(f"[{video_id}] recursos liberados")
 
 
@@ -356,3 +458,63 @@ def streams_status() -> List[dict]:
             "is_placeholder":  vid in _placeholder_cmds,
         })
     return result
+
+
+# ---------------------------------------------------------------------------
+# get_stream_debug_info  (usado pela API /api/proxy/debug/{video_id})
+# ---------------------------------------------------------------------------
+
+def get_stream_debug_info(video_id: str) -> Optional[dict]:
+    """Retorna informações detalhadas de debug para um stream ativo.
+    
+    Returns:
+        Dict com métricas completas ou None se stream não existe.
+    """
+    buf = _buffers.get(video_id)
+    mgr = _managers.get(video_id)
+    proc = _processes.get(video_id)
+    
+    if buf is None:
+        return None
+    
+    now = time.time()
+    start_time = _process_start_times.get(video_id, now)
+    uptime = now - start_time
+    
+    # Estado do processo
+    process_alive = proc.poll() is None if proc else False
+    process_info = {
+        "pid": proc.pid if proc else None,
+        "alive": process_alive,
+        "returncode": proc.returncode if proc and not process_alive else None,
+        "uptime_s": round(uptime, 1),
+    }
+    
+    # Estatísticas do buffer
+    buffer_mb = len(buf.chunks) * CHUNK_SIZE / 1024 / 1024
+    buffer_age = now - buf.created_at
+    growth_rate = buf.index / buffer_age if buffer_age > 0 else 0
+    time_since_last_chunk = now - buf.last_chunk_at
+    
+    buffer_info = {
+        "chunks_total": buf.index,
+        "chunks_in_buffer": len(buf.chunks),
+        "buffer_mb": round(buffer_mb, 2),
+        "buffer_age_s": round(buffer_age, 1),
+        "growth_rate_chunks_per_s": round(growth_rate, 2),
+        "time_since_last_chunk_s": round(time_since_last_chunk, 1),
+        "is_active": buf.active,
+    }
+    
+    # Clientes detalhados
+    clients_info = mgr.debug_snapshot(buf.index) if mgr else []
+    
+    return {
+        "video_id": video_id,
+        "process": process_info,
+        "buffer": buffer_info,
+        "clients": clients_info,
+        "clients_count": mgr.count if mgr else 0,
+        "is_placeholder": video_id in _placeholder_cmds,
+        "debug_enabled": _debug_enabled,
+    }
