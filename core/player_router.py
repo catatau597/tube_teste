@@ -90,13 +90,13 @@ def _get_texts_from_cache(video_id: str, texts_cache_path: Path) -> Dict[str, st
 # Builders de comandos (sincronos, retornam List[str])
 # ---------------------------------------------------------------------------
 
-def build_streamlink_cmd(watch_url: str) -> List[str]:
+def build_streamlink_cmd(watch_url: str, debug_enabled: bool = False) -> List[str]:
     """Retorna comando streamlink para stream ao vivo (status=live).
 
     IMPORTANTE — por que nao passamos User-Agent:
     O plugin YouTube do streamlink >=8.1.2 (fix PR #6777) configura
     internamente useragents.CHROME via session.http.headers antes de fazer
-    o POST para youtubei/v1/player com clientName=ANDROID. Passar
+    o POST para youtubei/v1/player com clientName=ANDROID). Passar
     --http-header User-Agent=<outro-UA> via CLI sobrescreve esse header e
     pode quebrar a autenticacao da API, causando 400 Bad Request.
 
@@ -106,14 +106,19 @@ def build_streamlink_cmd(watch_url: str) -> List[str]:
     - --no-plugin-sideloading: ignora plugins de terceiros no filesystem.
     - --http-no-ssl-verify: evita erros SSL em ambientes de container sem
       CA bundle completo.
-    - --loglevel info: diagnostico adequado sem verbosidade excessiva.
+    - --loglevel: info (padrão) ou debug (modo debug ativado).
+
+    Args:
+        watch_url:     URL do vídeo YouTube.
+        debug_enabled: Se True, usa --loglevel debug para diagnóstico detalhado.
     """
+    loglevel = "debug" if debug_enabled else "info"
     return [
         "streamlink",
         "--no-config",
         "--no-plugin-sideloading",
         "--http-no-ssl-verify",
-        "--loglevel", "info",
+        "--loglevel", loglevel,
         "--stdout",
         watch_url,
         "best",
@@ -123,6 +128,7 @@ def build_streamlink_cmd(watch_url: str) -> List[str]:
 def build_live_hls_ffmpeg_cmd(
     hls_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
+    debug_enabled: bool = False,
 ) -> List[str]:
     """Retorna comando ffmpeg para consumir URL HLS de live stream.
 
@@ -145,14 +151,16 @@ def build_live_hls_ffmpeg_cmd(
     - -reconnect_delay_max 5: espera maximo 5s entre tentativas.
 
     Args:
-        hls_url:    URL HLS do manifest (googlevideo.com ou similar).
-        user_agent: User-Agent para os requests HTTP do ffmpeg.
+        hls_url:       URL HLS do manifest (googlevideo.com ou similar).
+        user_agent:    User-Agent para os requests HTTP do ffmpeg.
+        debug_enabled: Se True, usa -loglevel info para diagnóstico detalhado.
 
     Returns:
         Lista de strings pronta para asyncio.create_subprocess_exec(*cmd).
     """
+    loglevel = "info" if debug_enabled else "error"
     return [
-        "ffmpeg", "-loglevel", "error",
+        "ffmpeg", "-loglevel", loglevel,
         "-re",                           # lê HLS a 1x — impede buffer overflow no live
         "-user_agent", user_agent,
         "-reconnect", "1",
@@ -169,6 +177,7 @@ def build_vod_cmd(
     cdn_url: str,
     watch_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
+    debug_enabled: bool = False,
 ) -> List[str]:
     """Retorna comando para reproducao de VOD (status in _VOD_STATUSES).
 
@@ -177,17 +186,20 @@ def build_vod_cmd(
     yt-dlp | ffmpeg como fallback garantido.
 
     Args:
-        cdn_url:    URL CDN resolvida pelo yt-dlp --get-url. Pode ser vazio.
-        watch_url:  URL original do video (https://youtube.com/watch?v=...).
-        user_agent: User-Agent HTTP para requests.
+        cdn_url:       URL CDN resolvida pelo yt-dlp --get-url. Pode ser vazio.
+        watch_url:     URL original do video (https://youtube.com/watch?v=...).
+        user_agent:    User-Agent HTTP para requests.
+        debug_enabled: Se True, usa -loglevel info para diagnóstico detalhado.
 
     Returns:
         Lista de strings pronta para asyncio.create_subprocess_exec(*cmd).
     """
+    loglevel = "info" if debug_enabled else "error"
+    
     if cdn_url:
         logger.debug(f"VOD via ffmpeg CDN direto: {cdn_url[:80]}...")
         return [
-            "ffmpeg", "-loglevel", "error",
+            "ffmpeg", "-loglevel", loglevel,
             "-headers", f"User-Agent: {user_agent}\r\n",
             "-i", cdn_url,
             "-c", "copy",
@@ -198,11 +210,12 @@ def build_vod_cmd(
     # Fallback: pipeline bash yt-dlp -> ffmpeg
     q_ua  = shlex.quote(user_agent)
     q_url = shlex.quote(watch_url)
+    yt_dlp_verbose = "--verbose" if debug_enabled else ""
     fallback = (
         "set -o pipefail; "
-        f"yt-dlp -f 'bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best' "
+        f"yt-dlp {yt_dlp_verbose} -f 'bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best' "
         f"--js-runtimes node --no-playlist -o - --user-agent {q_ua} {q_url} "
-        "| ffmpeg -loglevel error -i pipe:0 -c copy -f mpegts pipe:1"
+        f"| ffmpeg -loglevel {loglevel} -i pipe:0 -c copy -f mpegts pipe:1"
     )
     logger.info(f"VOD via fallback yt-dlp|ffmpeg: {watch_url}")
     return ["bash", "-lc", fallback]
@@ -214,6 +227,7 @@ def build_ffmpeg_placeholder_cmd(
     text_line2: str = "",
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     user_agent: str = DEFAULT_USER_AGENT,
+    debug_enabled: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Retorna (cmd, temp_files) para placeholder de stream indisponivel.
 
@@ -228,15 +242,17 @@ def build_ffmpeg_placeholder_cmd(
     - Removido -shortest: conflitava com -t explicito.
 
     Args:
-        image_url:   URL ou path local da imagem de fundo.
-        text_line1:  Linha superior do overlay (ex: titulo do evento).
-        text_line2:  Linha inferior do overlay (ex: horario previsto).
-        font_path:   Path da fonte TrueType dentro do container.
-        user_agent:  User-Agent para imagens remotas.
+        image_url:     URL ou path local da imagem de fundo.
+        text_line1:    Linha superior do overlay (ex: titulo do evento).
+        text_line2:    Linha inferior do overlay (ex: horario previsto).
+        font_path:     Path da fonte TrueType dentro do container.
+        user_agent:    User-Agent para imagens remotas.
+        debug_enabled: Se True, usa -loglevel info para diagnóstico detalhado.
 
     Returns:
         Tupla (cmd, temp_files) onde temp_files sao paths a deletar.
     """
+    loglevel = "info" if debug_enabled else "error"
     temp_files = []
     drawtext_filters = []
 
@@ -272,7 +288,7 @@ def build_ffmpeg_placeholder_cmd(
     )
 
     cmd = [
-        "ffmpeg", "-loglevel", "error",
+        "ffmpeg", "-loglevel", loglevel,
         "-re",
         # -loop 1 + -t: processo encerra naturalmente apos PLACEHOLDER_SEGMENT_DURATION s
         "-loop", "1",
@@ -299,6 +315,7 @@ async def resolve_live_hls_url_async(
     watch_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
     timeout: int = LIVE_HLS_RESOLVE_TIMEOUT_S,
+    debug_enabled: bool = False,
 ) -> str:
     """Resolve URL HLS de live stream via yt-dlp -g de forma assincrona.
 
@@ -310,22 +327,29 @@ async def resolve_live_hls_url_async(
     - Node.js instalado no container resolve o warning de JS runtime
 
     Args:
-        watch_url:  URL do video YouTube (live).
-        user_agent: User-Agent HTTP.
-        timeout:    Segundos maximos de espera (default 15).
+        watch_url:     URL do video YouTube (live).
+        user_agent:    User-Agent HTTP.
+        timeout:       Segundos maximos de espera (default 15).
+        debug_enabled: Se True, yt-dlp usa --verbose para diagnóstico.
 
     Returns:
         URL HLS como string, ou "" em falha/timeout.
     """
     proc = None
     try:
-        proc = await asyncio.create_subprocess_exec(
+        yt_dlp_args = [
             "yt-dlp",
             "-g",
             "--no-playlist",
             "--js-runtimes", "node",
             "--user-agent", user_agent,
-            watch_url,
+        ]
+        if debug_enabled:
+            yt_dlp_args.append("--verbose")
+        yt_dlp_args.append(watch_url)
+        
+        proc = await asyncio.create_subprocess_exec(
+            *yt_dlp_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -365,6 +389,7 @@ async def resolve_vod_url_async(
     watch_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
     timeout: int = VOD_RESOLVE_TIMEOUT_S,
+    debug_enabled: bool = False,
 ) -> str:
     """Resolve a URL CDN real de um VOD via yt-dlp --get-url de forma assincrona.
 
@@ -382,9 +407,10 @@ async def resolve_vod_url_async(
     - -f bestvideo+bestaudio/best: seleciona melhor qualidade disponivel.
 
     Args:
-        watch_url:  URL do video YouTube.
-        user_agent: User-Agent HTTP.
-        timeout:    Segundos maximos de espera (default 20).
+        watch_url:     URL do video YouTube.
+        user_agent:    User-Agent HTTP.
+        timeout:       Segundos maximos de espera (default 20).
+        debug_enabled: Se True, yt-dlp usa --verbose para diagnóstico.
 
     Returns:
         URL CDN como string, ou "" em falha/timeout.
@@ -394,14 +420,20 @@ async def resolve_vod_url_async(
     """
     proc = None
     try:
-        proc = await asyncio.create_subprocess_exec(
+        yt_dlp_args = [
             "yt-dlp",
             "-f", "bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             "--get-url",
             "--no-playlist",
             "--js-runtimes", "node",
             "--user-agent", user_agent,
-            watch_url,
+        ]
+        if debug_enabled:
+            yt_dlp_args.append("--verbose")
+        yt_dlp_args.append(watch_url)
+        
+        proc = await asyncio.create_subprocess_exec(
+            *yt_dlp_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -452,6 +484,7 @@ def build_player_command(
     user_agent: str = DEFAULT_USER_AGENT,
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     texts_cache_path: Optional[Path] = None,
+    debug_enabled: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Retorna (cmd, temp_files) para status live ou placeholder.
 
@@ -472,13 +505,14 @@ def build_player_command(
         user_agent:       User-Agent HTTP (nao repassado ao streamlink).
         font_path:        Path da fonte TrueType no container.
         texts_cache_path: Path para JSON de textos de overlay.
+        debug_enabled:    Se True, ativa loglevel verbose em todos os processos.
 
     Returns:
         Tupla (cmd, temp_files).
     """
     if status == "live":
         logger.debug(f"[{video_id}] modo live -> streamlink")
-        return build_streamlink_cmd(watch_url), []
+        return build_streamlink_cmd(watch_url, debug_enabled=debug_enabled), []
 
     # VOD: status 'vod' e 'ended' sao lives encerradas; 'none' e o valor legado.
     # Em producao use build_player_command_async() para pre-resolver a URL CDN.
@@ -487,7 +521,9 @@ def build_player_command(
             f"[{video_id}] build_player_command() chamado com status={status!r} — "
             "use build_player_command_async() para resolucao assincrona"
         )
-        return build_vod_cmd(cdn_url="", watch_url=watch_url, user_agent=user_agent), []
+        return build_vod_cmd(
+            cdn_url="", watch_url=watch_url, user_agent=user_agent, debug_enabled=debug_enabled
+        ), []
 
     logger.debug(f"[{video_id}] modo placeholder (status={status!r})")
     texts = _get_texts_from_cache(video_id, texts_cache_path) if texts_cache_path else {}
@@ -497,6 +533,7 @@ def build_player_command(
         text_line2=texts.get("line2", ""),
         font_path=font_path,
         user_agent=user_agent,
+        debug_enabled=debug_enabled,
     )
 
 
@@ -508,6 +545,7 @@ async def build_player_command_async(
     user_agent: str = DEFAULT_USER_AGENT,
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     texts_cache_path: Optional[Path] = None,
+    debug_enabled: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Versao assincrona de build_player_command — obrigatoria para VOD.
 
@@ -524,7 +562,7 @@ async def build_player_command_async(
         GeoBlockedError: propagada de resolve_vod_url_async() quando o video
             esta geo-bloqueado. O chamador deve retornar HTTP 451.
 
-    Args: idem build_player_command().
+    Args: idem build_player_command() + debug_enabled.
 
     Returns:
         Tupla (cmd, temp_files).
@@ -538,16 +576,19 @@ async def build_player_command_async(
             user_agent=user_agent,
             font_path=FONT_PATH,
             texts_cache_path=TEXTS_CACHE_PATH,
+            debug_enabled=_config.get_bool("streaming_debug_enabled"),
         )
     """
     if status in _VOD_STATUSES:
         logger.debug(f"[{video_id}] modo VOD (status={status!r}) -> resolve_vod_url_async")
-        cdn_url = await resolve_vod_url_async(watch_url, user_agent)
+        cdn_url = await resolve_vod_url_async(watch_url, user_agent, debug_enabled=debug_enabled)
         if cdn_url:
             logger.debug(f"[{video_id}] CDN resolvida: {cdn_url[:80]}...")
         else:
             logger.info(f"[{video_id}] CDN nao resolvida, usando fallback yt-dlp|ffmpeg")
-        return build_vod_cmd(cdn_url=cdn_url, watch_url=watch_url, user_agent=user_agent), []
+        return build_vod_cmd(
+            cdn_url=cdn_url, watch_url=watch_url, user_agent=user_agent, debug_enabled=debug_enabled
+        ), []
 
     return build_player_command(
         video_id=video_id,
@@ -557,4 +598,5 @@ async def build_player_command_async(
         user_agent=user_agent,
         font_path=font_path,
         texts_cache_path=texts_cache_path,
+        debug_enabled=debug_enabled,
     )
