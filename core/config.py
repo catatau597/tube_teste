@@ -100,6 +100,13 @@ DEFAULTS: dict = {
     # --- Logs ---
     "log_level":                     ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),
     "hide_access_logs":              ("true",  "logging", "Ocultar logs de acesso HTTP (uvicorn.access GET /)", "bool"),
+
+    # --- Verificação de VODs ---
+    "vod_post_live_check_enabled":         ("true",       "vod_verification", "Ativar verificação pós-live de VODs", "bool"),
+    "vod_post_live_initial_delay_seconds": ("120",        "vod_verification", "Delay inicial após live terminar (segundos)", "int"),
+    "vod_post_live_retry_delays":          ("120,300,600","vod_verification", "Delays de retry com backoff exponencial (segundos, vírgula)", "list"),
+    "vod_health_check_enabled":            ("true",       "vod_verification", "Ativar health check periódico de VODs", "bool"),
+    "vod_health_check_interval_minutes":   ("60",         "vod_verification", "Intervalo do health check de VODs (minutos)", "int"),
 }
 
 

@@ -28,6 +28,7 @@ from core.proxy_manager import (
 from core.scheduler import Scheduler
 from core.state_manager import StateManager
 from core.thumbnail_manager import ThumbnailManager
+from core.vod_verifier import VodVerifier
 from core.youtube_api import YouTubeAPI
 from web.routes.playlist_dashboard import playlist_dashboard_page
 from web.routes.channels import channels_page as _channels_page
@@ -193,15 +194,25 @@ async def lifespan(app):
     _xmltv_generator = XMLTVGenerator(_config)
     _categories_db = {}
     _scheduler.set_categories_db(_categories_db)
+
+    vod_verifier = VodVerifier(scraper, _state, _config)
+    _scheduler.set_vod_verifier(vod_verifier)
+
     task = asyncio.create_task(_scheduler.run())
-    logger.info("Scheduler iniciado.")
+    health_check_task = asyncio.create_task(vod_verifier.run_health_check_loop())
+    logger.info("Scheduler e VodVerifier iniciados.")
 
     try:
         yield
     finally:
         task.cancel()
+        health_check_task.cancel()
         try:
             await task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await health_check_task
         except asyncio.CancelledError:
             pass
         for vid in list(_processes.keys()):
@@ -734,6 +745,98 @@ async def config_technical_save(req):
     if _config:
         _config.update_many(_apply_bool_defaults(dict(form), "technical"))
     return RedirectResponse("/config/technical?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Rota HTML — /config/vod-verification
+# ---------------------------------------------------------------------------
+
+@app.get("/config/vod-verification")
+def config_vod_verification(saved: str = ""):
+    if not _config:
+        return _page_shell("Verificação de VODs", "config_vod_verification", P("Config não inicializado."))
+
+    cfg = _config
+    alert = Div("✅ Configurações salvas com sucesso.",
+                cls="alert alert-success") if saved == "1" else ""
+
+    post_live_enabled = cfg.get_bool("vod_post_live_check_enabled")
+    initial_delay     = cfg.get_raw("vod_post_live_initial_delay_seconds")
+    health_enabled    = cfg.get_bool("vod_health_check_enabled")
+    health_interval   = cfg.get_raw("vod_health_check_interval_minutes")
+
+    return _page_shell(
+        "Verificação de VODs", "config_vod_verification",
+        alert,
+        _TOGGLE_STYLE,
+        _TOGGLE_JS,
+        Div(
+            H2("Verificação Pós-Live"),
+            P(
+                "Após uma live terminar, verifica automaticamente se o VOD ficou disponível "
+                "antes de incluí-lo na playlist.",
+                cls="text-muted",
+                style="font-size:0.85rem;margin-bottom:16px;",
+            ),
+            Form(
+                _bool_toggle("vod_post_live_check_enabled", post_live_enabled,
+                             "Ativar verificação pós-live"),
+                Label(
+                    Span("Delay inicial (segundos)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="vod_post_live_initial_delay_seconds",
+                          value=initial_delay,
+                          type="number", min="0", step="1",
+                          style="max-width:200px;"),
+                ),
+                Div(
+                    "ℹ️ Retries automáticos após falha: ",
+                    Strong("2min → 5min → 10min"),
+                    cls="alert alert-info",
+                    style="margin-top:8px;margin-bottom:16px;font-size:0.85rem;",
+                ),
+                H2("Health Check Periódico", style="margin-top:24px;"),
+                P(
+                    "Verifica periodicamente se os VODs no cache ainda estão acessíveis. "
+                    "VODs indisponíveis são removidos das playlists geradas.",
+                    cls="text-muted",
+                    style="font-size:0.85rem;margin-bottom:16px;",
+                ),
+                _bool_toggle("vod_health_check_enabled", health_enabled,
+                             "Ativar health check periódico de VODs"),
+                Label(
+                    Span("Intervalo de verificação (minutos)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="vod_health_check_interval_minutes",
+                          value=health_interval,
+                          type="number", min="1", step="1",
+                          style="max-width:200px;"),
+                ),
+                Div(Button("Salvar", type="submit"), style="margin-top:20px;"),
+                method="post",
+                action="/config/vod-verification",
+            ),
+            cls="card",
+        ),
+    )
+
+
+@app.post("/config/vod-verification")
+async def config_vod_verification_save(req):
+    form = await req.form()
+    if _config:
+        allowed_keys = {
+            "vod_post_live_check_enabled",
+            "vod_post_live_initial_delay_seconds",
+            "vod_health_check_enabled",
+            "vod_health_check_interval_minutes",
+        }
+        data = _apply_bool_defaults(
+            {k: v for k, v in dict(form).items() if k in allowed_keys},
+            "vod_verification",
+        )
+        _config.update_many(data)
+    return RedirectResponse("/config/vod-verification?saved=1", status_code=303)
 
 
 # ---------------------------------------------------------------------------
