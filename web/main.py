@@ -22,6 +22,7 @@ from core.proxy_manager import (
     INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
     LIVE_PREROLL_BYTES, LIVE_PREROLL_WAIT_S,
     INITIAL_BEHIND_BYTES, TARGET_BATCH_BYTES, MAX_BATCH_BYTES,
+    CLIENT_JUMP_THRESHOLD_BYTES,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
 )
 from core.scheduler import Scheduler
