@@ -8,7 +8,7 @@ import time
 import random
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request as UrlRequest, urlopen
 
 from fasthtml.common import *
 from starlette.routing import Route
@@ -1505,9 +1505,10 @@ async def api_vod_stream(request):
     if range_header:
         headers["Range"] = range_header
 
+    method = "HEAD" if getattr(request, "method", "GET").upper() == "HEAD" else "GET"
     upstream = None
     for attempt in (1, 2):
-        req = Request(upstream_url, headers=headers)
+        req = UrlRequest(upstream_url, headers=headers, method=method)
         try:
             upstream = urlopen(req, timeout=30)
             break
@@ -1535,6 +1536,14 @@ async def api_vod_stream(request):
         value = upstream.headers.get(header)
         if value:
             response_headers[header] = value
+
+    if method == "HEAD":
+        try:
+            upstream.close()
+        except Exception:
+            pass
+        status_code = getattr(upstream, "status", None) or 200
+        return Response("", status_code=status_code, media_type=content_type, headers=response_headers)
 
     async def stream_gen():
         try:
