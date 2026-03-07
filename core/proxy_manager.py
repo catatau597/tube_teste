@@ -503,6 +503,7 @@ def streams_status() -> List[dict]:
         mgr  = _managers.get(vid)
         proc = _processes.get(vid)
         result.append({
+            "type":            "live",
             "video_id":        vid,
             "buffer_chunks":   buf.size,
             "buffer_index":    buf.index,

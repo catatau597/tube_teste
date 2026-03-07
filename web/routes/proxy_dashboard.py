@@ -98,7 +98,7 @@ def active_streams_card() -> Div:
         Div(
             Table(
                 Thead(Tr(
-                    Th("Video ID"), Th("Buffer (chunks)"), Th("Buffer (MB)"),
+                    Th("Tipo"), Th("Video ID"), Th("Buffer (chunks)"), Th("Buffer (MB)"),
                     Th("Clientes"), Th("PID"), Th("Status"), Th("Ação"),
                 )),
                 Tbody(id="dash-proxy-tbody"),
@@ -137,17 +137,18 @@ def dashboard_js() -> Script:
             data.streams.forEach(s => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
+                    <td>${s.type === 'vod' ? 'VOD' : 'LIVE'}</td>
                     <td><code>${s.video_id}</code></td>
-                    <td>${s.buffer_index} (${s.buffer_chunks} no deque)</td>
-                    <td>${s.buffer_mb}</td>
+                    <td>${s.buffer_index == null ? '—' : `${s.buffer_index} (${s.buffer_chunks} no deque)`}</td>
+                    <td>${s.buffer_mb == null ? '—' : s.buffer_mb}</td>
                     <td>${s.clients}</td>
                     <td>${s.process_pid || '\u2014'}</td>
                     <td>${_statusBadge(s.process_alive)}</td>
                     <td>
-                      <button onclick="_stopStream('${s.video_id}')"
+                      ${s.type === 'vod' ? '' : `<button onclick="_stopStream('${s.video_id}')"
                         style="font-size:0.78em;padding:2px 8px;cursor:pointer;
                                border:1px solid #f8514944;color:#f85149;background:transparent;
-                               border-radius:4px;">Parar</button>
+                               border-radius:4px;">Parar</button>`}
                     </td>
                 `;
                 tbody.appendChild(tr);

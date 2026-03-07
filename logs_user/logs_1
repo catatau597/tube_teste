@@ -1,481 +1,877 @@
 root@master2:~# docker logs -f tubewranglerr
 INFO:     Started server process [1]
 INFO:     Waiting for application startup.
-2026-03-07 02:08:35 INFO     TubeWrangler  === TubeWrangler iniciando ===
-2026-03-07 02:08:35 INFO     TubeWrangler.proxy  Modo debug de streaming: ATIVADO
-2026-03-07 02:08:35 INFO     TubeWrangler  Cache carregado do disco: state_cache.json | streams=57
-2026-03-07 02:08:35 INFO     TubeWrangler  Cache disco: True | canais=6 streams=57
-2026-03-07 02:08:35 INFO     TubeWrangler  Handles configurados : ['@cazetv', '@xsports.brasil', '@espnbrasil']
-2026-03-07 02:08:35 INFO     TubeWrangler  IDs configurados     : []
-2026-03-07 02:08:35 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:35 INFO     TubeWrangler  YouTubeAPI: 2 chaves configuradas (round-robin ativo).
-2026-03-07 02:08:35 INFO     TubeWrangler  Resolvendo 3 handle(s) via API...
-2026-03-07 02:08:35 INFO     TubeWrangler  Resolvendo 3 handles de canais para IDs... (usando cache quando possível)
-2026-03-07 02:08:35 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:35 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:35 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/search?part=id%2Csnippet&q=%40cazetv&type=channel&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:36 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:36 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:36 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=snippet&id=UCZiYbVptd3PVPf4f6eR6UaQ&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:36 INFO     TubeWrangler  Handle '@cazetv' -> UCZiYbVptd3PVPf4f6eR6UaQ (CazéTV)
-2026-03-07 02:08:36 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:36 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:36 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/search?part=id%2Csnippet&q=%40xsports.brasil&type=channel&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:37 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:37 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:37 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=snippet&id=UCH-BU-Os3JSo2L8lBQxE8KA&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:37 INFO     TubeWrangler  Handle '@xsports.brasil' -> UCH-BU-Os3JSo2L8lBQxE8KA (Xsports)
-2026-03-07 02:08:37 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:37 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:37 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/search?part=id%2Csnippet&q=%40espnbrasil&type=channel&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:37 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:37 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:37 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=snippet&id=UCw5-xj3AKqEizC7MvHaIPqA&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:38 INFO     TubeWrangler  Handle '@espnbrasil' -> UCw5-xj3AKqEizC7MvHaIPqA (ESPN Brasil)
-2026-03-07 02:08:38 INFO     TubeWrangler  Resolvido/cacheado via handle 3 canais nesta execução.
-2026-03-07 02:08:38 INFO     TubeWrangler  Handles resolvidos: {'UCZiYbVptd3PVPf4f6eR6UaQ': 'CazéTV', 'UCH-BU-Os3JSo2L8lBQxE8KA': 'Xsports', 'UCw5-xj3AKqEizC7MvHaIPqA': 'ESPN Brasil'}
-2026-03-07 02:08:38 DEBUG    TubeWrangler  Todos os IDs de canal alvo já possuem títulos no estado.
-2026-03-07 02:08:38 INFO     TubeWrangler  Canais prontos: 3
-2026-03-07 02:08:38 DEBUG    TubeWrangler  Scheduler init: last_main_run=0001-01-01 00:00:00+00:00, last_full_sync=0001-01-01 00:00:00+00:00
-2026-03-07 02:08:38 INFO     TubeWrangler  Scheduler e VodVerifier iniciados.
-2026-03-07 02:08:38 INFO     TubeWrangler  Scheduler: PRIMEIRA EXECUÇÃO — Limitando aos últimos 2 dias. publishedAfter=2026-03-05T05:08:38.238582+00:00
-2026-03-07 02:08:38 INFO     TubeWrangler  --- Scheduler: Verificação Principal [canais=6, force=False] ---
-2026-03-07 02:08:38 INFO     TubeWrangler  Buscando streams [playlistItems] para 6 canais (publishedAfter=2026-03-05T05:08:38.238582+00:00)...
-2026-03-07 02:08:38 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:38 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:38 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCZiYbVptd3PVPf4f6eR6UaQ&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:42 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:42 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:42 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUZiYbVptd3PVPf4f6eR6UaQ&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:42 DEBUG    TubeWrangler  Playlist UUZiYbVptd3PVPf4f6eR6UaQ (Canal UCZiYbVptd3PVPf4f6eR6UaQ): Paginação interrompida (1 pág).
-2026-03-07 02:08:42 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:42 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:42 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCH-BU-Os3JSo2L8lBQxE8KA&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:43 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:43 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:43 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUH-BU-Os3JSo2L8lBQxE8KA&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:43 DEBUG    TubeWrangler  Playlist UUH-BU-Os3JSo2L8lBQxE8KA (Canal UCH-BU-Os3JSo2L8lBQxE8KA): Paginação interrompida (1 pág).
-2026-03-07 02:08:43 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:43 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:43 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCw5-xj3AKqEizC7MvHaIPqA&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:43 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:43 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:43 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUw5-xj3AKqEizC7MvHaIPqA&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:44 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUw5-xj3AKqEizC7MvHaIPqA&maxResults=50&pageToken=EAAaHlBUOkNESWlFRVZGT1VRNFJEUTNRalJDTmpKR05UWQ&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:44 DEBUG    TubeWrangler  Playlist UUw5-xj3AKqEizC7MvHaIPqA (Canal UCw5-xj3AKqEizC7MvHaIPqA): Paginação completa (2 pág).
-2026-03-07 02:08:44 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:44 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:44 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCs-6sCz2LJm1PrWQN4ErsPw&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:45 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:45 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:45 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUs-6sCz2LJm1PrWQN4ErsPw&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:45 DEBUG    TubeWrangler  Playlist UUs-6sCz2LJm1PrWQN4ErsPw (Canal UCs-6sCz2LJm1PrWQN4ErsPw): Paginação interrompida (1 pág).
-2026-03-07 02:08:45 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:45 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:45 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UC_oToDrJ6uca7d1dFVBmLtg&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:45 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:45 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:45 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UU_oToDrJ6uca7d1dFVBmLtg&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:46 DEBUG    TubeWrangler  Playlist UU_oToDrJ6uca7d1dFVBmLtg (Canal UC_oToDrJ6uca7d1dFVBmLtg): Paginação interrompida (1 pág).
-2026-03-07 02:08:46 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:46 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:46 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCgCKagVhzGnZcuP9bSMgMCg&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:46 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:46 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:46 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUgCKagVhzGnZcuP9bSMgMCg&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:46 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUgCKagVhzGnZcuP9bSMgMCg&maxResults=50&pageToken=EAAaHlBUOkNESWlFRVExUmtJNFFqZEZNekkxTmtVMU9FVQ&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:47 DEBUG    TubeWrangler  Playlist UUgCKagVhzGnZcuP9bSMgMCg (Canal UCgCKagVhzGnZcuP9bSMgMCg): Paginação interrompida (2 pág).
-2026-03-07 02:08:47 INFO     TubeWrangler  Busca [playlistItems] encontrou 293 IDs únicos. Buscando detalhes...
-2026-03-07 02:08:47 INFO     TubeWrangler  Buscando detalhes para 293 video(s) específicos... (em batches)
-2026-03-07 02:08:47 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:47 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:47 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=UPlD9bfzPFk%2ClCgCOwW_21M%2CniWLQ4T8Pl4%2Cu66_D3j_0pQ%2C2CJ8A60oGXY%2CkGIB1c5O-uA%2CfRjHq9Enw70%2CI9RDYDXrCy4%2CZpucwM3ab6Y%2COC65JMwvyb8%2C1FzqjOz5x98%2ClJf62TDZxps%2CCShELin2BIM%2CtkKB31A02Cg%2C1Gw8pz__ETs%2CUcfpWG0tLhE%2CmY-kP5r6koE%2CRxZykHUBPPQ%2Cy4Q4M29L5_c%2CRdYbAj8M_cQ%2CC5tJKPW-TAY%2CJ9BcGSNbGfQ%2C0U1Os5-vshs%2CAJqMcl5eu6s%2CZTOrAZM6ALk%2CJ_bFN4Hp3Z4%2Cnet7nZ8p7Bg%2CwRDjPFAk-XU%2C7uvAAL7TiOY%2C2R_KVd0Zrao%2CFPYnKbupzcM%2CUEpsk6Mu4Fc%2CKEQUs7PuIIM%2CMu_pDrtXfuo%2CG0sOT8cagWU%2CkvHaihCEUZw%2Cf-yEq833trc%2CTgL4LSFSFaY%2C86c-r5yL5lk%2Cd14LUbQZfvk%2C_Xr6JpbxZhI%2Ce8M-K68O--8%2C_K_sRYAv_7o%2CITOtUqyzLHo%2CuwkchDr74FQ%2CVOa-hYdV-iM%2C_392BEGcpf4%2CSIB_JsUce8o%2CbsNIqFvNkZI%2C8RUzYCNJjBo&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:47 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:47 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:47 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=o_gMSaC3elY%2CYvTwS1fLc4w%2CuZx2wp6yxiA%2CC7Wq8yzYLYs%2CR4Td0bzhQKw%2CVkd0a9rxReI%2CtAagW2XW2iw%2CG4Om-ikbz7g%2Cnj97xlyXmio%2C9FcDQ8SXNP4%2C5A3-E4thrVY%2Cvqoy5GtM7Ws%2C1DB-L19gygM%2C7_VXoMDRk0s%2C0IRZFOdvgSU%2CyTpDprW8BPI%2Cyq-wOrDnmk8%2CfJRp4gtJnEs%2C7akrXJYMQS0%2CbgLyh7hw0no%2C4tJAmhdLcBM%2CKBx_hO2lTPM%2CMUk4raulRok%2CdVUJqlZfpQg%2C5oOFnRbrFSg%2CWL91OBRnShY%2CpymTsVrj0zM%2Csq4pfbxaSGQ%2ClH720hOQKl4%2Cu3lKMlTIpv8%2CZnn_J85ga5I%2Co934ZbKHXD0%2CZNf3149hwYs%2ChZZ9EGl5bwo%2CMwLvtGymY3U%2CoIWyuRUZxgI%2CQ4rswxVwJsY%2CcBDhZ51QS18%2Cdzo6NQrHuFA%2CRIRGI3yIqQQ%2CH8tcr8PAmL4%2C75eGbCRscKk%2CAgvpE8aNIA0%2CJUUm9nkyP20%2Cc7pOO-yNM5M%2Cq14-dX52hu0%2CQk11qNE22C0%2C4mWXpi3ynF0%2CDKMW7Q9fHuc%2Co10v3zI2a2Q&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:47 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:47 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:47 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=6iKqqILECRo%2ChgsHK75Di2Y%2CR8jc3NpYXiE%2CRdmSSKChbk4%2CJbE5JRkI3DA%2CImYtPKS7WyY%2Cw6ckh5OGPTM%2C8jADNPpbNOc%2CtD9ZPgs_jCY%2Cu6C5AWkM588%2CVBKtBmGea4s%2C8leCUmO3Dl8%2CKzBHcXKRxng%2CSOqiswtFP7Y%2Cdd_LP-Ffwfk%2CeGSXo5RbcCI%2CgoMR9dBu2Fk%2CtfSIoU1nLO4%2CVPBOdSdTEgI%2CSZCVGTEuxa0%2CIT09RLfT79Y%2CXKw1u3nS7QU%2Caa1BhpB3mJ4%2CDPaxm5gWCDo%2CD5vRn29hnPI%2ChB-6v4YAYBE%2C8ZhaL1tIQOw%2CXZc9g2vlJgY%2ClWmaF7r1u_I%2C5toIXvOTW5s%2CA9SYES6NfHE%2CNoxmHwX5nGk%2C_nD8nzBIEnU%2CYl8cDddMHh8%2CX0lyUMrKrCg%2CTIS3PmXUyt0%2Coz3pMFTRAVc%2CzD8Ggj1ea_E%2CZJrDsjhLy7Y%2CjXJn8_IqEPY%2C2ZXf6m5LhFg%2CehszDUtqlGc%2Co4nivXiBSfw%2Cq1El5LCdSeI%2CxHCrbXAMGHw%2CwElqqrR17Bo%2CC2XM0XKDtAY%2CiLv7Z78gups%2CXWGXlp0-TTQ%2CeKEcPHUT6hY&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:48 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:48 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:48 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=b7_o1BU_MwA%2C_fadFTWqsIM%2CHm0OhZ0DFMQ%2CkI7bYkDGWD0%2Cax2ZYssou5k%2CYSgvqtHC6vQ%2CxYThvq65xws%2CqhNoMvneADg%2C-5ImCrYNIvY%2CRQ_9zQ_OvgE%2CFnzogMobxHI%2CJPWiGzLf1wo%2CcWcLFDv3ohQ%2C5jLPuS09XGg%2CROI_S-W0gHE%2CpNhHMjhq5Rg%2CcAxq0bozu80%2C1LUdg_IZ2e4%2CKP2IYUYxvPw%2CX2k-nuBB184%2C34GBX-2Aw3c%2C2KLN9u0g9p8%2C3eaOiy2XyfU%2CKhlRUlBCXfE%2CNdsgKoUP3Vo%2CauBwfiQUZsM%2CyFwzMdg7ajo%2C8Tr3diTAtas%2CcJOCkNSsDIY%2CP7hoJLTdQqA%2CeV_CdcgY7F0%2CjWorqQP-c3M%2CiXVrM0KxqqE%2CrnYUd_4PJTI%2C8iLwwuOHIpU%2C7vpS6-bvM2s%2CiZ3FdNSJQc0%2Ckm502pxSHFY%2CH9q1RJ6D9yQ%2CtGXodLculHc%2CgWEa1PMh7-o%2CA3g9eBMekK0%2Cg6vOe8LayZM%2CdhJWyOftagQ%2CVeKw82tKCdc%2CXe8ExZKCoMg%2CRd7mVNqwshw%2Cm79iy2WQhS0%2CHztq4m3dwu0%2C53tFB0LrB0E&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:48 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:48 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:48 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=oVLAiIxMKBQ%2C11cxxM_jWp0%2CDBXKViK26T4%2CZWEvekZgOkA%2C0AvYzK5XNbM%2Cm45113tCDP8%2C9DthezGFirQ%2CphAFrxFu0mo%2C8bZPjV2gtsM%2Cqfi5wzDMhok%2Cr8ZT_CKXe7Y%2Cmbewd7Bxdxc%2CTDKbYkcgLmo%2CgEXo4jqGfjs%2CdGfsGFobTyc%2COzwJGFBiZVs%2CVOiLDtM2gc4%2CVIfo_dGf9aE%2CVB2yGTXAq-g%2C4p83h6ZXHj0%2CuZxvq9MdnUQ%2CGRBVFNbbbtw%2C4GWUb-J_vwQ%2C17Oluy2ce8g%2CooKal7OC4NQ%2Cf3tsZARqTrg%2Ctj4YTTYpH50%2CjDZdan9_AaI%2CgzQjjaLKdzY%2CF8jB7XoV7jY%2CBD4R4ZAj59g%2CzoSgLMtnrQg%2C47ub5rk0fF0%2CfcmPmuvlAzU%2Ck5aFeahqFNQ%2C0o5dylmKTds%2CUyoz6vcYDj0%2CACfGPvRMNis%2Cny45FZle0o4%2CiE09Zkf1ZmA%2CXbvEp2p1xvg%2C4_9OdaarC-s%2CU06TgqxpFD4%2CE_YddafsX5o%2Cc1kKwZ2BJdk%2CDu4Qyksmw8E%2C1U_6y1MvYdY%2CiEWjcWPLprU%2CnqdWAc64uXs%2ChG6Pa6cu7pA&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:48 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:48 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
-2026-03-07 02:08:48 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=mo-IeCDP1hg%2CwMpqwlpjEEs%2CoVhQK6vg3ps%2CGPziPHpIwT0%2Cd3KFKwr_lsc%2CAzV6ACCcdMg%2CMjiL1_YyPYc%2COEn_-KvAm8M%2CEAvxMDodW5c%2C5nJy4okOuQs%2CY88g2MxT6Fo%2CPPeIRkGI1Zg%2CiogAIcMgDdE%2CTMSVssGTGsg%2CizOKz5BKanw%2CYZxtmwzqOhk%2CRKCaYI5DKrU%2CpzzLiHKS4KU%2CdblXMxLsUh0%2C_a_wqwEvwjo%2Cfgyu698-030%2Cq0IlW9epuds%2Cwo3gFyQqciY%2C6HWDsJEGhmc%2Cz6j0vq5eTAc%2C_rOEi1lSH-I%2C5mydQYJKbVQ%2C7sF82we7O2A%2C5YduvimKPZU%2Ct3G5cYC0uf8%2C9X_fX9HovNM%2C7Vbw-DdO-Yc%2CYbaje1mFiF4%2C6GZgN7HxrhA%2CDpC3OAgruKk%2C5e005tzEYMc%2C7iESgr_SSws%2CJ28wDvwPRhE%2CY41ie9UnDTI%2Cm4hIOyZJvCY%2C2qoEajWbAC4%2CK0xBEUjbrfw%2CN9HSitapZkA&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
-2026-03-07 02:08:48 INFO     TubeWrangler  Recebidos detalhes de 293 video(s).
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando UPlD9bfzPFk (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando niWLQ4T8Pl4 (dur=25s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando u66_D3j_0pQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2CJ8A60oGXY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando kGIB1c5O-uA (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando fRjHq9Enw70 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando I9RDYDXrCy4 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ZpucwM3ab6Y (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando OC65JMwvyb8 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 1FzqjOz5x98 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando lJf62TDZxps (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando CShELin2BIM (dur=20s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 1Gw8pz__ETs (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando UcfpWG0tLhE (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando mY-kP5r6koE (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando RxZykHUBPPQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando y4Q4M29L5_c (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando RdYbAj8M_cQ (dur=33s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando J9BcGSNbGfQ (dur=46s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 0U1Os5-vshs (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando AJqMcl5eu6s (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ZTOrAZM6ALk (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando J_bFN4Hp3Z4 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando wRDjPFAk-XU (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2R_KVd0Zrao (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando UEpsk6Mu4Fc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando KEQUs7PuIIM (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Mu_pDrtXfuo (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando G0sOT8cagWU (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando kvHaihCEUZw (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando f-yEq833trc (dur=9s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando TgL4LSFSFaY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 86c-r5yL5lk (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando d14LUbQZfvk (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando e8M-K68O--8 (dur=50s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:categoria] ignorando ITOtUqyzLHo (cat=24)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando uwkchDr74FQ (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando _392BEGcpf4 (dur=20s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando SIB_JsUce8o (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando bsNIqFvNkZI (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando o_gMSaC3elY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando YvTwS1fLc4w (dur=16s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando uZx2wp6yxiA (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando C7Wq8yzYLYs (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Vkd0a9rxReI (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando tAagW2XW2iw (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando G4Om-ikbz7g (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando nj97xlyXmio (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 9FcDQ8SXNP4 (dur=14s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 5A3-E4thrVY (dur=25s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 1DB-L19gygM (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7_VXoMDRk0s (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando yTpDprW8BPI (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando yq-wOrDnmk8 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando fJRp4gtJnEs (dur=24s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 7akrXJYMQS0 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando bgLyh7hw0no (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando KBx_hO2lTPM (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando MUk4raulRok (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando dVUJqlZfpQg (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5oOFnRbrFSg (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando WL91OBRnShY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando pymTsVrj0zM (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando sq4pfbxaSGQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando lH720hOQKl4 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando u3lKMlTIpv8 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Znn_J85ga5I (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando ZNf3149hwYs (dur=61s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando hZZ9EGl5bwo (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando MwLvtGymY3U (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando oIWyuRUZxgI (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Q4rswxVwJsY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando cBDhZ51QS18 (dur=53s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando RIRGI3yIqQQ (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando H8tcr8PAmL4 (dur=28s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 75eGbCRscKk (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando AgvpE8aNIA0 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando JUUm9nkyP20 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando c7pOO-yNM5M (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando q14-dX52hu0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Qk11qNE22C0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 4mWXpi3ynF0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando DKMW7Q9fHuc (dur=60s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 6iKqqILECRo (dur=53s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando R8jc3NpYXiE (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando RdmSSKChbk4 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando JbE5JRkI3DA (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ImYtPKS7WyY (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando w6ckh5OGPTM (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 8jADNPpbNOc (dur=42s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando tD9ZPgs_jCY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando u6C5AWkM588 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando VBKtBmGea4s (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando KzBHcXKRxng (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando SOqiswtFP7Y (dur=33s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando dd_LP-Ffwfk (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando eGSXo5RbcCI (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VPBOdSdTEgI (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando IT09RLfT79Y (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XKw1u3nS7QU (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando aa1BhpB3mJ4 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando DPaxm5gWCDo (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando D5vRn29hnPI (dur=35s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando hB-6v4YAYBE (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 8ZhaL1tIQOw (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XZc9g2vlJgY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando lWmaF7r1u_I (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 5toIXvOTW5s (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando A9SYES6NfHE (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando NoxmHwX5nGk (dur=16s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando _nD8nzBIEnU (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Yl8cDddMHh8 (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando X0lyUMrKrCg (dur=42s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando oz3pMFTRAVc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando zD8Ggj1ea_E (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ZJrDsjhLy7Y (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando jXJn8_IqEPY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2ZXf6m5LhFg (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ehszDUtqlGc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando o4nivXiBSfw (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando xHCrbXAMGHw (dur=30s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando wElqqrR17Bo (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando C2XM0XKDtAY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando iLv7Z78gups (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XWGXlp0-TTQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando b7_o1BU_MwA (dur=41s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando _fadFTWqsIM (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando Hm0OhZ0DFMQ (dur=45s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando kI7bYkDGWD0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando YSgvqtHC6vQ (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando xYThvq65xws (dur=61s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando qhNoMvneADg (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando -5ImCrYNIvY (dur=13s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando RQ_9zQ_OvgE (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando JPWiGzLf1wo (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando cWcLFDv3ohQ (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 5jLPuS09XGg (dur=22s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ROI_S-W0gHE (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando cAxq0bozu80 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 1LUdg_IZ2e4 (dur=15s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando KP2IYUYxvPw (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando X2k-nuBB184 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 34GBX-2Aw3c (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 2KLN9u0g9p8 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 3eaOiy2XyfU (dur=62s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando KhlRUlBCXfE (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando NdsgKoUP3Vo (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando auBwfiQUZsM (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando yFwzMdg7ajo (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 8Tr3diTAtas (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando cJOCkNSsDIY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando P7hoJLTdQqA (dur=18s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando eV_CdcgY7F0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando iXVrM0KxqqE (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando rnYUd_4PJTI (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 8iLwwuOHIpU (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7vpS6-bvM2s (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando iZ3FdNSJQc0 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando km502pxSHFY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando H9q1RJ6D9yQ (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando tGXodLculHc (dur=23s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando A3g9eBMekK0 (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando g6vOe8LayZM (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando dhJWyOftagQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VeKw82tKCdc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Xe8ExZKCoMg (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Rd7mVNqwshw (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando m79iy2WQhS0 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Hztq4m3dwu0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 53tFB0LrB0E (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando oVLAiIxMKBQ (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 11cxxM_jWp0 (dur=61s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ZWEvekZgOkA (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 0AvYzK5XNbM (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando m45113tCDP8 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 9DthezGFirQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando phAFrxFu0mo (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 8bZPjV2gtsM (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando qfi5wzDMhok (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando r8ZT_CKXe7Y (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando mbewd7Bxdxc (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando TDKbYkcgLmo (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando gEXo4jqGfjs (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando dGfsGFobTyc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VOiLDtM2gc4 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VIfo_dGf9aE (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando VB2yGTXAq-g (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 4p83h6ZXHj0 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando GRBVFNbbbtw (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 4GWUb-J_vwQ (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 17Oluy2ce8g (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ooKal7OC4NQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando f3tsZARqTrg (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando jDZdan9_AaI (dur=14s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando gzQjjaLKdzY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando F8jB7XoV7jY (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando BD4R4ZAj59g (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando zoSgLMtnrQg (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 47ub5rk0fF0 (dur=28s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando k5aFeahqFNQ (dur=15s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 0o5dylmKTds (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Uyoz6vcYDj0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ACfGPvRMNis (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ny45FZle0o4 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XbvEp2p1xvg (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 4_9OdaarC-s (dur=16s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando U06TgqxpFD4 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando E_YddafsX5o (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando c1kKwZ2BJdk (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Du4Qyksmw8E (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 1U_6y1MvYdY (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando iEWjcWPLprU (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando nqdWAc64uXs (dur=23s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando hG6Pa6cu7pA (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando wMpqwlpjEEs (dur=16s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando oVhQK6vg3ps (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando GPziPHpIwT0 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando d3KFKwr_lsc (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando MjiL1_YyPYc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando OEn_-KvAm8M (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando EAvxMDodW5c (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 5nJy4okOuQs (dur=20s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando PPeIRkGI1Zg (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando TMSVssGTGsg (match='podcast')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando izOKz5BKanw (dur=12s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando YZxtmwzqOhk (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando pzzLiHKS4KU (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando _a_wqwEvwjo (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando fgyu698-030 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando q0IlW9epuds (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando wo3gFyQqciY (dur=29s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 6HWDsJEGhmc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando z6j0vq5eTAc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando _rOEi1lSH-I (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5mydQYJKbVQ (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 7sF82we7O2A (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5YduvimKPZU (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando t3G5cYC0uf8 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 9X_fX9HovNM (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7Vbw-DdO-Yc (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Ybaje1mFiF4 (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 6GZgN7HxrhA (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando DpC3OAgruKk (dur=33s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5e005tzEYMc (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7iESgr_SSws (nunca foi live/upcoming)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Y41ie9UnDTI (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando m4hIOyZJvCY (dur=35s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2qoEajWbAC4 (match='#shorts')
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando K0xBEUjbrfw (dur=41s <= max=62s)
-2026-03-07 02:08:48 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando N9HSitapZkA (dur=58s <= max=62s)
-2026-03-07 02:08:48 INFO     TubeWrangler  Update Streams: +0 upd=43 | ign categoria=1 shorts(palavra)=114 shorts(dur)=45 vod-puro=90
-2026-03-07 02:08:48 INFO     TubeWrangler  Status Verificação Principal: 57 streams — 1 live, 47 upcoming, 9 vod/ended
-2026-03-07 02:08:48 DEBUG    TubeWrangler  textosepg.json: 47 entradas geradas
-2026-03-07 02:08:48 INFO     TubeWrangler  --- Scheduler: 1 live PÓS-EVENTO ---
-2026-03-07 02:08:48 INFO     TubeWrangler  Buscando detalhes para 1 video(s) específicos... (em batches)
-2026-03-07 02:08:48 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
-2026-03-07 02:08:48 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
-2026-03-07 02:08:48 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=iogAIcMgDdE&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
-2026-03-07 02:08:49 INFO     TubeWrangler  Recebidos detalhes de 1 video(s).
-2026-03-07 02:08:49 INFO     TubeWrangler  Update Streams: +0 upd=1 | ign categoria=0 shorts(palavra)=0 shorts(dur)=0 vod-puro=0
-2026-03-07 02:08:49 INFO     TubeWrangler  Status Verificação Alta Frequência: 57 streams — 1 live, 47 upcoming, 9 vod/ended
-2026-03-07 02:08:49 DEBUG    TubeWrangler  textosepg.json: 47 entradas geradas
-2026-03-07 02:08:49 INFO     TubeWrangler  [VodVerifier] Health check loop iniciado.
-2026-03-07 02:08:49 DEBUG    TubeWrangler  [VodVerifier] Health check: próxima verificação em 3600s.
+2026-03-07 02:20:08 INFO     TubeWrangler  === TubeWrangler iniciando ===
+2026-03-07 02:20:08 INFO     TubeWrangler.proxy  Modo debug de streaming: ATIVADO
+2026-03-07 02:20:08 INFO     TubeWrangler  Cache carregado do disco: state_cache.json | streams=57
+2026-03-07 02:20:08 INFO     TubeWrangler  Cache disco: True | canais=6 streams=57
+2026-03-07 02:20:08 INFO     TubeWrangler  Handles configurados : ['@cazetv', '@xsports.brasil', '@espnbrasil']
+2026-03-07 02:20:08 INFO     TubeWrangler  IDs configurados     : []
+2026-03-07 02:20:08 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:08 INFO     TubeWrangler  YouTubeAPI: 2 chaves configuradas (round-robin ativo).
+2026-03-07 02:20:08 INFO     TubeWrangler  Resolvendo 3 handle(s) via API...
+2026-03-07 02:20:08 INFO     TubeWrangler  Resolvendo 3 handles de canais para IDs... (usando cache quando possível)
+2026-03-07 02:20:08 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:08 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:08 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/search?part=id%2Csnippet&q=%40cazetv&type=channel&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:08 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:08 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:08 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=snippet&id=UCZiYbVptd3PVPf4f6eR6UaQ&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:09 INFO     TubeWrangler  Handle '@cazetv' -> UCZiYbVptd3PVPf4f6eR6UaQ (CazéTV)
+2026-03-07 02:20:09 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:09 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:09 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/search?part=id%2Csnippet&q=%40xsports.brasil&type=channel&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:09 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:09 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:09 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=snippet&id=UCH-BU-Os3JSo2L8lBQxE8KA&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:09 INFO     TubeWrangler  Handle '@xsports.brasil' -> UCH-BU-Os3JSo2L8lBQxE8KA (Xsports)
+2026-03-07 02:20:09 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:09 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:09 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/search?part=id%2Csnippet&q=%40espnbrasil&type=channel&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:10 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:10 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:10 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=snippet&id=UCw5-xj3AKqEizC7MvHaIPqA&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:10 INFO     TubeWrangler  Handle '@espnbrasil' -> UCw5-xj3AKqEizC7MvHaIPqA (ESPN Brasil)
+2026-03-07 02:20:10 INFO     TubeWrangler  Resolvido/cacheado via handle 3 canais nesta execução.
+2026-03-07 02:20:10 INFO     TubeWrangler  Handles resolvidos: {'UCZiYbVptd3PVPf4f6eR6UaQ': 'CazéTV', 'UCH-BU-Os3JSo2L8lBQxE8KA': 'Xsports', 'UCw5-xj3AKqEizC7MvHaIPqA': 'ESPN Brasil'}
+2026-03-07 02:20:10 DEBUG    TubeWrangler  Todos os IDs de canal alvo já possuem títulos no estado.
+2026-03-07 02:20:10 INFO     TubeWrangler  Canais prontos: 3
+2026-03-07 02:20:10 DEBUG    TubeWrangler  Scheduler init: last_main_run=0001-01-01 00:00:00+00:00, last_full_sync=0001-01-01 00:00:00+00:00
+2026-03-07 02:20:10 INFO     TubeWrangler  Scheduler e VodVerifier iniciados.
+2026-03-07 02:20:10 INFO     TubeWrangler  Scheduler: PRIMEIRA EXECUÇÃO — Limitando aos últimos 2 dias. publishedAfter=2026-03-05T05:20:10.785194+00:00
+2026-03-07 02:20:10 INFO     TubeWrangler  --- Scheduler: Verificação Principal [canais=6, force=False] ---
+2026-03-07 02:20:10 INFO     TubeWrangler  Buscando streams [playlistItems] para 6 canais (publishedAfter=2026-03-05T05:20:10.785194+00:00)...
+2026-03-07 02:20:10 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:10 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:10 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCZiYbVptd3PVPf4f6eR6UaQ&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:10 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:10 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:10 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUZiYbVptd3PVPf4f6eR6UaQ&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:11 DEBUG    TubeWrangler  Playlist UUZiYbVptd3PVPf4f6eR6UaQ (Canal UCZiYbVptd3PVPf4f6eR6UaQ): Paginação interrompida (1 pág).
+2026-03-07 02:20:11 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:11 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:11 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCH-BU-Os3JSo2L8lBQxE8KA&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:11 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:11 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:11 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUH-BU-Os3JSo2L8lBQxE8KA&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:12 DEBUG    TubeWrangler  Playlist UUH-BU-Os3JSo2L8lBQxE8KA (Canal UCH-BU-Os3JSo2L8lBQxE8KA): Paginação interrompida (1 pág).
+2026-03-07 02:20:12 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:12 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:12 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCw5-xj3AKqEizC7MvHaIPqA&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:12 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:12 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:12 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUw5-xj3AKqEizC7MvHaIPqA&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:15 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUw5-xj3AKqEizC7MvHaIPqA&maxResults=50&pageToken=EAAaHlBUOkNESWlFRVZGT1VRNFJEUTNRalJDTmpKR05UWQ&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:15 DEBUG    TubeWrangler  Playlist UUw5-xj3AKqEizC7MvHaIPqA (Canal UCw5-xj3AKqEizC7MvHaIPqA): Paginação completa (2 pág).
+2026-03-07 02:20:15 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:15 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:15 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCs-6sCz2LJm1PrWQN4ErsPw&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:15 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:15 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:15 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUs-6sCz2LJm1PrWQN4ErsPw&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:16 DEBUG    TubeWrangler  Playlist UUs-6sCz2LJm1PrWQN4ErsPw (Canal UCs-6sCz2LJm1PrWQN4ErsPw): Paginação interrompida (1 pág).
+2026-03-07 02:20:16 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:16 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:16 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UC_oToDrJ6uca7d1dFVBmLtg&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:16 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:16 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:16 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UU_oToDrJ6uca7d1dFVBmLtg&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:17 DEBUG    TubeWrangler  Playlist UU_oToDrJ6uca7d1dFVBmLtg (Canal UC_oToDrJ6uca7d1dFVBmLtg): Paginação interrompida (1 pág).
+2026-03-07 02:20:17 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:17 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:17 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&id=UCgCKagVhzGnZcuP9bSMgMCg&maxResults=1&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:17 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:17 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:17 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUgCKagVhzGnZcuP9bSMgMCg&maxResults=50&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:17 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=UUgCKagVhzGnZcuP9bSMgMCg&maxResults=50&pageToken=EAAaHlBUOkNESWlFRVExUmtJNFFqZEZNekkxTmtVMU9FVQ&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:18 DEBUG    TubeWrangler  Playlist UUgCKagVhzGnZcuP9bSMgMCg (Canal UCgCKagVhzGnZcuP9bSMgMCg): Paginação interrompida (2 pág).
+2026-03-07 02:20:18 INFO     TubeWrangler  Busca [playlistItems] encontrou 293 IDs únicos. Buscando detalhes...
+2026-03-07 02:20:18 INFO     TubeWrangler  Buscando detalhes para 293 video(s) específicos... (em batches)
+2026-03-07 02:20:18 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:18 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:18 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=7sF82we7O2A%2CH9q1RJ6D9yQ%2CDpC3OAgruKk%2C8RUzYCNJjBo%2Cu6C5AWkM588%2CYvTwS1fLc4w%2Cq1El5LCdSeI%2Coz3pMFTRAVc%2CDu4Qyksmw8E%2CjDZdan9_AaI%2CD5vRn29hnPI%2CH8tcr8PAmL4%2CtfSIoU1nLO4%2CKBx_hO2lTPM%2Cf-yEq833trc%2Cw6ckh5OGPTM%2CGPziPHpIwT0%2CiZ3FdNSJQc0%2C86c-r5yL5lk%2CYl8cDddMHh8%2CR4Td0bzhQKw%2C7uvAAL7TiOY%2CSOqiswtFP7Y%2CooKal7OC4NQ%2C0IRZFOdvgSU%2Cnj97xlyXmio%2CtD9ZPgs_jCY%2ChgsHK75Di2Y%2C0o5dylmKTds%2C4p83h6ZXHj0%2CRKCaYI5DKrU%2C5jLPuS09XGg%2CJbE5JRkI3DA%2CZJrDsjhLy7Y%2CyFwzMdg7ajo%2Cmo-IeCDP1hg%2C1LUdg_IZ2e4%2Cf3tsZARqTrg%2CZTOrAZM6ALk%2CcBDhZ51QS18%2CxYThvq65xws%2CdGfsGFobTyc%2C8jADNPpbNOc%2C5e005tzEYMc%2CoVhQK6vg3ps%2CgEXo4jqGfjs%2CF8jB7XoV7jY%2CiEWjcWPLprU%2C5toIXvOTW5s%2CmY-kP5r6koE&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:18 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:18 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:18 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=XbvEp2p1xvg%2C17Oluy2ce8g%2ClJf62TDZxps%2Cq14-dX52hu0%2CITOtUqyzLHo%2CACfGPvRMNis%2CcAxq0bozu80%2CpzzLiHKS4KU%2Cqfi5wzDMhok%2CTIS3PmXUyt0%2CnqdWAc64uXs%2CdhJWyOftagQ%2CgzQjjaLKdzY%2Cm79iy2WQhS0%2CyTpDprW8BPI%2C1U_6y1MvYdY%2CTMSVssGTGsg%2Ctj4YTTYpH50%2CRxZykHUBPPQ%2CUcfpWG0tLhE%2CMjiL1_YyPYc%2CRdYbAj8M_cQ%2Ck5aFeahqFNQ%2CUyoz6vcYDj0%2CA9SYES6NfHE%2CkvHaihCEUZw%2CR8jc3NpYXiE%2CphAFrxFu0mo%2C1Gw8pz__ETs%2C0U1Os5-vshs%2C0AvYzK5XNbM%2CiogAIcMgDdE%2CZWEvekZgOkA%2CwElqqrR17Bo%2CwMpqwlpjEEs%2CxHCrbXAMGHw%2CRQ_9zQ_OvgE%2CVkd0a9rxReI%2CJPWiGzLf1wo%2COC65JMwvyb8%2CQ4rswxVwJsY%2CImYtPKS7WyY%2CKEQUs7PuIIM%2C2KLN9u0g9p8%2C9X_fX9HovNM%2Cy4Q4M29L5_c%2CSIB_JsUce8o%2CqhNoMvneADg%2CX0lyUMrKrCg%2CXKw1u3nS7QU&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:18 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:18 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:18 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=m45113tCDP8%2CJ9BcGSNbGfQ%2CiLv7Z78gups%2CcWcLFDv3ohQ%2CWL91OBRnShY%2CiE09Zkf1ZmA%2Csq4pfbxaSGQ%2CXe8ExZKCoMg%2C2ZXf6m5LhFg%2CVOiLDtM2gc4%2Cq0IlW9epuds%2CMwLvtGymY3U%2CTDKbYkcgLmo%2CjXJn8_IqEPY%2Cd14LUbQZfvk%2C7Vbw-DdO-Yc%2CN9HSitapZkA%2CVB2yGTXAq-g%2CXWGXlp0-TTQ%2C5nJy4okOuQs%2C_392BEGcpf4%2C2qoEajWbAC4%2C8iLwwuOHIpU%2CK0xBEUjbrfw%2CAzV6ACCcdMg%2Co934ZbKHXD0%2CgWEa1PMh7-o%2CUPlD9bfzPFk%2C8leCUmO3Dl8%2CKzBHcXKRxng%2CVPBOdSdTEgI%2CkI7bYkDGWD0%2C-5ImCrYNIvY%2CbsNIqFvNkZI%2Cyq-wOrDnmk8%2CROI_S-W0gHE%2ChG6Pa6cu7pA%2C1FzqjOz5x98%2C5YduvimKPZU%2CfJRp4gtJnEs%2CuwkchDr74FQ%2ChB-6v4YAYBE%2CVIfo_dGf9aE%2CJ_bFN4Hp3Z4%2CE_YddafsX5o%2CoIWyuRUZxgI%2ClH720hOQKl4%2CAJqMcl5eu6s%2CMUk4raulRok%2Cdzo6NQrHuFA&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:19 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:19 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:19 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=SZCVGTEuxa0%2C5oOFnRbrFSg%2Cu3lKMlTIpv8%2C_Xr6JpbxZhI%2Cdd_LP-Ffwfk%2ClWmaF7r1u_I%2Cm4hIOyZJvCY%2CNoxmHwX5nGk%2CDKMW7Q9fHuc%2CgoMR9dBu2Fk%2Ce8M-K68O--8%2CG4Om-ikbz7g%2C7vpS6-bvM2s%2CJUUm9nkyP20%2Cr8ZT_CKXe7Y%2Cd3KFKwr_lsc%2CjWorqQP-c3M%2CC5tJKPW-TAY%2CBD4R4ZAj59g%2CcJOCkNSsDIY%2CP7hoJLTdQqA%2CG0sOT8cagWU%2ClCgCOwW_21M%2Cax2ZYssou5k%2CzD8Ggj1ea_E%2CHztq4m3dwu0%2C6HWDsJEGhmc%2CX2k-nuBB184%2CFPYnKbupzcM%2C34GBX-2Aw3c%2C6iKqqILECRo%2CeKEcPHUT6hY%2CYbaje1mFiF4%2CRIRGI3yIqQQ%2CIT09RLfT79Y%2CTgL4LSFSFaY%2Cc7pOO-yNM5M%2COzwJGFBiZVs%2C6GZgN7HxrhA%2CtAagW2XW2iw%2CA3g9eBMekK0%2C8bZPjV2gtsM%2Cb7_o1BU_MwA%2CehszDUtqlGc%2CpymTsVrj0zM%2CFnzogMobxHI%2Cwo3gFyQqciY%2C_a_wqwEvwjo%2C11cxxM_jWp0%2CZNf3149hwYs&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:19 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:19 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:19 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=VeKw82tKCdc%2CU06TgqxpFD4%2CZnn_J85ga5I%2C4tJAmhdLcBM%2C4mWXpi3ynF0%2C47ub5rk0fF0%2CKP2IYUYxvPw%2Co_gMSaC3elY%2Cny45FZle0o4%2CEAvxMDodW5c%2CeV_CdcgY7F0%2CtGXodLculHc%2C3eaOiy2XyfU%2Ckm502pxSHFY%2CYZxtmwzqOhk%2CC2XM0XKDtAY%2CdblXMxLsUh0%2COEn_-KvAm8M%2CwRDjPFAk-XU%2C7akrXJYMQS0%2CJ28wDvwPRhE%2CI9RDYDXrCy4%2C9DthezGFirQ%2CYSgvqtHC6vQ%2CVBKtBmGea4s%2CUEpsk6Mu4Fc%2Cz6j0vq5eTAc%2CVOa-hYdV-iM%2C_nD8nzBIEnU%2ChZZ9EGl5bwo%2Ct3G5cYC0uf8%2C4GWUb-J_vwQ%2CGRBVFNbbbtw%2C_rOEi1lSH-I%2C8ZhaL1tIQOw%2C9FcDQ8SXNP4%2Cnet7nZ8p7Bg%2CDBXKViK26T4%2Cu66_D3j_0pQ%2CY88g2MxT6Fo%2C4_9OdaarC-s%2Cvqoy5GtM7Ws%2CdVUJqlZfpQg%2Co4nivXiBSfw%2CZpucwM3ab6Y%2CXZc9g2vlJgY%2CQk11qNE22C0%2C2R_KVd0Zrao%2CCShELin2BIM%2Cc1kKwZ2BJdk&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:19 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:19 DEBUG    TubeWrangler  YouTubeAPI: usando chave [1/2]
+2026-03-07 02:20:19 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=auBwfiQUZsM%2C53tFB0LrB0E%2CuZxvq9MdnUQ%2CNdsgKoUP3Vo%2C75eGbCRscKk%2Cg6vOe8LayZM%2CRd7mVNqwshw%2CeGSXo5RbcCI%2C_fadFTWqsIM%2CtkKB31A02Cg%2CHm0OhZ0DFMQ%2CbgLyh7hw0no%2CY41ie9UnDTI%2CfRjHq9Enw70%2CRdmSSKChbk4%2CMu_pDrtXfuo%2CiXVrM0KxqqE%2CAgvpE8aNIA0%2CrnYUd_4PJTI%2C8Tr3diTAtas%2CniWLQ4T8Pl4%2C7iESgr_SSws%2C2CJ8A60oGXY%2CC7Wq8yzYLYs%2Co10v3zI2a2Q%2CkGIB1c5O-uA%2CpNhHMjhq5Rg%2CoVLAiIxMKBQ%2Caa1BhpB3mJ4%2C5A3-E4thrVY%2C5mydQYJKbVQ%2CKhlRUlBCXfE%2Cfgyu698-030%2Cmbewd7Bxdxc%2CizOKz5BKanw%2CPPeIRkGI1Zg%2C1DB-L19gygM%2CDPaxm5gWCDo%2CzoSgLMtnrQg%2C_K_sRYAv_7o%2CfcmPmuvlAzU%2C7_VXoMDRk0s%2CuZx2wp6yxiA&key=AIzaSyAQDA0rXgp9ApP0EwpxLhnVbAl7LIx-X_k&alt=json
+2026-03-07 02:20:19 INFO     TubeWrangler  Recebidos detalhes de 293 video(s).
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 7sF82we7O2A (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando H9q1RJ6D9yQ (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando DpC3OAgruKk (dur=33s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando u6C5AWkM588 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando YvTwS1fLc4w (dur=16s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando oz3pMFTRAVc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Du4Qyksmw8E (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando jDZdan9_AaI (dur=14s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando D5vRn29hnPI (dur=35s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando H8tcr8PAmL4 (dur=28s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando KBx_hO2lTPM (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando f-yEq833trc (dur=9s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando w6ckh5OGPTM (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando GPziPHpIwT0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando iZ3FdNSJQc0 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 86c-r5yL5lk (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Yl8cDddMHh8 (match='podcast')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando SOqiswtFP7Y (dur=33s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ooKal7OC4NQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando nj97xlyXmio (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando tD9ZPgs_jCY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 0o5dylmKTds (match='podcast')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 4p83h6ZXHj0 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 5jLPuS09XGg (dur=22s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando JbE5JRkI3DA (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ZJrDsjhLy7Y (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando yFwzMdg7ajo (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 1LUdg_IZ2e4 (dur=15s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando f3tsZARqTrg (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ZTOrAZM6ALk (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando cBDhZ51QS18 (dur=53s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando xYThvq65xws (dur=61s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando dGfsGFobTyc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 8jADNPpbNOc (dur=42s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5e005tzEYMc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando oVhQK6vg3ps (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando gEXo4jqGfjs (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando F8jB7XoV7jY (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando iEWjcWPLprU (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 5toIXvOTW5s (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando mY-kP5r6koE (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XbvEp2p1xvg (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 17Oluy2ce8g (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando lJf62TDZxps (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando q14-dX52hu0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:categoria] ignorando ITOtUqyzLHo (cat=24)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ACfGPvRMNis (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando cAxq0bozu80 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando pzzLiHKS4KU (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando qfi5wzDMhok (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando nqdWAc64uXs (dur=23s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando dhJWyOftagQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando gzQjjaLKdzY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando m79iy2WQhS0 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando yTpDprW8BPI (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 1U_6y1MvYdY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando TMSVssGTGsg (match='podcast')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando RxZykHUBPPQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando UcfpWG0tLhE (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando MjiL1_YyPYc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando RdYbAj8M_cQ (dur=33s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando k5aFeahqFNQ (dur=15s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Uyoz6vcYDj0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando A9SYES6NfHE (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando kvHaihCEUZw (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando R8jc3NpYXiE (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando phAFrxFu0mo (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 1Gw8pz__ETs (match='podcast')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 0U1Os5-vshs (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 0AvYzK5XNbM (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ZWEvekZgOkA (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando wElqqrR17Bo (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando wMpqwlpjEEs (dur=16s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando xHCrbXAMGHw (dur=30s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando RQ_9zQ_OvgE (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Vkd0a9rxReI (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando JPWiGzLf1wo (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando OC65JMwvyb8 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Q4rswxVwJsY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ImYtPKS7WyY (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando KEQUs7PuIIM (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 2KLN9u0g9p8 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 9X_fX9HovNM (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando y4Q4M29L5_c (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando SIB_JsUce8o (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando qhNoMvneADg (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando X0lyUMrKrCg (dur=42s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XKw1u3nS7QU (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando m45113tCDP8 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando J9BcGSNbGfQ (dur=46s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando iLv7Z78gups (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando cWcLFDv3ohQ (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando WL91OBRnShY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando sq4pfbxaSGQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Xe8ExZKCoMg (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2ZXf6m5LhFg (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VOiLDtM2gc4 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando q0IlW9epuds (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando MwLvtGymY3U (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando TDKbYkcgLmo (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando jXJn8_IqEPY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando d14LUbQZfvk (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7Vbw-DdO-Yc (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando N9HSitapZkA (dur=58s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando VB2yGTXAq-g (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XWGXlp0-TTQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 5nJy4okOuQs (dur=20s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando _392BEGcpf4 (dur=20s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2qoEajWbAC4 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 8iLwwuOHIpU (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando K0xBEUjbrfw (dur=41s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando UPlD9bfzPFk (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando KzBHcXKRxng (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VPBOdSdTEgI (match='podcast')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando kI7bYkDGWD0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando -5ImCrYNIvY (dur=13s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando bsNIqFvNkZI (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando yq-wOrDnmk8 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ROI_S-W0gHE (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando hG6Pa6cu7pA (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 1FzqjOz5x98 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5YduvimKPZU (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando fJRp4gtJnEs (dur=24s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando uwkchDr74FQ (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando hB-6v4YAYBE (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VIfo_dGf9aE (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando J_bFN4Hp3Z4 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando E_YddafsX5o (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando oIWyuRUZxgI (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando lH720hOQKl4 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando AJqMcl5eu6s (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando MUk4raulRok (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5oOFnRbrFSg (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando u3lKMlTIpv8 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando dd_LP-Ffwfk (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando lWmaF7r1u_I (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando m4hIOyZJvCY (dur=35s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando NoxmHwX5nGk (dur=16s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando DKMW7Q9fHuc (dur=60s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando e8M-K68O--8 (dur=50s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando G4Om-ikbz7g (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7vpS6-bvM2s (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando JUUm9nkyP20 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando r8ZT_CKXe7Y (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando d3KFKwr_lsc (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando BD4R4ZAj59g (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando cJOCkNSsDIY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando P7hoJLTdQqA (dur=18s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando G0sOT8cagWU (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando zD8Ggj1ea_E (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Hztq4m3dwu0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 6HWDsJEGhmc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando X2k-nuBB184 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 34GBX-2Aw3c (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 6iKqqILECRo (dur=53s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Ybaje1mFiF4 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando RIRGI3yIqQQ (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando IT09RLfT79Y (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando TgL4LSFSFaY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando c7pOO-yNM5M (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 6GZgN7HxrhA (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando tAagW2XW2iw (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando A3g9eBMekK0 (match='podcast')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 8bZPjV2gtsM (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando b7_o1BU_MwA (dur=41s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando ehszDUtqlGc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando pymTsVrj0zM (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando wo3gFyQqciY (dur=29s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando _a_wqwEvwjo (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 11cxxM_jWp0 (dur=61s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando ZNf3149hwYs (dur=61s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando VeKw82tKCdc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando U06TgqxpFD4 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Znn_J85ga5I (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 4mWXpi3ynF0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 47ub5rk0fF0 (dur=28s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando KP2IYUYxvPw (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando o_gMSaC3elY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ny45FZle0o4 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando EAvxMDodW5c (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando eV_CdcgY7F0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando tGXodLculHc (dur=23s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 3eaOiy2XyfU (dur=62s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando km502pxSHFY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando YZxtmwzqOhk (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando C2XM0XKDtAY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando OEn_-KvAm8M (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando wRDjPFAk-XU (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 7akrXJYMQS0 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando I9RDYDXrCy4 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 9DthezGFirQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando YSgvqtHC6vQ (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando VBKtBmGea4s (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando UEpsk6Mu4Fc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando z6j0vq5eTAc (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando _nD8nzBIEnU (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando hZZ9EGl5bwo (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando t3G5cYC0uf8 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 4GWUb-J_vwQ (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando GRBVFNbbbtw (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando _rOEi1lSH-I (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 8ZhaL1tIQOw (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 9FcDQ8SXNP4 (dur=14s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando u66_D3j_0pQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 4_9OdaarC-s (dur=16s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando dVUJqlZfpQg (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando o4nivXiBSfw (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando ZpucwM3ab6Y (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando XZc9g2vlJgY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Qk11qNE22C0 (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2R_KVd0Zrao (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando CShELin2BIM (dur=20s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando c1kKwZ2BJdk (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando auBwfiQUZsM (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 53tFB0LrB0E (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando NdsgKoUP3Vo (match='podcast')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 75eGbCRscKk (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando g6vOe8LayZM (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Rd7mVNqwshw (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando eGSXo5RbcCI (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando _fadFTWqsIM (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando Hm0OhZ0DFMQ (dur=45s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando bgLyh7hw0no (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando Y41ie9UnDTI (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando fRjHq9Enw70 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando RdmSSKChbk4 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando Mu_pDrtXfuo (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando iXVrM0KxqqE (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando AgvpE8aNIA0 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando rnYUd_4PJTI (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 8Tr3diTAtas (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando niWLQ4T8Pl4 (dur=25s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7iESgr_SSws (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 2CJ8A60oGXY (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando C7Wq8yzYLYs (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando kGIB1c5O-uA (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando oVLAiIxMKBQ (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando aa1BhpB3mJ4 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando 5A3-E4thrVY (dur=25s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando 5mydQYJKbVQ (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando KhlRUlBCXfE (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando fgyu698-030 (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando mbewd7Bxdxc (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-duracao] ignorando izOKz5BKanw (dur=12s <= max=62s)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando PPeIRkGI1Zg (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 1DB-L19gygM (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando DPaxm5gWCDo (match='#shorts')
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando zoSgLMtnrQg (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:vod-puro] descartando 7_VXoMDRk0s (nunca foi live/upcoming)
+2026-03-07 02:20:19 DEBUG    TubeWrangler  [filtro:shorts-palavra] ignorando uZx2wp6yxiA (match='podcast')
+2026-03-07 02:20:19 INFO     TubeWrangler  Update Streams: +0 upd=43 | ign categoria=1 shorts(palavra)=114 shorts(dur)=45 vod-puro=90
+2026-03-07 02:20:19 INFO     TubeWrangler  Status Verificação Principal: 57 streams — 1 live, 47 upcoming, 9 vod/ended
+2026-03-07 02:20:19 DEBUG    TubeWrangler  textosepg.json: 47 entradas geradas
+2026-03-07 02:20:19 INFO     TubeWrangler  --- Scheduler: 1 live PÓS-EVENTO ---
+2026-03-07 02:20:19 INFO     TubeWrangler  Buscando detalhes para 1 video(s) específicos... (em batches)
+2026-03-07 02:20:19 INFO     googleapiclient.discovery_cache  file_cache is only supported with oauth2client<4.0.0
+2026-03-07 02:20:19 DEBUG    TubeWrangler  YouTubeAPI: usando chave [2/2]
+2026-03-07 02:20:19 DEBUG    googleapiclient.discovery  URL being requested: GET https://youtube.googleapis.com/youtube/v3/videos?part=snippet%2CliveStreamingDetails%2CcontentDetails&id=iogAIcMgDdE&key=AIzaSyAohOUN_bQb36AxIptttfu5-vKAH0PBRFk&alt=json
+2026-03-07 02:20:20 INFO     TubeWrangler  Recebidos detalhes de 1 video(s).
+2026-03-07 02:20:20 INFO     TubeWrangler  Update Streams: +0 upd=1 | ign categoria=0 shorts(palavra)=0 shorts(dur)=0 vod-puro=0
+2026-03-07 02:20:20 INFO     TubeWrangler  Status Verificação Alta Frequência: 57 streams — 1 live, 47 upcoming, 9 vod/ended
+2026-03-07 02:20:20 DEBUG    TubeWrangler  textosepg.json: 47 entradas geradas
+2026-03-07 02:20:20 INFO     TubeWrangler  [VodVerifier] Health check loop iniciado.
+2026-03-07 02:20:20 DEBUG    TubeWrangler  [VodVerifier] Health check: próxima verificação em 3600s.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8888 (Press CTRL+C to quit)
-2026-03-07 02:09:00 INFO     TubeWrangler  [RKCaYI5DKrU] nova conexao proxy  client=1772860140772_4595  ip=127.0.0.1
-2026-03-07 02:09:00 INFO     uvicorn.access  127.0.0.1:39590 - "HEAD /api/proxy/RKCaYI5DKrU HTTP/1.1" 307
-2026-03-07 02:09:09 INFO     uvicorn.access  127.0.0.1:57206 - "HEAD /api/vod/RKCaYI5DKrU HTTP/1.1" 500
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 107, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
-    raise exc
-  File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/middleware/sessions.py", line 85, in __call__
-    await self.app(scope, receive, send_wrapper)
-  File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 716, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 736, in app
-    await route.handle(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 290, in handle
-    await self.app(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 78, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 75, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "/app/web/main.py", line 1510, in api_vod_stream
-    req = Request(upstream_url, headers=headers)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: Request.__init__() got an unexpected keyword argument 'headers'
-^Croot@master2:~# ^C
-root@master2:~# docker exec -it tubewranglerr bash
-root@3fa8b3c3e3ae:/app# curl -s http://localhost:8888/playlist/vod-proxy.m3u | head -n 40
-#EXTM3U
-#EXTINF:-1 tvg-id="vqoy5GtM7Ws" tvg-name="GOAT PÓS-JOGO DE BAYERN X GLADBACH PELA BUNDESLIGA | CENTRAL DO ALEMÃO" tvg-logo="http://localhost:8888/api/thumbnail/vqoy5GtM7Ws" group-title="17",GOAT PÓS-JOGO DE BAYERN X GLADBACH PELA BUNDESLIGA | CENTRAL DO ALEMÃO
-http://localhost:8888/api/vod/vqoy5GtM7Ws
-#EXTINF:-1 tvg-id="pNhHMjhq5Rg" tvg-name="GOAT BAYERN DE MUNIQUE X BORUSSIA MONCHENGLADBACH | BUNDESLIGA | E" tvg-logo="http://localhost:8888/api/thumbnail/pNhHMjhq5Rg" group-title="17",GOAT BAYERN DE MUNIQUE X BORUSSIA MONCHENGLADBACH | BUNDESLIGA | E
-http://localhost:8888/api/vod/pNhHMjhq5Rg
-#EXTINF:-1 tvg-id="VOa-hYdV-iM" tvg-name="GE TV DESPORTIVA FERROVIÁRIA X SPORT | COPA DO BRASIL |" tvg-logo="http://localhost:8888/api/thumbnail/VOa-hYdV-iM" group-title="17",GE TV DESPORTIVA FERROVIÁRIA X SPORT | COPA DO BRASIL |
-http://localhost:8888/api/vod/VOa-hYdV-iM
-#EXTINF:-1 tvg-id="8leCUmO3Dl8" tvg-name="TNT Sports JARDIM APRESENTADO E BOTO DE SAÍDA? FINAIS DOS ESTADUAIS PAULISTA, CARIOCA... | DE PLACA 06/03/26" tvg-logo="http://localhost:8888/api/thumbnail/8leCUmO3Dl8" group-title="17",TNT Sports JARDIM APRESENTADO E BOTO DE SAÍDA? FINAIS DOS ESTADUAIS PAULISTA, CARIOCA... | DE PLACA 06/03/26
-http://localhost:8888/api/vod/8leCUmO3Dl8
-#EXTINF:-1 tvg-id="OzwJGFBiZVs" tvg-name="TNT Sports JARDIM CHEGA E BOTO FALA SOBRE DEMISSÃO DO FILIPE ENDRICK CRITICADO NA FRANÇA FINAL DO PAULISTÃO" tvg-logo="http://localhost:8888/api/thumbnail/OzwJGFBiZVs" group-title="17",TNT Sports JARDIM CHEGA E BOTO FALA SOBRE DEMISSÃO DO FILIPE ENDRICK CRITICADO NA FRANÇA FINAL DO PAULISTÃO
-http://localhost:8888/api/vod/OzwJGFBiZVs
-#EXTINF:-1 tvg-id="mo-IeCDP1hg" tvg-name="ESPN Brasil AMISTOSOS DA SELEÇÃO BRASILEIRA E EXCLUSIVA COM A INGRYD LIMA, DO PALMEIRAS | MINA DE PASSE" tvg-logo="http://localhost:8888/api/thumbnail/mo-IeCDP1hg" group-title="17",ESPN Brasil AMISTOSOS DA SELEÇÃO BRASILEIRA E EXCLUSIVA COM A INGRYD LIMA, DO PALMEIRAS | MINA DE PASSE
-http://localhost:8888/api/vod/mo-IeCDP1hg
-#EXTINF:-1 tvg-id="FnzogMobxHI" tvg-name="ESPN Brasil LEONARDO JARDIM ESTREIA EM FLA-FLU | DECISÕES E CLÁSSICOS PELO BRASIL | NEGUERE É O NOSSO CONVIDADO" tvg-logo="http://localhost:8888/api/thumbnail/FnzogMobxHI" group-title="17",ESPN Brasil LEONARDO JARDIM ESTREIA EM FLA-FLU | DECISÕES E CLÁSSICOS PELO BRASIL | NEGUERE É O NOSSO CONVIDADO
-http://localhost:8888/api/vod/FnzogMobxHI
-#EXTINF:-1 tvg-id="RKCaYI5DKrU" tvg-name="CazéTV VEJA COMO FOI ALEMANHA X ARGENTINA NA COPA DO MUNDO DE FIFA DE 2010 | RECOPANDO" tvg-logo="http://localhost:8888/api/thumbnail/RKCaYI5DKrU" group-title="17",CazéTV VEJA COMO FOI ALEMANHA X ARGENTINA NA COPA DO MUNDO DE FIFA DE 2010 | RECOPANDO
-http://localhost:8888/api/vod/RKCaYI5DKrU
-#EXTINF:-1 tvg-id="Y88g2MxT6Fo" tvg-name="CazéTV PSG X MÔNACO | LIGUE 1 2025/2026 | 25ª RODADA" tvg-logo="http://localhost:8888/api/thumbnail/Y88g2MxT6Fo" group-title="17",CazéTV PSG X MÔNACO | LIGUE 1 2025/2026 | 25ª RODADA
-http://localhost:8888/apcurl -I http://localhost:8888/api/proxy/RKCaYI5DKrUtp://localhost:8888/api/proxy/RKCaYI5DKrU
-HTTP/1.1 307 Temporary Redirect
-date: Sat, 07 Mar 2026 05:10:23 GMT
-server: uvicorn
-content-length: 0
-location: /api/vod/RKCaYI5DKrU
-
-root@3fa8b3c3e3ae:/app# curl -I http://localhost:8888/api/vod/RKCaYI5DKrU
-HTTP/1.1 500 Internal Server Error
-date: Sat, 07 Mar 2026 05:10:28 GMT
-server: uvicorn
-content-length: 21
-content-type: text/plain; charset=utf-8
-
-root@3fa8b3c3e3ae:/app# curl -s http://localhost:8888/playlist/vod-proxy.m3u | head -n 40
-#EXTM3U
-#EXTINF:-1 tvg-id="vqoy5GtM7Ws" tvg-name="GOAT PÓS-JOGO DE BAYERN X GLADBACH PELA BUNDESLIGA | CENTRAL DO ALEMÃO" tvg-logo="http://localhost:8888/api/thumbnail/vqoy5GtM7Ws" group-title="17",GOAT PÓS-JOGO DE BAYERN X GLADBACH PELA BUNDESLIGA | CENTRAL DO ALEMÃO
-http://localhost:8888/api/vod/vqoy5GtM7Ws
-#EXTINF:-1 tvg-id="pNhHMjhq5Rg" tvg-name="GOAT BAYERN DE MUNIQUE X BORUSSIA MONCHENGLADBACH | BUNDESLIGA | E" tvg-logo="http://localhost:8888/api/thumbnail/pNhHMjhq5Rg" group-title="17",GOAT BAYERN DE MUNIQUE X BORUSSIA MONCHENGLADBACH | BUNDESLIGA | E
-http://localhost:8888/api/vod/pNhHMjhq5Rg
-#EXTINF:-1 tvg-id="VOa-hYdV-iM" tvg-name="GE TV DESPORTIVA FERROVIÁRIA X SPORT | COPA DO BRASIL |" tvg-logo="http://localhost:8888/api/thumbnail/VOa-hYdV-iM" group-title="17",GE TV DESPORTIVA FERROVIÁRIA X SPORT | COPA DO BRASIL |
-http://localhost:8888/api/vod/VOa-hYdV-iM
-#EXTINF:-1 tvg-id="8leCUmO3Dl8" tvg-name="TNT Sports JARDIM APRESENTADO E BOTO DE SAÍDA? FINAIS DOS ESTADUAIS PAULISTA, CARIOCA... | DE PLACA 06/03/26" tvg-logo="http://localhost:8888/api/thumbnail/8leCUmO3Dl8" group-title="17",TNT Sports JARDIM APRESENTADO E BOTO DE SAÍDA? FINAIS DOS ESTADUAIS PAULISTA, CARIOCA... | DE PLACA 06/03/26
-http://localhost:8888/api/vod/8leCUmO3Dl8
-#EXTINF:-1 tvg-id="OzwJGFBiZVs" tvg-name="TNT Sports JARDIM CHEGA E BOTO FALA SOBRE DEMISSÃO DO FILIPE ENDRICK CRITICADO NA FRANÇA FINAL DO PAULISTÃO" tvg-logo="http://localhost:8888/api/thumbnail/OzwJGFBiZVs" group-title="17",TNT Sports JARDIM CHEGA E BOTO FALA SOBRE DEMISSÃO DO FILIPE ENDRICK CRITICADO NA FRANÇA FINAL DO PAULISTÃO
-http://localhost:8888/api/vod/OzwJGFBiZVs
-#EXTINF:-1 tvg-id="mo-IeCDP1hg" tvg-name="ESPN Brasil AMISTOSOS DA SELEÇÃO BRASILEIRA E EXCLUSIVA COM A INGRYD LIMA, DO PALMEIRAS | MINA DE PASSE" tvg-logo="http://localhost:8888/api/thumbnail/mo-IeCDP1hg" group-title="17",ESPN Brasil AMISTOSOS DA SELEÇÃO BRASILEIRA E EXCLUSIVA COM A INGRYD LIMA, DO PALMEIRAS | MINA DE PASSE
-http://localhost:8888/api/vod/mo-IeCDP1hg
-#EXTINF:-1 tvg-id="FnzogMobxHI" tvg-name="ESPN Brasil LEONARDO JARDIM ESTREIA EM FLA-FLU | DECISÕES E CLÁSSICOS PELO BRASIL | NEGUERE É O NOSSO CONVIDADO" tvg-logo="http://localhost:8888/api/thumbnail/FnzogMobxHI" group-title="17",ESPN Brasil LEONARDO JARDIM ESTREIA EM FLA-FLU | DECISÕES E CLÁSSICOS PELO BRASIL | NEGUERE É O NOSSO CONVIDADO
-http://localhost:8888/api/vod/FnzogMobxHI
-#EXTINF:-1 tvg-id="RKCaYI5DKrU" tvg-name="CazéTV VEJA COMO FOI ALEMANHA X ARGENTINA NA COPA DO MUNDO DE FIFA DE 2010 | RECOPANDO" tvg-logo="http://localhost:8888/api/thumbnail/RKCaYI5DKrU" group-title="17",CazéTV VEJA COMO FOI ALEMANHA X ARGENTINA NA COPA DO MUNDO DE FIFA DE 2010 | RECOPANDO
-http://localhost:8888/api/vod/RKCaYI5DKrU
-#EXTINF:-1 tvg-id="Y88g2MxT6Fo" tvg-name="CazéTV PSG X MÔNACO | LIGUE 1 2025/2026 | 25ª RODADA" tvg-logo="http://localhost:8888/api/thumbnail/Y88g2MxT6Fo" group-title="17",CazéTV PSG X MÔNACO | LIGUE 1 2025/2026 | 25ª RODADA
-http://localhost:8888/apgrep -n "/api/vod/" /app/web/main.pyapp# grep -n "/api/vod/" /app/web/main.py
-grep -n 'mode == "vod"' /app/core/playlist_builder.py
-grep -n "api/vod" /app/core/playlist_builder.py
-1350:            return RedirectResponse(f"/api/vod/{video_id}", status_code=307)
-1561:app.routes.append(Route("/api/vod/{video_id}", endpoint=api_vod_stream))
-1573:        return RedirectResponse(f"/api/vod/{video_id}", status_code=307)
-223:        elif mode == "vod":
-274:                if mode == "vod":
-275:                    url = f"{base_url}/api/vod/{vid}" if base_url else f"/api/vod/{vid}"
+2026-03-07 02:20:21 INFO     uvicorn.access  192.168.20.1:52046 - "GET /playlist HTTP/1.1" 200
+2026-03-07 02:20:22 INFO     uvicorn.access  192.168.20.1:52046 - "GET /favicon.ico HTTP/1.1" 404
+2026-03-07 02:20:24 INFO     uvicorn.access  192.168.20.1:52046 - "GET /logs HTTP/1.1" 200
+2026-03-07 02:20:28 INFO     TubeWrangler  Ocultar logs de acesso HTTP: False
+2026-03-07 02:20:28 INFO     uvicorn.access  192.168.20.1:59138 - "POST /api/logs/hide-access HTTP/1.1" 200
+2026-03-07 02:20:28 INFO     TubeWrangler  Ocultar logs de acesso HTTP: True
+2026-03-07 02:20:28 INFO     uvicorn.access  192.168.20.1:59138 - "POST /api/logs/hide-access HTTP/1.1" 200
+2026-03-07 02:20:29 INFO     TubeWrangler.proxy  Modo debug de streaming: DESATIVADO
+2026-03-07 02:20:29 INFO     TubeWrangler  Debug de streaming: DESATIVADO
+2026-03-07 02:20:29 INFO     uvicorn.access  192.168.20.1:59138 - "POST /api/logs/streaming-debug HTTP/1.1" 200
+2026-03-07 02:20:29 INFO     TubeWrangler.proxy  Modo debug de streaming: ATIVADO
+2026-03-07 02:20:29 INFO     TubeWrangler  Debug de streaming: ATIVADO
+2026-03-07 02:20:29 INFO     uvicorn.access  192.168.20.1:59138 - "POST /api/logs/streaming-debug HTTP/1.1" 200
+2026-03-07 02:20:34 INFO     uvicorn.access  192.168.20.1:59138 - "GET /playlist HTTP/1.1" 200
+2026-03-07 02:20:36 INFO     uvicorn.access  192.168.20.1:59138 - "GET /canais HTTP/1.1" 200
+2026-03-07 02:20:37 INFO     uvicorn.access  192.168.20.1:59138 - "GET /eventos HTTP/1.1" 200
+2026-03-07 02:20:39 INFO     uvicorn.access  192.168.20.1:59138 - "GET /playlist HTTP/1.1" 200
+2026-03-07 02:20:51 DEBUG    TubeWrangler  M3U [live/proxy]: 1 entradas geradas
+2026-03-07 02:20:51 INFO     uvicorn.access  192.168.20.1:53624 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-07 02:20:51 INFO     TubeWrangler  [iogAIcMgDdE] nova conexao proxy  client=1772860851243_4497  ip=192.168.20.1
+2026-03-07 02:20:51 INFO     TubeWrangler  [iogAIcMgDdE] iniciando stream  status='live'  url=https://www.youtube.com/watch?v=iogAIcMgDdE
+2026-03-07 02:20:51 DEBUG    TubeWrangler.player_router  [iogAIcMgDdE] modo live -> streamlink
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] processo iniciado  PID=30
+2026-03-07 02:20:51 DEBUG    TubeWrangler.proxy  [iogAIcMgDdE] cmd completo: streamlink --no-config --no-plugin-sideloading --http-no-ssl-verify --loglevel debug --stdout https://www.youtube.com/watch?v=iogAIcMgDdE best
+2026-03-07 02:20:51 INFO     TubeWrangler  [iogAIcMgDdE] stream proxy iniciado
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][info] streamlink is running as root! Be careful!
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] OS:         Linux-6.1.0-41-amd64-x86_64-with-glibc2.41
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] Python:     3.12.13
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] OpenSSL:    OpenSSL 3.5.4 30 Sep 2025
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] Streamlink: 8.2.1
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] Dependencies:
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  certifi: 2026.2.25
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  isodate: 0.7.2
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  lxml: 6.0.2
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  pycountry: 26.2.16
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  pycryptodome: 3.23.0
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  PySocks: 1.7.1
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  requests: 2.32.5
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  trio: 0.33.0
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  trio-websocket: 0.12.2
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  typing-extensions: 4.15.0
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  urllib3: 2.6.3
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  websocket-client: 1.9.0
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] Arguments:
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  url=https://www.youtube.com/watch?v=iogAIcMgDdE
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  stream=['best']
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  --no-config=True
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  --loglevel=debug
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  --no-plugin-sideloading=True
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  --stdout=True
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug]  --http-no-ssl-verify=False
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [session][debug] Loading plugin: youtube
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][info] Found matching plugin youtube for URL https://www.youtube.com/watch?v=iogAIcMgDdE
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'www.youtube.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'www.youtube.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [plugins.youtube][debug] Using video ID: iogAIcMgDdE
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [plugins.youtube][debug] This video is live.
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [utils.l10n][debug] Language code: en_US
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][info] Available streams: 144p (worst), 240p, 360p, 480p, 720p60, 1080p60 (best)
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][info] Opening stream: 1080p60 (hls)
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] Pre-buffering 8192 bytes
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] First Sequence: 1507; Last Sequence: 1522
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Start offset: 0; Duration: 0.0; Start Sequence: 1520; End Sequence: None
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1520, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1521, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1522, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1520 to output
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1520 complete
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][debug] Writing stream to output
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=50 chunks=50 MB=3.12 rate=24.4chunks/s
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=100 chunks=100 MB=6.25 rate=48.8chunks/s
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 100 chunks lidos (6.25 MB)
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] cliente conectado: 1772860851243_4497 (192.168.20.1)  total=1
+2026-03-07 02:20:53 INFO     uvicorn.access  192.168.20.1:53625 - "GET /api/proxy/iogAIcMgDdE HTTP/1.1" 200
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1521 to output
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=150 chunks=150 MB=9.38 rate=70.0chunks/s
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1521 complete
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=200 chunks=200 MB=12.50 rate=93.3chunks/s
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 200 chunks lidos (12.50 MB)
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1522 to output
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1522 complete
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=250 chunks=200 MB=12.50 rate=112.1chunks/s
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=300 chunks=200 MB=12.50 rate=134.5chunks/s
+2026-03-07 02:20:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 300 chunks lidos (18.75 MB)
+2026-03-07 02:20:54 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:20:54 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:54 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1523, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1524, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1523 to output
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1523 complete
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=350 chunks=200 MB=12.50 rate=91.3chunks/s
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=400 chunks=200 MB=12.50 rate=104.3chunks/s
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 400 chunks lidos (25.00 MB)
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1524 to output
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1524 complete
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=450 chunks=200 MB=12.50 rate=115.0chunks/s
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=500 chunks=200 MB=12.50 rate=127.7chunks/s
+2026-03-07 02:20:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 500 chunks lidos (31.25 MB)
+2026-03-07 02:20:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:20:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1525, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:57 DEBUG    TubeWrangler  M3U [live/proxy]: 1 entradas geradas
+2026-03-07 02:20:57 INFO     uvicorn.access  192.168.20.1:53626 - "GET /playlist/live-proxy.m3u HTTP/1.1" 200
+2026-03-07 02:20:57 INFO     TubeWrangler  [iogAIcMgDdE] nova conexao proxy  client=1772860857052_1366  ip=192.168.20.1
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] cliente conectado: 1772860857052_1366 (192.168.20.1)  total=2
+2026-03-07 02:20:57 INFO     uvicorn.access  192.168.20.1:53627 - "GET /api/proxy/iogAIcMgDdE HTTP/1.1" 200
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1525 to output
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1525 complete
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=550 chunks=200 MB=12.50 rate=94.3chunks/s
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=600 chunks=200 MB=12.50 rate=102.8chunks/s
+2026-03-07 02:20:57 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 600 chunks lidos (37.50 MB)
+2026-03-07 02:20:58 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:20:58 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:58 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:59 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1526, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:20:59 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:20:59 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:20:59 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1526 to output
+2026-03-07 02:20:59 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1526 complete
+2026-03-07 02:20:59 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=650 chunks=200 MB=12.50 rate=83.1chunks/s
+2026-03-07 02:21:00 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:00 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:00 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:01 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:01 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:01 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:02 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:02 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:02 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1527, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1527 to output
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1527 complete
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=700 chunks=200 MB=12.50 rate=59.0chunks/s
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 700 chunks lidos (43.75 MB)
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=750 chunks=200 MB=12.50 rate=63.2chunks/s
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=800 chunks=200 MB=12.50 rate=67.4chunks/s
+2026-03-07 02:21:03 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 800 chunks lidos (50.00 MB)
+2026-03-07 02:21:04 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:04 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:04 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1528, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1528 to output
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1528 complete
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=850 chunks=200 MB=12.50 rate=61.3chunks/s
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=900 chunks=200 MB=12.50 rate=64.9chunks/s
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 900 chunks lidos (56.25 MB)
+2026-03-07 02:21:05 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=950 chunks=200 MB=12.50 rate=68.5chunks/s
+2026-03-07 02:21:06 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:06 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:06 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1529, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1529 to output
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1529 complete
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1000 chunks=200 MB=12.50 rate=63.0chunks/s
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1000 chunks lidos (62.50 MB)
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1050 chunks=200 MB=12.50 rate=66.2chunks/s
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1100 chunks=200 MB=12.50 rate=69.3chunks/s
+2026-03-07 02:21:07 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1100 chunks lidos (68.75 MB)
+2026-03-07 02:21:08 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:08 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:08 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1530, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1530 to output
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1530 complete
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1150 chunks=200 MB=12.50 rate=64.4chunks/s
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1200 chunks=200 MB=12.50 rate=67.2chunks/s
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1200 chunks lidos (75.00 MB)
+2026-03-07 02:21:09 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1250 chunks=200 MB=12.50 rate=70.0chunks/s
+2026-03-07 02:21:10 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:10 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:10 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1531, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1531 to output
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1531 complete
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1300 chunks=200 MB=12.50 rate=65.4chunks/s
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1300 chunks lidos (81.25 MB)
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1350 chunks=200 MB=12.50 rate=67.9chunks/s
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1400 chunks=200 MB=12.50 rate=70.4chunks/s
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1400 chunks lidos (87.50 MB)
+2026-03-07 02:21:11 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1450 chunks=200 MB=12.50 rate=72.9chunks/s
+2026-03-07 02:21:12 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:12 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:12 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1532, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1532 to output
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1532 complete
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1500 chunks=200 MB=12.50 rate=68.6chunks/s
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1500 chunks lidos (93.75 MB)
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1550 chunks=200 MB=12.50 rate=70.9chunks/s
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1600 chunks=200 MB=12.50 rate=73.2chunks/s
+2026-03-07 02:21:13 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1600 chunks lidos (100.00 MB)
+2026-03-07 02:21:14 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:14 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:14 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:15 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1533, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:15 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:15 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:15 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1533 to output
+2026-03-07 02:21:15 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1533 complete
+2026-03-07 02:21:15 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1650 chunks=200 MB=12.50 rate=69.2chunks/s
+2026-03-07 02:21:16 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:16 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:16 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1534, init=False, discontinuity=False, duration=1.969, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1534 to output
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1534 complete
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1700 chunks=200 MB=12.50 rate=65.8chunks/s
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1700 chunks lidos (106.25 MB)
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1750 chunks=200 MB=12.50 rate=67.7chunks/s
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1800 chunks=200 MB=12.50 rate=69.7chunks/s
+2026-03-07 02:21:17 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1800 chunks lidos (112.50 MB)
+2026-03-07 02:21:18 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:18 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:18 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1535, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1535 to output
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1535 complete
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1850 chunks=200 MB=12.50 rate=66.4chunks/s
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1900 chunks=200 MB=12.50 rate=68.2chunks/s
+2026-03-07 02:21:19 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 1900 chunks lidos (118.75 MB)
+2026-03-07 02:21:20 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:20 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:20 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1536, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1537, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1536 to output
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1536 complete
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=1950 chunks=200 MB=12.50 rate=65.3chunks/s
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2000 chunks=200 MB=12.50 rate=66.9chunks/s
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2000 chunks lidos (125.00 MB)
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1537 to output
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1537 complete
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2050 chunks=200 MB=12.50 rate=68.4chunks/s
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2100 chunks=200 MB=12.50 rate=70.1chunks/s
+2026-03-07 02:21:21 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2100 chunks lidos (131.25 MB)
+2026-03-07 02:21:22 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:22 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:22 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:23 INFO     TubeWrangler.proxy  [iogAIcMgDdE] cliente desconectado: 1772860857052_1366  duração=26.3s  MB=3.23  restantes=1  kbps=125.6
+2026-03-07 02:21:23 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:23 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:23 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:24 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:24 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:24 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1538, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1538 to output
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1538 complete
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2150 chunks=200 MB=12.50 rate=63.5chunks/s
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2200 chunks=200 MB=12.50 rate=65.0chunks/s
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2200 chunks lidos (137.50 MB)
+2026-03-07 02:21:25 INFO     TubeWrangler.proxy  [iogAIcMgDdE] cliente desconectado: 1772860851243_4497  duração=32.6s  MB=5.44  restantes=0  kbps=170.7
+2026-03-07 02:21:26 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:26 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:26 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1539, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1539 to output
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1539 complete
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2250 chunks=200 MB=12.50 rate=62.7chunks/s
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2300 chunks=200 MB=12.50 rate=64.1chunks/s
+2026-03-07 02:21:27 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2300 chunks lidos (143.75 MB)
+2026-03-07 02:21:28 DEBUG    TubeWrangler  M3U [vod]: 9 candidatos -> 9 apos max_per_ch
+2026-03-07 02:21:28 DEBUG    TubeWrangler  M3U [vod/proxy]: 9 entradas geradas
+2026-03-07 02:21:28 INFO     uvicorn.access  192.168.20.1:53628 - "GET /playlist/vod-proxy.m3u HTTP/1.1" 200
+2026-03-07 02:21:28 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:28 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:28 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1540, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1540 to output
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1540 complete
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2350 chunks=200 MB=12.50 rate=62.1chunks/s
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2400 chunks=200 MB=12.50 rate=63.4chunks/s
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2400 chunks lidos (150.00 MB)
+2026-03-07 02:21:29 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2450 chunks=200 MB=12.50 rate=64.7chunks/s
+2026-03-07 02:21:30 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:30 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:30 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1541, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:31 INFO     uvicorn.access  192.168.20.1:53629 - "GET /api/vod/vqoy5GtM7Ws HTTP/1.1" 206
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1541 to output
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1541 complete
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2500 chunks=200 MB=12.50 rate=62.7chunks/s
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2500 chunks lidos (156.25 MB)
+2026-03-07 02:21:31 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2550 chunks=200 MB=12.50 rate=64.0chunks/s
+2026-03-07 02:21:31 DEBUG    TubeWrangler  M3U [vod]: 9 candidatos -> 9 apos max_per_ch
+2026-03-07 02:21:31 DEBUG    TubeWrangler  M3U [vod/proxy]: 9 entradas geradas
+2026-03-07 02:21:31 INFO     uvicorn.access  192.168.20.1:53630 - "GET /playlist/vod-proxy.m3u HTTP/1.1" 200
+2026-03-07 02:21:32 INFO     uvicorn.access  192.168.20.1:53631 - "GET /api/vod/vqoy5GtM7Ws HTTP/1.1" 206
+2026-03-07 02:21:32 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:32 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:32 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1542, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1542 to output
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1542 complete
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2600 chunks=200 MB=12.50 rate=62.1chunks/s
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2600 chunks lidos (162.50 MB)
+2026-03-07 02:21:33 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2650 chunks=200 MB=12.50 rate=63.3chunks/s
+2026-03-07 02:21:34 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:34 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:34 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1543, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1543 to output
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1543 complete
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2700 chunks=200 MB=12.50 rate=61.6chunks/s
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2700 chunks lidos (168.75 MB)
+2026-03-07 02:21:35 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2750 chunks=200 MB=12.50 rate=62.7chunks/s
+2026-03-07 02:21:36 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:36 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:36 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1544, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1544 to output
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1544 complete
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2800 chunks=200 MB=12.50 rate=61.1chunks/s
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2800 chunks lidos (175.00 MB)
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2850 chunks=200 MB=12.50 rate=62.1chunks/s
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2900 chunks=200 MB=12.50 rate=63.2chunks/s
+2026-03-07 02:21:37 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 2900 chunks lidos (181.25 MB)
+2026-03-07 02:21:38 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:38 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:38 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1545, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1545 to output
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1545 complete
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=2950 chunks=200 MB=12.50 rate=61.6chunks/s
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3000 chunks=200 MB=12.50 rate=62.6chunks/s
+2026-03-07 02:21:39 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3000 chunks lidos (187.50 MB)
+2026-03-07 02:21:40 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:40 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:40 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1546, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1546 to output
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1546 complete
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3050 chunks=200 MB=12.50 rate=61.1chunks/s
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3100 chunks=200 MB=12.50 rate=62.1chunks/s
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3100 chunks lidos (193.75 MB)
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3150 chunks=200 MB=12.50 rate=63.1chunks/s
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3200 chunks=200 MB=12.50 rate=64.1chunks/s
+2026-03-07 02:21:41 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3200 chunks lidos (200.00 MB)
+2026-03-07 02:21:42 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:42 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:42 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:43 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1547, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:43 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:43 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:43 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1547 to output
+2026-03-07 02:21:43 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1547 complete
+2026-03-07 02:21:43 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3250 chunks=200 MB=12.50 rate=62.7chunks/s
+2026-03-07 02:21:44 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:44 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:44 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1548, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1548 to output
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1548 complete
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3300 chunks=200 MB=12.50 rate=61.3chunks/s
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3300 chunks lidos (206.25 MB)
+2026-03-07 02:21:45 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3350 chunks=200 MB=12.50 rate=62.2chunks/s
+2026-03-07 02:21:46 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:46 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:46 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1549, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1549 to output
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1549 complete
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3400 chunks=200 MB=12.50 rate=60.9chunks/s
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3400 chunks lidos (212.50 MB)
+2026-03-07 02:21:47 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3450 chunks=200 MB=12.50 rate=61.8chunks/s
+2026-03-07 02:21:48 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:48 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:48 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:49 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1550, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:49 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:49 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:49 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1550 to output
+2026-03-07 02:21:49 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1550 complete
+2026-03-07 02:21:49 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3500 chunks=200 MB=12.50 rate=60.5chunks/s
+2026-03-07 02:21:49 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3500 chunks lidos (218.75 MB)
+2026-03-07 02:21:50 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:50 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:50 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1551, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1551 to output
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1551 complete
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3550 chunks=200 MB=12.50 rate=59.3chunks/s
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3600 chunks=200 MB=12.50 rate=60.2chunks/s
+2026-03-07 02:21:51 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3600 chunks lidos (225.00 MB)
+2026-03-07 02:21:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:52 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1552, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1552 to output
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1552 complete
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3650 chunks=200 MB=12.50 rate=59.0chunks/s
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3700 chunks=200 MB=12.50 rate=59.8chunks/s
+2026-03-07 02:21:53 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3700 chunks lidos (231.25 MB)
+2026-03-07 02:21:54 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Reloading playlist
+2026-03-07 02:21:54 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'manifest.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:54 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Queuing HLSSegment(num=1553, init=False, discontinuity=False, duration=2.002, title=None, key=None, byterange=None, date=None, map=None, fileext='ts')
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [warnings][insecurerequestwarning] Unverified HTTPS request is being made to host 'rr2---sn-b8u-jfcr.googlevideo.com'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr:   /usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Writing segment 1553 to output
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.hls][debug] Segment 1553 complete
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3750 chunks=200 MB=12.50 rate=58.7chunks/s
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 📊 Buffer: index=3800 chunks=200 MB=12.50 rate=59.5chunks/s
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] 💾 stdout thread: 3800 chunks lidos (237.50 MB)
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Closing worker thread
+2026-03-07 02:21:55 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [stream.segmented][debug] Closing writer thread
+2026-03-07 02:21:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][info] Stream ended
+2026-03-07 02:21:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: Interrupted! Exiting...
+2026-03-07 02:21:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stderr: [cli][info] Closing currently open stream...
+2026-03-07 02:21:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] stdout encerrado (index=3821)
+2026-03-07 02:21:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] processo encerrado  PID=30
+2026-03-07 02:21:56 INFO     TubeWrangler.proxy  [iogAIcMgDdE] recursos liberados
+2026-03-07 02:22:06 INFO     uvicorn.access  192.168.20.1:53635 - "GET /api/vod/OzwJGFBiZVs HTTP/1.1" 206
+2026-03-07 02:22:11 INFO     uvicorn.access  192.168.20.1:53636 - "GET /api/vod/FnzogMobxHI HTTP/1.1" 206
+2026-03-07 02:23:05 INFO     uvicorn.access  192.168.20.1:53643 - "GET /api/vod/FnzogMobxHI HTTP/1.1" 206
+2026-03-07 02:23:36 INFO     uvicorn.access  192.168.20.1:53644 - "GET /api/vod/8leCUmO3Dl8 HTTP/1.1" 206
+2026-03-07 02:23:38 INFO     uvicorn.access  192.168.20.1:53651 - "GET /api/vod/8leCUmO3Dl8 HTTP/1.1" 416
+2026-03-07 02:23:38 INFO     uvicorn.access  192.168.20.1:53652 - "GET /api/vod/8leCUmO3Dl8 HTTP/1.1" 206
+2026-03-07 02:23:45 INFO     uvicorn.access  192.168.20.1:63522 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:23:45 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/scheduler/status HTTP/1.1" 200
+2026-03-07 02:23:47 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:23:49 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:23:50 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/scheduler/status HTTP/1.1" 200
+2026-03-07 02:23:51 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:23:53 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:23:55 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:23:55 INFO     uvicorn.access  192.168.20.1:56991 - "GET /api/scheduler/status HTTP/1.1" 200
+2026-03-07 02:23:56 INFO     uvicorn.access  192.168.20.1:57037 - "GET /api/vod/FnzogMobxHI HTTP/1.1" 206
+2026-03-07 02:23:57 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:23:59 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:24:00 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/scheduler/status HTTP/1.1" 200
+2026-03-07 02:24:01 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:24:03 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:24:05 INFO     uvicorn.access  192.168.20.1:51647 - "GET /api/proxy/status HTTP/1.1" 200
+2026-03-07 02:24:05 INFO     uvicorn.access  192.168.20.1:58430 - "GET /api/scheduler/status HTTP/1.1" 200
+^Croot@master2:~#
