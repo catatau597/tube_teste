@@ -394,6 +394,14 @@ Observação:
 - nesta etapa atual os valores continuam fixos por pragmatismo de calibração
 - isso não é o desenho final desejado
 
+Transição de fase:
+
+- com a estabilidade base do live atingida, as próximas mudanças devem entrar como melhorias controladas
+- prioridade imediata:
+  - observabilidade limpa para separar problema do proxy de descontinuidade da origem
+  - política adaptativa por cliente
+  - depois disso, retomada das melhorias estruturais restantes
+
 ## 6. Regras de Trabalho nesta Branch
 
 - não misturar correção de live e VOD na mesma mudança sem motivo explícito

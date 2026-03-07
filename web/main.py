@@ -1450,7 +1450,16 @@ async def api_proxy_stream(request):
                         late_for = mgr.mark_late(client_id)
                         if late_for < 2.0:
                             continue
-                        local_index       = buf.latest_safe_index()
+                        lag_before = buf.bytes_behind(local_index)
+                        new_index = buf.latest_safe_index()
+                        lag_after = buf.bytes_behind(new_index)
+                        logger.warning(
+                            f"[{video_id}][{client_id}] jump de catch-up: "
+                            f"lag_before={lag_before/1024/1024:.2f}MB "
+                            f"late_for={late_for:.1f}s "
+                            f"lag_after={lag_after/1024/1024:.2f}MB"
+                        )
+                        local_index       = new_index
                         consecutive_empty = 0
                     else:
                         mgr.clear_late(client_id)

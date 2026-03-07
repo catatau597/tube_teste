@@ -43,6 +43,10 @@ LIVE_PREROLL_WAIT_S      = 4       # teto de espera para o pré-buffer inicial
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
 INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
+ADAPTIVE_MIN_BEHIND_BYTES = 128 * 1024
+ADAPTIVE_MAX_BEHIND_BYTES = 768 * 1024
+ADAPTIVE_MIN_JUMP_BYTES   = 2 * 1024 * 1024
+ADAPTIVE_MAX_JUMP_BYTES   = 6 * 1024 * 1024
 
 # Duração em segundos de cada segmento do placeholder antes de encerrar naturalmente.
 # Deve ser igual ao -t passado ao ffmpeg em build_ffmpeg_placeholder_cmd().
@@ -185,7 +189,12 @@ class StreamBuffer:
             result = chunks_list[offset:end]
             return result, start_index + len(result)
 
-    def get_optimized_client_data(self, start_index: int) -> Tuple[List[bytes], int]:
+    def get_optimized_client_data(
+        self,
+        start_index: int,
+        target_bytes_override: int | None = None,
+        max_batch_bytes_override: int | None = None,
+    ) -> Tuple[List[bytes], int]:
         """Retorna um lote adaptativo de dados para reduzir stalls e overhead."""
         with self.lock:
             if not self.chunks:
@@ -208,18 +217,20 @@ class StreamBuffer:
             if bytes_behind <= 0:
                 return [], start_index
 
+            max_batch_bytes = max_batch_bytes_override or MAX_BATCH_BYTES
+
             if bytes_behind <= 512 * 1024:
                 count = chunks_behind
-                target_bytes = 512 * 1024
+                target_bytes = min(target_bytes_override or 512 * 1024, max_batch_bytes)
             elif bytes_behind <= INITIAL_BEHIND_BYTES:
                 count = min(chunks_behind, 8)
-                target_bytes = 1024 * 1024
+                target_bytes = min(target_bytes_override or 1024 * 1024, max_batch_bytes)
             elif bytes_behind <= CLIENT_JUMP_THRESHOLD_BYTES // 2:
                 count = min(chunks_behind, 24)
-                target_bytes = TARGET_BATCH_BYTES
+                target_bytes = min(target_bytes_override or TARGET_BATCH_BYTES, max_batch_bytes)
             else:
                 count = min(chunks_behind, MAX_BATCH_CHUNKS)
-                target_bytes = MAX_BATCH_BYTES
+                target_bytes = max_batch_bytes
 
             selected: List[bytes] = []
             total = 0
@@ -231,10 +242,18 @@ class StreamBuffer:
                 total += len(chunk)
                 if len(selected) >= MIN_BATCH_CHUNKS and total >= target_bytes:
                     break
-                if total >= MAX_BATCH_BYTES:
+                if total >= max_batch_bytes:
                     break
 
             return selected, start_index + len(selected)
+
+
+@dataclass(frozen=True)
+class ClientStreamPolicy:
+    initial_behind_bytes: int
+    target_batch_bytes: int
+    jump_threshold_bytes: int
+    late_grace_s: float
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +279,7 @@ class ClientManager:
     def __init__(self, video_id: str) -> None:
         self.video_id = video_id
         self._clients: Dict[str, ClientInfo] = {}
-        self._lock    = threading.Lock()
+        self._lock    = threading.RLock()
         self._last_disconnect: Optional[float] = None
 
     def add_client(self, client_id: str, ip: str, user_agent: str) -> None:
@@ -328,6 +347,52 @@ class ClientManager:
             if client_id in self._clients:
                 self._clients[client_id].late_since = None
 
+    def get_policy(self, client_id: str) -> ClientStreamPolicy:
+        with self._lock:
+            info = self._clients.get(client_id)
+            if info is None:
+                return ClientStreamPolicy(
+                    initial_behind_bytes=INITIAL_BEHIND_BYTES,
+                    target_batch_bytes=TARGET_BATCH_BYTES,
+                    jump_threshold_bytes=CLIENT_JUMP_THRESHOLD_BYTES,
+                    late_grace_s=2.0,
+                )
+
+            now = time.time()
+            duration = max(0.0, now - info.connected_at)
+            kbps = (info.bytes_sent / duration / 1024) if duration > 0 else 0.0
+
+            # Cliente novo entra com um pouco mais de gordura e depois aproxima
+            # naturalmente do live edge.
+            if duration < 5:
+                initial_behind = ADAPTIVE_MAX_BEHIND_BYTES
+            elif duration < 20:
+                initial_behind = INITIAL_BEHIND_BYTES
+            else:
+                initial_behind = ADAPTIVE_MIN_BEHIND_BYTES
+
+            # Cliente que já sustenta taxa estável pode receber lotes menores
+            # e ficar mais colado no live edge.
+            if kbps >= 500:
+                target_batch = 768 * 1024
+                jump_threshold = ADAPTIVE_MIN_JUMP_BYTES
+                late_grace_s = 3.0
+            elif kbps >= 350:
+                target_batch = TARGET_BATCH_BYTES
+                jump_threshold = CLIENT_JUMP_THRESHOLD_BYTES
+                late_grace_s = 2.5
+            else:
+                target_batch = 2 * 1024 * 1024
+                jump_threshold = ADAPTIVE_MAX_JUMP_BYTES
+                late_grace_s = 2.0
+
+            return ClientStreamPolicy(
+                initial_behind_bytes=initial_behind,
+                target_batch_bytes=target_batch,
+                jump_threshold_bytes=jump_threshold,
+                late_grace_s=late_grace_s,
+            )
+
     @property
     def count(self) -> int:
         with self._lock:
@@ -376,6 +441,7 @@ class ClientManager:
                     "is_stalled": c.stall_start is not None,
                     "stall_time_s": round(stall_time, 1) if stall_time > 0 else 0,
                     "late_for_s": round(now - c.late_since, 1) if c.late_since else 0,
+                    "policy": self.get_policy(c.client_id).__dict__,
                 })
             return result
 
@@ -456,18 +522,44 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
 
     # Thread: loga TODO o stderr em INFO (não só erros)
     def _read_stderr() -> None:
+        suppressed_skip_count = 0
+        last_skip_flush = time.monotonic()
+
+        def _flush_suppressed() -> None:
+            nonlocal suppressed_skip_count, last_skip_flush
+            if suppressed_skip_count <= 0:
+                return
+            logger.info(
+                f"[{video_id}] stderr: HLS skip/meta suprimidos={suppressed_skip_count}"
+            )
+            suppressed_skip_count = 0
+            last_skip_flush = time.monotonic()
+
         try:
             for raw in process.stderr:
                 line = raw.decode("utf-8", errors="replace").rstrip()
                 if not line:
                     continue
                 low = line.lower()
+
+                # Metadados repetitivos de HLS/ads geram muito ruído e não ajudam
+                # a diagnosticar o proxy quando o stream está saudável.
+                if "[hls" in low and "skip (" in low:
+                    suppressed_skip_count += 1
+                    now = time.monotonic()
+                    if now - last_skip_flush >= 5.0:
+                        _flush_suppressed()
+                    continue
+
+                _flush_suppressed()
                 if any(kw in low for kw in ("error", "fail", "fatal", "invalid", "no playable", "unable")):
                     logger.warning(f"[{video_id}] stderr: {line}")
                 else:
                     logger.info(f"[{video_id}] stderr: {line}")
         except Exception as exc:
             logger.debug(f"[{video_id}] stderr thread encerrada: {exc}")
+        finally:
+            _flush_suppressed()
 
     threading.Thread(target=_read_stdout, daemon=True, name=f"stdout-{video_id}").start()
     threading.Thread(target=_read_stderr, daemon=True, name=f"stderr-{video_id}").start()
