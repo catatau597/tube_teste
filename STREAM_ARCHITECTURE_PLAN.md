@@ -372,6 +372,7 @@ Concluído nesta fase:
 - catch-up do cliente ficou mais agressivo quando o atraso cresce
 - saída live passou a enviar payloads agregados por lote, não chunk por chunk
 - endpoint live agora espera um pré-buffer curto antes de liberar o cliente
+- métricas de buffer live passaram a usar bytes reais, não suposição fixa por read()
 
 Hipótese operacional desta fase:
 

@@ -19,8 +19,8 @@ from core.proxy_manager import (
     start_stream_reader, stop_stream, is_stream_active, streams_status,
     register_placeholder, restart_placeholder_if_needed,
     _buffers, _managers, _processes,
-    INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S, CLIENT_JUMP_THRESHOLD,
-    LIVE_PREROLL_CHUNKS, LIVE_PREROLL_WAIT_S,
+    INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S, CLIENT_JUMP_THRESHOLD_BYTES,
+    LIVE_PREROLL_BYTES, LIVE_PREROLL_WAIT_S,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
 )
 from core.scheduler import Scheduler
@@ -1413,7 +1413,7 @@ async def api_proxy_stream(request):
             preroll_deadline = time.monotonic() + LIVE_PREROLL_WAIT_S
             while time.monotonic() < preroll_deadline:
                 buf = _buffers.get(video_id)
-                if buf is None or buf.ready_for_clients(LIVE_PREROLL_CHUNKS):
+                if buf is None or buf.ready_for_clients(LIVE_PREROLL_BYTES):
                     break
                 await asyncio.sleep(0.1)
 
@@ -1446,7 +1446,7 @@ async def api_proxy_stream(request):
                     if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                         mgr.mark_stall(client_id)
                         break
-                    if buf.index - local_index > CLIENT_JUMP_THRESHOLD:
+                    if buf.bytes_behind(local_index) > CLIENT_JUMP_THRESHOLD_BYTES:
                         local_index       = buf.latest_safe_index()
                         consecutive_empty = 0
         except asyncio.CancelledError:

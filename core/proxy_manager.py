@@ -30,15 +30,15 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # Configuracao
 # ---------------------------------------------------------------------------
 
-CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura
-BUFFER_MAXLEN            = 600     # absorve burst de HLS sem expulsar cliente cedo (~37 MB)
-INITIAL_BEHIND_CHUNKS    = 24      # novos clientes começam com alguma folga atrás da cabeça
-CLIENT_JUMP_THRESHOLD    = 240     # cliente muito atrás salta para perto do live edge
+CHUNK_SIZE               = 65536   # tamanho máximo de cada read() do stdout
+BUFFER_MAXLEN            = 600     # número máximo de blocos no deque
+INITIAL_BEHIND_BYTES     = 1536 * 1024
+CLIENT_JUMP_THRESHOLD_BYTES = 8 * 1024 * 1024
 MIN_BATCH_CHUNKS         = 4       # lote mínimo por leitura
 MAX_BATCH_CHUNKS         = 48      # catch-up mais agressivo quando o cliente fica atrás
 TARGET_BATCH_BYTES       = 1536 * 1024
 MAX_BATCH_BYTES          = 4 * 1024 * 1024
-LIVE_PREROLL_CHUNKS      = 24      # só libera live quando houver gordura inicial no buffer
+LIVE_PREROLL_BYTES       = 1536 * 1024
 LIVE_PREROLL_WAIT_S      = 4       # teto de espera para o pré-buffer inicial
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
@@ -88,21 +88,26 @@ class StreamBuffer:
     active:   bool  = True        # False quando o processo encerrou
     created_at: float = field(default_factory=time.time)  # timestamp de criação
     last_chunk_at: float = field(default_factory=time.time)  # timestamp do último chunk
+    total_bytes: int = 0
+    produced_bytes: int = 0
 
     def add_chunk(self, data: bytes) -> None:
         with self.lock:
+            evicted_len = len(self.chunks[0]) if len(self.chunks) == self.chunks.maxlen else 0
             self.chunks.append(data)
             self.index += 1
+            self.total_bytes += len(data) - evicted_len
+            self.produced_bytes += len(data)
             self.last_chunk_at = time.time()
             
             # Debug: log periódico de buffer state (a cada 50 chunks)
             if _debug_enabled and self.index % 50 == 0:
-                mb = len(self.chunks) * CHUNK_SIZE / 1024 / 1024
+                mb = self.total_bytes / 1024 / 1024
                 elapsed = time.time() - self.created_at
-                rate = self.index / elapsed if elapsed > 0 else 0
+                rate = self.produced_bytes / elapsed / 1024 if elapsed > 0 else 0
                 logger.info(
                     f"[{self.video_id}] 📊 Buffer: index={self.index} chunks={len(self.chunks)} "
-                    f"MB={mb:.2f} rate={rate:.1f}chunks/s"
+                    f"MB={mb:.2f} rate={rate:.1f}KB/s"
                 )
 
     @property
@@ -110,13 +115,44 @@ class StreamBuffer:
         with self.lock:
             return len(self.chunks)
 
-    def latest_safe_index(self, behind: int = INITIAL_BEHIND_CHUNKS) -> int:
+    @property
+    def size_bytes(self) -> int:
         with self.lock:
-            return max(0, self.index - behind)
+            return self.total_bytes
 
-    def ready_for_clients(self, min_chunks: int = LIVE_PREROLL_CHUNKS) -> bool:
+    @property
+    def produced_bytes_total(self) -> int:
         with self.lock:
-            return len(self.chunks) >= min_chunks or not self.active
+            return self.produced_bytes
+
+    def latest_safe_index(self, behind_bytes: int = INITIAL_BEHIND_BYTES) -> int:
+        with self.lock:
+            if not self.chunks:
+                return self.index
+            accumulated = 0
+            steps_back = 0
+            for chunk in reversed(self.chunks):
+                accumulated += len(chunk)
+                if accumulated >= behind_bytes:
+                    break
+                steps_back += 1
+            return max(0, self.index - steps_back - 1)
+
+    def ready_for_clients(self, min_bytes: int = LIVE_PREROLL_BYTES) -> bool:
+        with self.lock:
+            return self.total_bytes >= min_bytes or not self.active
+
+    def bytes_behind(self, start_index: int) -> int:
+        with self.lock:
+            if not self.chunks:
+                return 0
+            buffer_start = self.index - len(self.chunks)
+            if start_index < buffer_start:
+                start_index = buffer_start
+            offset = start_index - buffer_start
+            if offset < 0 or offset >= len(self.chunks):
+                return 0
+            return sum(len(chunk) for chunk in list(self.chunks)[offset:])
 
     def get_chunks(self, start_index: int, count: int = 5) -> Tuple[List[bytes], int]:
         """Retorna até `count` chunks a partir de `start_index`.
@@ -163,24 +199,28 @@ class StreamBuffer:
             if chunks_behind <= 0:
                 return [], start_index
 
-            if chunks_behind <= MIN_BATCH_CHUNKS:
+            chunks_list = list(self.chunks)
+            offset = start_index - buffer_start
+            if offset < 0 or offset >= len(chunks_list):
+                return [], start_index
+
+            bytes_behind = sum(len(chunk) for chunk in chunks_list[offset:])
+            if bytes_behind <= 0:
+                return [], start_index
+
+            if bytes_behind <= 512 * 1024:
                 count = chunks_behind
                 target_bytes = 512 * 1024
-            elif chunks_behind <= INITIAL_BEHIND_CHUNKS:
+            elif bytes_behind <= INITIAL_BEHIND_BYTES:
                 count = min(chunks_behind, 8)
                 target_bytes = 1024 * 1024
-            elif chunks_behind <= CLIENT_JUMP_THRESHOLD // 2:
+            elif bytes_behind <= CLIENT_JUMP_THRESHOLD_BYTES // 2:
                 count = min(chunks_behind, 24)
                 target_bytes = TARGET_BATCH_BYTES
             else:
                 count = min(chunks_behind, MAX_BATCH_CHUNKS)
                 target_bytes = MAX_BATCH_BYTES
 
-            offset = start_index - buffer_start
-            if offset < 0 or offset >= len(self.chunks):
-                return [], start_index
-
-            chunks_list = list(self.chunks)
             selected: List[bytes] = []
             total = 0
 
@@ -373,6 +413,7 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     def _read_stdout() -> None:
         buf = _buffers[video_id]
         chunk_count = 0
+        bytes_read = 0
         try:
             while True:
                 chunk = process.stdout.read(CHUNK_SIZE)
@@ -380,10 +421,11 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
                     break
                 buf.add_chunk(chunk)
                 chunk_count += 1
+                bytes_read += len(chunk)
                 
                 # Debug: log a cada 100 chunks lidos
                 if _debug_enabled and chunk_count % 100 == 0:
-                    mb = chunk_count * CHUNK_SIZE / 1024 / 1024
+                    mb = bytes_read / 1024 / 1024
                     logger.info(
                         f"[{video_id}] 💾 stdout thread: {chunk_count} chunks lidos "
                         f"({mb:.2f} MB)"
@@ -519,7 +561,8 @@ def streams_status() -> List[dict]:
             "video_id":        vid,
             "buffer_chunks":   buf.size,
             "buffer_index":    buf.index,
-            "buffer_mb":       round(buf.size * CHUNK_SIZE / 1024 / 1024, 2),
+            "buffer_mb":       round(buf.size_bytes / 1024 / 1024, 2),
+            "buffer_bytes":    buf.size_bytes,
             "clients":         mgr.count if mgr else 0,
             "clients_info":    mgr.snapshot() if mgr else [],
             "process_alive":   proc.poll() is None if proc else False,
@@ -560,23 +603,29 @@ def get_stream_debug_info(video_id: str) -> Optional[dict]:
     }
     
     # Estatísticas do buffer
-    buffer_mb = buf.size * CHUNK_SIZE / 1024 / 1024
+    buffer_mb = buf.size_bytes / 1024 / 1024
     buffer_age = now - buf.created_at
-    growth_rate = buf.index / buffer_age if buffer_age > 0 else 0
+    growth_rate_bytes = buf.produced_bytes_total / buffer_age if buffer_age > 0 else 0
     time_since_last_chunk = now - buf.last_chunk_at
     
     buffer_info = {
         "chunks_total": buf.index,
         "chunks_in_buffer": buf.size,
+        "produced_bytes_total": buf.produced_bytes_total,
+        "buffer_bytes": buf.size_bytes,
         "buffer_mb": round(buffer_mb, 2),
         "buffer_age_s": round(buffer_age, 1),
-        "growth_rate_chunks_per_s": round(growth_rate, 2),
+        "growth_rate_kb_per_s": round(growth_rate_bytes / 1024, 2),
         "time_since_last_chunk_s": round(time_since_last_chunk, 1),
         "is_active": buf.active,
     }
     
     # Clientes detalhados
     clients_info = mgr.debug_snapshot(buf.index) if mgr else []
+    for client in clients_info:
+        lag_bytes = buf.bytes_behind(client.get("current_index", 0))
+        client["lag_bytes"] = lag_bytes
+        client["lag_mb"] = round(lag_bytes / 1024 / 1024, 2)
     
     return {
         "video_id": video_id,
