@@ -18,11 +18,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# --- Código da aplicação ---
 COPY . .
 
+# Criar diretórios de dados
 RUN mkdir -p /data/m3us /data/epgs /data/logs
 
-# Tornar entrypoint executável
+# Tornar entrypoint executável (precisa estar DEPOIS do COPY)
 RUN chmod +x /app/entrypoint.sh
 
 VOLUME ["/data"]
