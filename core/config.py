@@ -71,7 +71,7 @@ DEFAULTS: dict = {
         "filters", "Renomear categorias para exibição: ID|Nome (vírgula) — NÃO filtra", "mapping"),
 
     # --- Filtros de Shorts ---
-    "shorts_max_duration_s":         ("62",       "filters", "Duracão máxima (s) para bloquear Shorts (0=off)", "int"),
+    "shorts_max_duration_s":         ("62",       "filters", "Duração máxima (s) para bloquear Shorts (0=off)", "int"),
     "shorts_block_words":            ("#shorts,#short", "filters", "Palavras no título/tags que identificam Shorts", "list"),
 
     # --- Formato de Título ---
@@ -90,6 +90,13 @@ DEFAULTS: dict = {
         "https://i.ibb.co/9kZStw28/placeholder-sports.png",
         "playlist_output", "URL da imagem placeholder para streams sem thumb", "str"),
     "thumbnail_cache_directory":     ("/data/thumbnails", "playlist_output", "Diretório de cache de thumbnails (padrão do sistema)", "str"),
+
+    # --- Streaming Buffer (Redis) ---
+    "buffer_chunk_size_kb":          ("1024", "streaming_buffer", "Tamanho de cada chunk no Redis (KB)", "int"),
+    "buffer_chunk_ttl":              ("90",   "streaming_buffer", "Tempo de vida dos chunks no Redis (segundos)", "int"),
+    "buffer_max_memory_mb":          ("50",   "streaming_buffer", "Buffer temporário em RAM antes de gravar no Redis (MB)", "int"),
+    "stream_read_chunk_kb":          ("64",   "streaming_buffer", "Tamanho de leitura do stdout ffmpeg (KB)", "int"),
+    "channel_shutdown_delay":        ("5",    "streaming_buffer", "Aguardar antes de fechar stream após último cliente (segundos)", "int"),
 
     # --- Técnico ---
     "http_port":                     ("8888",             "technical", "Porta HTTP do servidor web", "int"),
