@@ -5,8 +5,8 @@ Arquitetura:
   subprocess (ffmpeg/streamlink)
       |  stdout
       v
-  StreamBuffer (deque circular, chunks de ~64KB)
-      |  get_chunks()
+  StreamBuffer (OrderedDict indexado, chunks de ~64KB)
+      |  read(index) / get_chunks()
       v
   N clientes via StreamingResponse (async generator)
 
@@ -20,7 +20,7 @@ import logging
 import subprocess
 import threading
 import time
-from collections import deque
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -31,7 +31,7 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # ---------------------------------------------------------------------------
 
 CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura
-BUFFER_MAXLEN            = 200     # máximo de chunks no deque (~12 MB)
+BUFFER_MAXLEN            = 200     # máximo de chunks no buffer (~12 MB)
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
 INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
@@ -71,43 +71,70 @@ def get_debug_mode() -> bool:
 
 @dataclass
 class StreamBuffer:
-    """Buffer circular de chunks TS para um stream."""
+    """Buffer indexado de chunks TS para um stream.
+
+    Usa OrderedDict para acesso O(1) por índice e cleanup automático de chunks
+    antigos sem conversão list() no hot path.
+    """
 
     video_id: str
-    chunks:   deque = field(default_factory=lambda: deque(maxlen=BUFFER_MAXLEN))
+    buffer:   OrderedDict = field(default_factory=OrderedDict)
     index:    int   = 0           # índice global (monotônico)
     lock:     threading.Lock = field(default_factory=threading.Lock)
     active:   bool  = True        # False quando o processo encerrou
     created_at: float = field(default_factory=time.time)  # timestamp de criação
     last_chunk_at: float = field(default_factory=time.time)  # timestamp do último chunk
 
-    def add_chunk(self, data: bytes) -> None:
+    def write(self, data: bytes) -> int:
+        """Adiciona um chunk ao buffer e retorna o índice atribuído.
+
+        Remove automaticamente o chunk mais antigo quando o buffer excede
+        BUFFER_MAXLEN, mantendo uso de memória limitado.
+        """
         with self.lock:
-            self.chunks.append(data)
+            idx = self.index
+            self.buffer[idx] = data
             self.index += 1
             self.last_chunk_at = time.time()
-            
+
+            # Auto-cleanup: remove o chunk mais antigo quando excede o limite
+            if len(self.buffer) > BUFFER_MAXLEN:
+                self.buffer.popitem(last=False)
+
             # Debug: log periódico de buffer state (a cada 50 chunks)
             if _debug_enabled and self.index % 50 == 0:
-                mb = len(self.chunks) * CHUNK_SIZE / 1024 / 1024
+                mb = len(self.buffer) * CHUNK_SIZE / 1024 / 1024
                 elapsed = time.time() - self.created_at
                 rate = self.index / elapsed if elapsed > 0 else 0
                 logger.info(
-                    f"[{self.video_id}] 📊 Buffer: index={self.index} chunks={len(self.chunks)} "
+                    f"[{self.video_id}] 📊 Buffer: index={self.index} chunks={len(self.buffer)} "
                     f"MB={mb:.2f} rate={rate:.1f}chunks/s"
                 )
+
+            return idx
+
+    def add_chunk(self, data: bytes) -> None:
+        """Alias de write() para compatibilidade com código existente."""
+        self.write(data)
+
+    def read(self, idx: int) -> Optional[bytes]:
+        """Retorna o chunk no índice `idx`, ou None se não estiver no buffer."""
+        with self.lock:
+            return self.buffer.get(idx)
 
     def get_chunks(self, start_index: int, count: int = 5) -> Tuple[List[bytes], int]:
         """Retorna até `count` chunks a partir de `start_index`.
 
         Retorna (lista_de_chunks, próximo_start_index).
         Se `start_index` ficou para trás do buffer, pula para o início disponível.
+        Acesso O(1) por índice — sem conversão list() do buffer completo.
         """
         with self.lock:
-            if not self.chunks:
+            if not self.buffer:
                 return [], start_index
 
-            buffer_start = self.index - len(self.chunks)
+            # Primeiro índice disponível no buffer
+            buffer_start = next(iter(self.buffer))
 
             # cliente muito atrasado → pula para início do buffer
             if start_index < buffer_start:
@@ -119,14 +146,16 @@ class StreamBuffer:
                     )
                 start_index = buffer_start
 
-            offset = start_index - buffer_start
-            if offset < 0 or offset >= len(self.chunks):
-                return [], start_index
+            result = []
+            current = start_index
+            for _ in range(count):
+                chunk = self.buffer.get(current)
+                if chunk is None:
+                    break
+                result.append(chunk)
+                current += 1
 
-            chunks_list = list(self.chunks)
-            end    = min(offset + count, len(chunks_list))
-            result = chunks_list[offset:end]
-            return result, start_index + len(result)
+            return result, current
 
 
 # ---------------------------------------------------------------------------
@@ -448,9 +477,9 @@ def streams_status() -> List[dict]:
         proc = _processes.get(vid)
         result.append({
             "video_id":        vid,
-            "buffer_chunks":   len(buf.chunks),
+            "buffer_chunks":   len(buf.buffer),
             "buffer_index":    buf.index,
-            "buffer_mb":       round(len(buf.chunks) * CHUNK_SIZE / 1024 / 1024, 2),
+            "buffer_mb":       round(len(buf.buffer) * CHUNK_SIZE / 1024 / 1024, 2),
             "clients":         mgr.count if mgr else 0,
             "clients_info":    mgr.snapshot() if mgr else [],
             "process_alive":   proc.poll() is None if proc else False,
@@ -491,14 +520,14 @@ def get_stream_debug_info(video_id: str) -> Optional[dict]:
     }
     
     # Estatísticas do buffer
-    buffer_mb = len(buf.chunks) * CHUNK_SIZE / 1024 / 1024
+    buffer_mb = len(buf.buffer) * CHUNK_SIZE / 1024 / 1024
     buffer_age = now - buf.created_at
     growth_rate = buf.index / buffer_age if buffer_age > 0 else 0
     time_since_last_chunk = now - buf.last_chunk_at
     
     buffer_info = {
         "chunks_total": buf.index,
-        "chunks_in_buffer": len(buf.chunks),
+        "chunks_in_buffer": len(buf.buffer),
         "buffer_mb": round(buffer_mb, 2),
         "buffer_age_s": round(buffer_age, 1),
         "growth_rate_chunks_per_s": round(growth_rate, 2),
