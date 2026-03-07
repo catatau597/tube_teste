@@ -9,7 +9,6 @@ services:
       - ./data:/data
     environment:
       - PYTHONUNBUFFERED=1
-      - REDIS_URL=redis://localhost:6379/0
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/')"]
       interval: 30s
