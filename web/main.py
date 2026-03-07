@@ -19,7 +19,7 @@ from core.proxy_manager import (
     start_stream_reader, stop_stream, is_stream_active, streams_status,
     register_placeholder, restart_placeholder_if_needed,
     _buffers, _managers, _processes,
-    INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S, CLIENT_JUMP_THRESHOLD_BYTES,
+    INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
     LIVE_PREROLL_BYTES, LIVE_PREROLL_WAIT_S,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
 )

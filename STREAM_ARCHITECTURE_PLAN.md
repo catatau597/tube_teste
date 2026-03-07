@@ -402,6 +402,20 @@ Transição de fase:
   - política adaptativa por cliente
   - depois disso, retomada das melhorias estruturais restantes
 
+Status da política adaptativa:
+
+- iniciada
+- o live já ajusta por cliente:
+  - distância inicial do live edge
+  - tamanho do lote de entrega
+  - limiar de jump
+  - janela de tolerância antes do jump
+
+Ainda falta:
+
+- alimentar a policy com mais sinais reais além de duração e taxa média
+- diferenciar cliente recém-conectado, cliente estável e cliente degradado com mais precisão
+
 ## 6. Regras de Trabalho nesta Branch
 
 - não misturar correção de live e VOD na mesma mudança sem motivo explícito
