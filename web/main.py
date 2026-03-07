@@ -1418,7 +1418,8 @@ async def api_proxy_stream(request):
                     mgr.update_activity(client_id, bytes_sent, local_index)
                 else:
                     consecutive_empty += 1
-                    await asyncio.sleep(min(0.05 * consecutive_empty, 1.0))
+                    # CORREÇÃO: sleep inicial 10ms, progressivo até 100ms máximo
+                    await asyncio.sleep(min(0.01 * consecutive_empty, 0.1))
                     if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                         mgr.mark_stall(client_id)
                         break
@@ -1787,7 +1788,7 @@ def logs_page():
                     if (d.ok) {
                         document.getElementById('current-level-badge').textContent = d.level;
                         document.getElementById('level-feedback').textContent =
-                            '\\u2705 N\u00edvel alterado para ' + d.level;
+                            '\\u2705 N\\u00edvel alterado para ' + d.level;
                         document.querySelectorAll('[id^="btn-level-"]').forEach(b => {
                             b.style.borderColor = '';
                             b.style.color = '';
@@ -1798,7 +1799,7 @@ def logs_page():
                     }
                 })
                 .catch(() => {
-                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao alterar n\u00edvel.';
+                    document.getElementById('level-feedback').textContent = '\\u274c Erro ao alterar n\\u00edvel.';
                     document.getElementById('level-feedback').style.color = '#f85149';
                 });
             }
@@ -1812,7 +1813,7 @@ def logs_page():
                 .then(r => r.json())
                 .then(d => {
                     if (d.ok) {
-                        const msg = hide ? '\\u2705 Logs de acesso ocultados.' : '\\u2705 Logs de acesso vis\u00edveis.';
+                        const msg = hide ? '\\u2705 Logs de acesso ocultados.' : '\\u2705 Logs de acesso vis\\u00edveis.';
                         document.getElementById('level-feedback').textContent = msg;
                         setTimeout(() => { document.getElementById('level-feedback').textContent=''; }, 3000);
                     }
