@@ -1422,7 +1422,8 @@ async def api_proxy_stream(request):
     mgr.add_client(client_id, client_ip, user_agent)
 
     async def generate():
-        local_index       = buf.latest_safe_index()
+        policy = mgr.get_policy(client_id)
+        local_index       = buf.latest_safe_index(policy.initial_behind_bytes)
         bytes_sent        = 0
         last_yield_time   = time.monotonic()
         consecutive_empty = 0
@@ -1431,7 +1432,12 @@ async def api_proxy_stream(request):
                 if not is_stream_active(video_id) and video_id not in _buffers:
                     break
                 restart_placeholder_if_needed(video_id)
-                chunks, next_index = buf.get_optimized_client_data(local_index)
+                policy = mgr.get_policy(client_id)
+                chunks, next_index = buf.get_optimized_client_data(
+                    local_index,
+                    target_bytes_override=policy.target_batch_bytes,
+                    max_batch_bytes_override=max(policy.target_batch_bytes * 2, policy.target_batch_bytes),
+                )
                 if chunks:
                     payload = b"".join(chunks) if len(chunks) > 1 else chunks[0]
                     yield payload
@@ -1446,17 +1452,18 @@ async def api_proxy_stream(request):
                     if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                         mgr.mark_stall(client_id)
                         break
-                    if buf.bytes_behind(local_index) > CLIENT_JUMP_THRESHOLD_BYTES:
+                    if buf.bytes_behind(local_index) > policy.jump_threshold_bytes:
                         late_for = mgr.mark_late(client_id)
-                        if late_for < 2.0:
+                        if late_for < policy.late_grace_s:
                             continue
                         lag_before = buf.bytes_behind(local_index)
-                        new_index = buf.latest_safe_index()
+                        new_index = buf.latest_safe_index(policy.initial_behind_bytes)
                         lag_after = buf.bytes_behind(new_index)
                         logger.warning(
                             f"[{video_id}][{client_id}] jump de catch-up: "
                             f"lag_before={lag_before/1024/1024:.2f}MB "
                             f"late_for={late_for:.1f}s "
+                            f"jump_threshold={policy.jump_threshold_bytes/1024/1024:.2f}MB "
                             f"lag_after={lag_after/1024/1024:.2f}MB"
                         )
                         local_index       = new_index
