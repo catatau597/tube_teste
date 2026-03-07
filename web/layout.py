@@ -169,7 +169,7 @@ def _sidebar(active: str = "") -> Div:
     active keys: dashboard, canais, playlist, eventos,
                  config_credentials, config_scheduler, config_filters,
                  config_title_format, config_playlist, config_technical,
-                 config_vod_verification, logs
+                 config_vod_verification, config_streaming_buffer, logs
     """
     def nav_item(label, href, key):
         cls = "nav-item active" if active == key else "nav-item"
@@ -195,6 +195,7 @@ def _sidebar(active: str = "") -> Div:
             nav_sub("📋  Playlist",            "/config/playlist",         "config_playlist"),
             nav_sub("🔧  Técnico",             "/config/technical",        "config_technical"),
             nav_sub("🎬  Verificação de VODs", "/config/vod-verification", "config_vod_verification"),
+            nav_sub("📦  Streaming Buffer", "/config/streaming-buffer", "config_streaming_buffer"),
 
             nav_item("📋  Logs",           "/logs",   "logs"),
         ),
