@@ -9,28 +9,10 @@ services:
       - ./data:/data
     environment:
       - PYTHONUNBUFFERED=1
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - redis
+      - REDIS_URL=redis://localhost:6379/0
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-
-  redis:
-    image: redis:7-alpine
-    container_name: tubewranglerr-redis
-    restart: unless-stopped
-    volumes:
-      - redis-data:/data
-    command: redis-server --save 60 1 --loglevel warning
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-
-volumes:
-  redis-data:
