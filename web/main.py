@@ -1447,8 +1447,13 @@ async def api_proxy_stream(request):
                         mgr.mark_stall(client_id)
                         break
                     if buf.bytes_behind(local_index) > CLIENT_JUMP_THRESHOLD_BYTES:
+                        late_for = mgr.mark_late(client_id)
+                        if late_for < 2.0:
+                            continue
                         local_index       = buf.latest_safe_index()
                         consecutive_empty = 0
+                    else:
+                        mgr.clear_late(client_id)
         except asyncio.CancelledError:
             pass
         except Exception as exc:

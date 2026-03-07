@@ -32,13 +32,13 @@ logger = logging.getLogger("TubeWrangler.proxy")
 
 CHUNK_SIZE               = 65536   # tamanho máximo de cada read() do stdout
 BUFFER_MAXLEN            = 600     # número máximo de blocos no deque
-INITIAL_BEHIND_BYTES     = 1536 * 1024
-CLIENT_JUMP_THRESHOLD_BYTES = 8 * 1024 * 1024
+INITIAL_BEHIND_BYTES     = 512 * 1024
+CLIENT_JUMP_THRESHOLD_BYTES = 4 * 1024 * 1024
 MIN_BATCH_CHUNKS         = 4       # lote mínimo por leitura
 MAX_BATCH_CHUNKS         = 48      # catch-up mais agressivo quando o cliente fica atrás
-TARGET_BATCH_BYTES       = 1536 * 1024
+TARGET_BATCH_BYTES       = 1024 * 1024
 MAX_BATCH_BYTES          = 4 * 1024 * 1024
-LIVE_PREROLL_BYTES       = 1536 * 1024
+LIVE_PREROLL_BYTES       = 512 * 1024
 LIVE_PREROLL_WAIT_S      = 4       # teto de espera para o pré-buffer inicial
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
@@ -251,6 +251,7 @@ class ClientInfo:
     bytes_sent:   int = 0
     current_index: int = 0  # índice atual do cliente no buffer
     stall_start: Optional[float] = None  # timestamp quando começou stall
+    late_since: Optional[float] = None
 
 
 class ClientManager:
@@ -302,6 +303,7 @@ class ClientManager:
                 self._clients[client_id].current_index = current_index
                 # Reset stall se cliente está ativo
                 self._clients[client_id].stall_start = None
+                self._clients[client_id].late_since = None
 
     def mark_stall(self, client_id: str) -> None:
         """Marca que cliente entrou em stall (sem receber chunks)."""
@@ -310,6 +312,21 @@ class ClientManager:
                 self._clients[client_id].stall_start = time.time()
                 if _debug_enabled:
                     logger.warning(f"[{self.video_id}] 🚫 Stall detectado: {client_id}")
+
+    def mark_late(self, client_id: str) -> float:
+        with self._lock:
+            if client_id not in self._clients:
+                return 0.0
+            now = time.time()
+            info = self._clients[client_id]
+            if info.late_since is None:
+                info.late_since = now
+            return now - info.late_since
+
+    def clear_late(self, client_id: str) -> None:
+        with self._lock:
+            if client_id in self._clients:
+                self._clients[client_id].late_since = None
 
     @property
     def count(self) -> int:
@@ -358,6 +375,7 @@ class ClientManager:
                     "lag_chunks": lag,
                     "is_stalled": c.stall_start is not None,
                     "stall_time_s": round(stall_time, 1) if stall_time > 0 else 0,
+                    "late_for_s": round(now - c.late_since, 1) if c.late_since else 0,
                 })
             return result
 

@@ -379,6 +379,21 @@ Hipótese operacional desta fase:
 - o live atual sofre mais com burst na entrada e início precoce do cliente do que com falta de dados absoluta
 - por isso a prioridade é dar folga ao buffer e estabilizar o egress antes de novas mudanças arquiteturais
 
+Próxima subfase obrigatória após a calibração base:
+
+- substituir thresholds fixos de live por política adaptativa
+- separar melhor o que é global do stream e o que é individual por cliente
+- tornar dinâmicos, por cliente, pelo menos:
+  - distância inicial do live edge
+  - tamanho de lote de entrega
+  - critério de cliente "atrasado"
+  - política de catch-up e jump
+
+Observação:
+
+- nesta etapa atual os valores continuam fixos por pragmatismo de calibração
+- isso não é o desenho final desejado
+
 ## 6. Regras de Trabalho nesta Branch
 
 - não misturar correção de live e VOD na mesma mudança sem motivo explícito
