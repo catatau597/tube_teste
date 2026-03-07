@@ -21,6 +21,9 @@ streamlink>=8.2.0
 # nodejs ja instalado no Dockerfile (apt-get install nodejs)
 yt-dlp>=2026.3.3
 
+# Redis para StreamBuffer persistente
+redis>=5.0.0
+
 # Testes
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
