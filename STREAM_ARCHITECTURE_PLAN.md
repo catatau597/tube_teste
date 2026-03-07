@@ -381,7 +381,7 @@ Hipótese operacional desta fase:
 
 Próxima subfase obrigatória após a calibração base:
 
-- substituir thresholds fixos de live por política adaptativa
+- evoluir thresholds fixos de live para política adaptativa, mas só depois de termos sinais mais confiáveis
 - separar melhor o que é global do stream e o que é individual por cliente
 - tornar dinâmicos, por cliente, pelo menos:
   - distância inicial do live edge
@@ -399,22 +399,31 @@ Transição de fase:
 - com a estabilidade base do live atingida, as próximas mudanças devem entrar como melhorias controladas
 - prioridade imediata:
   - observabilidade limpa para separar problema do proxy de descontinuidade da origem
-  - política adaptativa por cliente
-  - depois disso, retomada das melhorias estruturais restantes
+  - manter a calibração fixa estável
+  - só depois retomar as melhorias estruturais restantes
 
 Status da política adaptativa:
 
-- iniciada
-- o live já ajusta por cliente:
+- tentada e revertida
+- a primeira versão, baseada só em duração da conexão e taxa média em kbps, introduziu backlog crônico em alguns clientes
+- efeito observado:
+  - clientes permaneciam recebendo dados, mas ficavam vários MB atrás do live edge
+  - o VLC entrava em "carregando" e clientes simultâneos abriam com defasagem grande
+
+Decisão atual:
+
+- manter thresholds fixos enquanto a base live estiver estável
+- registrar a política adaptativa como melhoria futura, não como baseline atual
+
+Pré-requisitos para retomar política adaptativa:
+
+- distinguir melhor throughput instantâneo de throughput médio
+- detectar backlog crônico mesmo sem stall completo
+- considerar sinais por cliente e por stream antes de ajustar:
   - distância inicial do live edge
   - tamanho do lote de entrega
   - limiar de jump
   - janela de tolerância antes do jump
-
-Ainda falta:
-
-- alimentar a policy com mais sinais reais além de duração e taxa média
-- diferenciar cliente recém-conectado, cliente estável e cliente degradado com mais precisão
 
 ## 6. Regras de Trabalho nesta Branch
 
