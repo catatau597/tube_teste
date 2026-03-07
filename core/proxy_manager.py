@@ -1,29 +1,28 @@
 """
-proxy_manager.py — Gerenciamento de streams e clientes com Redis.
+proxy_manager.py — Gerenciamento de streams e clientes sem Redis.
 
 Arquitetura:
   subprocess (ffmpeg/streamlink)
       |  stdout
       v
-  StreamBuffer (Redis, chunks de ~1MB)
-      |  get_chunk(index)
+  StreamBuffer (deque circular, chunks de ~64KB)
+      |  get_chunks()
       v
-  N clientes via stream_to_client() (async generator)
+  N clientes via StreamingResponse (async generator)
+
+Todo o estado fica em memória no processo FastHTML (single-process).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import subprocess
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import AsyncGenerator, Dict, List, Optional
-
-from core.stream_buffer import StreamBuffer
-from core.config import AppConfig
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("TubeWrangler.proxy")
 
@@ -31,11 +30,11 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # Configuracao
 # ---------------------------------------------------------------------------
 
-CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura do stdout (fallback)
+CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura
+BUFFER_MAXLEN            = 200     # máximo de chunks no deque (~12 MB)
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
 INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
-MAX_STREAM_MISSES        = 10      # máximo de chunks consecutivos não encontrados antes de desconectar
 
 # Duração em segundos de cada segmento do placeholder antes de encerrar naturalmente.
 # Deve ser igual ao -t passado ao ffmpeg em build_ffmpeg_placeholder_cmd().
@@ -64,6 +63,70 @@ def set_debug_mode(enabled: bool) -> None:
 def get_debug_mode() -> bool:
     """Retorna True se modo debug está ativo."""
     return _debug_enabled
+
+
+# ---------------------------------------------------------------------------
+# StreamBuffer
+# ---------------------------------------------------------------------------
+
+@dataclass
+class StreamBuffer:
+    """Buffer circular de chunks TS para um stream."""
+
+    video_id: str
+    chunks:   deque = field(default_factory=lambda: deque(maxlen=BUFFER_MAXLEN))
+    index:    int   = 0           # índice global (monotônico)
+    lock:     threading.Lock = field(default_factory=threading.Lock)
+    active:   bool  = True        # False quando o processo encerrou
+    created_at: float = field(default_factory=time.time)  # timestamp de criação
+    last_chunk_at: float = field(default_factory=time.time)  # timestamp do último chunk
+
+    def add_chunk(self, data: bytes) -> None:
+        with self.lock:
+            self.chunks.append(data)
+            self.index += 1
+            self.last_chunk_at = time.time()
+            
+            # Debug: log periódico de buffer state (a cada 50 chunks)
+            if _debug_enabled and self.index % 50 == 0:
+                mb = len(self.chunks) * CHUNK_SIZE / 1024 / 1024
+                elapsed = time.time() - self.created_at
+                rate = self.index / elapsed if elapsed > 0 else 0
+                logger.info(
+                    f"[{self.video_id}] 📊 Buffer: index={self.index} chunks={len(self.chunks)} "
+                    f"MB={mb:.2f} rate={rate:.1f}chunks/s"
+                )
+
+    def get_chunks(self, start_index: int, count: int = 5) -> Tuple[List[bytes], int]:
+        """Retorna até `count` chunks a partir de `start_index`.
+
+        Retorna (lista_de_chunks, próximo_start_index).
+        Se `start_index` ficou para trás do buffer, pula para o início disponível.
+        """
+        with self.lock:
+            if not self.chunks:
+                return [], start_index
+
+            buffer_start = self.index - len(self.chunks)
+
+            # cliente muito atrasado → pula para início do buffer
+            if start_index < buffer_start:
+                if _debug_enabled:
+                    lag = buffer_start - start_index
+                    logger.warning(
+                        f"[{self.video_id}] ⚠️ Cliente atrasado: pulando {lag} chunks "
+                        f"(de {start_index} para {buffer_start})"
+                    )
+                start_index = buffer_start
+
+            offset = start_index - buffer_start
+            if offset < 0 or offset >= len(self.chunks):
+                return [], start_index
+
+            chunks_list = list(self.chunks)
+            end    = min(offset + count, len(chunks_list))
+            result = chunks_list[offset:end]
+            return result, start_index + len(result)
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +263,6 @@ _buffers:   Dict[str, StreamBuffer]  = {}
 _managers:  Dict[str, ClientManager] = {}
 _processes: Dict[str, subprocess.Popen] = {}
 _process_start_times: Dict[str, float] = {}  # video_id → timestamp de start
-_stream_reading: Dict[str, bool] = {}  # video_id → True enquanto thread stdout ativa
 
 # Registra comandos de placeholder para permitir restart automático.
 # video_id → List[str] cmd (somente para streams do tipo placeholder)
@@ -211,28 +273,20 @@ _placeholder_cmds: Dict[str, List[str]] = {}
 # start_stream_reader
 # ---------------------------------------------------------------------------
 
-async def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
+def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     """
     Inicia o processo (ffmpeg/streamlink) e uma thread daemon que lê
-    stdout → StreamBuffer (Redis).  Também loga stderr via logging.
+    stdout → StreamBuffer.  Também loga stderr via logging.
 
-    Cria StreamBuffer e ClientManager se ainda não existirem.
+    Cria BufferStream e ClientManager se ainda não existirem.
     """
-    config = AppConfig().get_all()
-    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
-
     if video_id not in _buffers:
-        _buffers[video_id] = StreamBuffer(video_id, redis_url, {
-            "buffer_chunk_size_kb": int(config.get("buffer_chunk_size_kb", 1024)),
-            "buffer_chunk_ttl":     int(config.get("buffer_chunk_ttl", 90)),
-            "buffer_max_memory_mb": int(config.get("buffer_max_memory_mb", 50)),
-        })
-        await _buffers[video_id].initialize()
+        _buffers[video_id]  = StreamBuffer(video_id=video_id)
         _managers[video_id] = ClientManager(video_id=video_id)
-
-    _stream_reading[video_id] = True
-
-    stdout_chunk_size = int(config.get("stream_read_chunk_kb", 64)) * 1024
+    else:
+        # Reativa o buffer para um novo segmento de placeholder
+        _buffers[video_id].active = True
+        _buffers[video_id].created_at = time.time()
 
     process = subprocess.Popen(
         cmd,
@@ -247,24 +301,21 @@ async def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen
     logger.info(f"[{video_id}] processo iniciado  PID={process.pid}")
     logger.debug(f"[{video_id}] cmd completo: {cmd_str}")
 
-    loop = asyncio.get_event_loop()
-    buf  = _buffers[video_id]
-
-    # Thread: lê stdout → buffer Redis
+    # Thread: lê stdout → buffer
     def _read_stdout() -> None:
+        buf = _buffers[video_id]
         chunk_count = 0
         try:
             while True:
-                chunk = process.stdout.read(stdout_chunk_size)
+                chunk = process.stdout.read(CHUNK_SIZE)
                 if not chunk:
                     break
-                future = asyncio.run_coroutine_threadsafe(buf.add_data(chunk), loop)
-                future.result()
+                buf.add_chunk(chunk)
                 chunk_count += 1
-
+                
                 # Debug: log a cada 100 chunks lidos
                 if _debug_enabled and chunk_count % 100 == 0:
-                    mb = chunk_count * stdout_chunk_size / 1024 / 1024
+                    mb = chunk_count * CHUNK_SIZE / 1024 / 1024
                     logger.info(
                         f"[{video_id}] 💾 stdout thread: {chunk_count} chunks lidos "
                         f"({mb:.2f} MB)"
@@ -272,8 +323,8 @@ async def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen
         except Exception as exc:
             logger.error(f"[{video_id}] erro lendo stdout: {exc}")
         finally:
-            _stream_reading[video_id] = False
-            logger.info(f"[{video_id}] stdout encerrado (index={buf.head_index})")
+            buf.active = False
+            logger.info(f"[{video_id}] stdout encerrado (index={buf.index})")
 
     # Thread: loga TODO o stderr em INFO (não só erros)
     def _read_stderr() -> None:
@@ -314,7 +365,7 @@ def register_placeholder(video_id: str, cmd: List[str]) -> None:
     logger.debug(f"[{video_id}] placeholder registrado para restart automático")
 
 
-async def restart_placeholder_if_needed(video_id: str) -> bool:
+def restart_placeholder_if_needed(video_id: str) -> bool:
     """Reinicia o processo placeholder se ele encerrou e ainda há clientes.
 
     O processo placeholder usa ffmpeg com -loop 1 -t PLACEHOLDER_SEGMENT_DURATION,
@@ -348,7 +399,7 @@ async def restart_placeholder_if_needed(video_id: str) -> bool:
         f"[{video_id}] placeholder encerrou naturalmente, reiniciando "
         f"(clientes={mgr.count})  cmd={cmd[0]}"
     )
-    await start_stream_reader(video_id, cmd)
+    start_stream_reader(video_id, cmd)
     return True
 
 
@@ -356,7 +407,7 @@ async def restart_placeholder_if_needed(video_id: str) -> bool:
 # stop_stream
 # ---------------------------------------------------------------------------
 
-async def stop_stream(video_id: str) -> None:
+def stop_stream(video_id: str) -> None:
     """Para o processo e remove os recursos do stream."""
     # Remove registro de placeholder antes de qualquer outra coisa
     _placeholder_cmds.pop(video_id, None)
@@ -371,56 +422,10 @@ async def stop_stream(video_id: str) -> None:
             logger.warning(f"[{video_id}] erro ao terminar processo: {exc}")
         logger.info(f"[{video_id}] processo encerrado  PID={proc.pid}")
 
-    buf = _buffers.pop(video_id, None)
-    if buf:
-        try:
-            await buf.cleanup()
-        except Exception as exc:
-            logger.warning(f"[{video_id}] erro ao limpar buffer: {exc}")
-
+    _buffers.pop(video_id, None)
     _managers.pop(video_id, None)
     _process_start_times.pop(video_id, None)
-    _stream_reading.pop(video_id, None)
     logger.info(f"[{video_id}] recursos liberados")
-
-
-# ---------------------------------------------------------------------------
-# stream_to_client
-# ---------------------------------------------------------------------------
-
-async def stream_to_client(
-    video_id: str, client_id: str, start_from_live: bool = False
-) -> AsyncGenerator[bytes, None]:
-    """Async generator que entrega chunks do Redis para um cliente.
-
-    Args:
-        video_id:        ID do vídeo.
-        client_id:       ID único do cliente conectado.
-        start_from_live: Se True, inicia no índice atual (live). Se False, inicia do índice 0.
-    """
-    buf = _buffers[video_id]
-    mgr = _managers[video_id]
-
-    if start_from_live:
-        client_index = await buf.get_current_index()
-    else:
-        client_index = 0
-
-    consecutive_misses = 0
-
-    while True:
-        chunk = await buf.get_chunk(client_index + 1)
-
-        if chunk:
-            yield chunk
-            client_index += 1
-            consecutive_misses = 0
-            mgr.update_activity(client_id, len(chunk), client_index)
-        else:
-            consecutive_misses += 1
-            if consecutive_misses >= MAX_STREAM_MISSES:
-                break
-            await asyncio.sleep(0.1)
 
 
 # ---------------------------------------------------------------------------
@@ -436,18 +441,16 @@ def is_stream_active(video_id: str) -> bool:
 # streams_status  (usado pela API /api/proxy/status)
 # ---------------------------------------------------------------------------
 
-async def streams_status() -> List[dict]:
+def streams_status() -> List[dict]:
     result = []
     for vid, buf in list(_buffers.items()):
         mgr  = _managers.get(vid)
         proc = _processes.get(vid)
-        buffer_index = await buf.get_current_index()
-        buffer_mb    = round(buffer_index * buf.chunk_size / 1024 / 1024, 2)
         result.append({
             "video_id":        vid,
-            "buffer_chunks":   buffer_index,
-            "buffer_index":    buffer_index,
-            "buffer_mb":       buffer_mb,
+            "buffer_chunks":   len(buf.chunks),
+            "buffer_index":    buf.index,
+            "buffer_mb":       round(len(buf.chunks) * CHUNK_SIZE / 1024 / 1024, 2),
             "clients":         mgr.count if mgr else 0,
             "clients_info":    mgr.snapshot() if mgr else [],
             "process_alive":   proc.poll() is None if proc else False,
@@ -461,7 +464,7 @@ async def streams_status() -> List[dict]:
 # get_stream_debug_info  (usado pela API /api/proxy/debug/{video_id})
 # ---------------------------------------------------------------------------
 
-async def get_stream_debug_info(video_id: str) -> Optional[dict]:
+def get_stream_debug_info(video_id: str) -> Optional[dict]:
     """Retorna informações detalhadas de debug para um stream ativo.
     
     Returns:
@@ -487,20 +490,24 @@ async def get_stream_debug_info(video_id: str) -> Optional[dict]:
         "uptime_s": round(uptime, 1),
     }
     
-    # Estatísticas do buffer via Redis
-    current_index = await buf.get_current_index()
-    buffer_mb = current_index * buf.chunk_size / 1024 / 1024
+    # Estatísticas do buffer
+    buffer_mb = len(buf.chunks) * CHUNK_SIZE / 1024 / 1024
+    buffer_age = now - buf.created_at
+    growth_rate = buf.index / buffer_age if buffer_age > 0 else 0
+    time_since_last_chunk = now - buf.last_chunk_at
     
     buffer_info = {
-        "chunks_total": current_index,
+        "chunks_total": buf.index,
+        "chunks_in_buffer": len(buf.chunks),
         "buffer_mb": round(buffer_mb, 2),
-        "is_active": _stream_reading.get(video_id, False),
-        "chunk_size_kb": round(buf.chunk_size / 1024, 1),
-        "chunk_ttl": buf.chunk_ttl,
+        "buffer_age_s": round(buffer_age, 1),
+        "growth_rate_chunks_per_s": round(growth_rate, 2),
+        "time_since_last_chunk_s": round(time_since_last_chunk, 1),
+        "is_active": buf.active,
     }
     
     # Clientes detalhados
-    clients_info = mgr.debug_snapshot(current_index) if mgr else []
+    clients_info = mgr.debug_snapshot(buf.index) if mgr else []
     
     return {
         "video_id": video_id,

@@ -25,7 +25,6 @@ from core.proxy_manager import (
     _buffers, _managers, _processes,
     INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
-    stream_to_client,
 )
 from core.scheduler import Scheduler
 from core.state_manager import StateManager
@@ -222,7 +221,7 @@ async def lifespan(app):
         except asyncio.CancelledError:
             pass
         for vid in list(_processes.keys()):
-            await stop_stream(vid)
+            stop_stream(vid)
         _state.save_to_disk()
         logger.info("=== TubeWrangler encerrado ===")
 
@@ -846,119 +845,6 @@ async def config_vod_verification_save(req):
 
 
 # ---------------------------------------------------------------------------
-# Rota HTML — /config/streaming-buffer
-# ---------------------------------------------------------------------------
-
-@app.get("/config/streaming-buffer")
-def config_streaming_buffer(saved: str = ""):
-    if not _config:
-        return _page_shell("Streaming Buffer", "config_streaming_buffer",
-                           P("Config não inicializado."))
-
-    cfg = _config
-    alert = Div("✅ Configurações salvas com sucesso.",
-                cls="alert alert-success") if saved == "1" else ""
-
-    chunk_size     = cfg.get_raw("buffer_chunk_size_kb")
-    chunk_ttl      = cfg.get_raw("buffer_chunk_ttl")
-    max_memory     = cfg.get_raw("buffer_max_memory_mb")
-    read_chunk     = cfg.get_raw("stream_read_chunk_kb")
-    shutdown_delay = cfg.get_raw("channel_shutdown_delay")
-
-    return _page_shell(
-        "Streaming Buffer", "config_streaming_buffer",
-        alert,
-        Div(
-            Form(
-                H2("Buffer do Redis"),
-                P("Configuração de chunks e TTL para persistência em Redis",
-                  cls="text-muted",
-                  style="font-size:0.85rem;margin-bottom:16px;"),
-                Label(
-                    Span("Tamanho do chunk (KB)",
-                         style="display:block;margin-bottom:4px;"),
-                    Input(name="buffer_chunk_size_kb", value=chunk_size,
-                          type="number", min="64", max="4096", step="1",
-                          style="max-width:200px;"),
-                    Span("Tamanho de cada chunk armazenado no Redis. "
-                         "Valores maiores reduzem o número de operações.",
-                         cls="text-muted",
-                         style="display:block;margin-top:4px;font-size:0.82rem;"),
-                ),
-                Label(
-                    Span("TTL do chunk (segundos)",
-                         style="display:block;margin-bottom:4px;"),
-                    Input(name="buffer_chunk_ttl", value=chunk_ttl,
-                          type="number", min="30", max="600", step="1",
-                          style="max-width:200px;"),
-                    Span("Tempo até os chunks expirarem no Redis. "
-                         "Evita acúmulo de dados obsoletos.",
-                         cls="text-muted",
-                         style="display:block;margin-top:4px;font-size:0.82rem;"),
-                ),
-                Label(
-                    Span("Limite de memória RAM (MB)",
-                         style="display:block;margin-bottom:4px;"),
-                    Input(name="buffer_max_memory_mb", value=max_memory,
-                          type="number", min="10", max="500", step="1",
-                          style="max-width:200px;"),
-                    Span("Buffer temporário em RAM antes de gravar no Redis. "
-                         "Reduz a frequência de escritas.",
-                         cls="text-muted",
-                         style="display:block;margin-top:4px;font-size:0.82rem;"),
-                ),
-                H2("Performance de Streaming", style="margin-top:24px;"),
-                P("Ajustes de leitura e desligamento de canais",
-                  cls="text-muted",
-                  style="font-size:0.85rem;margin-bottom:16px;"),
-                Label(
-                    Span("Tamanho de leitura do ffmpeg (KB)",
-                         style="display:block;margin-bottom:4px;"),
-                    Input(name="stream_read_chunk_kb", value=read_chunk,
-                          type="number", min="32", max="2048", step="1",
-                          style="max-width:200px;"),
-                    Span("Tamanho de cada leitura do stdout do ffmpeg. "
-                         "Afeta a latência e o uso de CPU.",
-                         cls="text-muted",
-                         style="display:block;margin-top:4px;font-size:0.82rem;"),
-                ),
-                Label(
-                    Span("Delay de encerramento do canal (segundos)",
-                         style="display:block;margin-bottom:4px;"),
-                    Input(name="channel_shutdown_delay", value=shutdown_delay,
-                          type="number", min="5", max="300", step="1",
-                          style="max-width:200px;"),
-                    Span("Segundos sem clientes antes de parar o stream. "
-                         "Valores maiores reduzem reinicializações desnecessárias.",
-                         cls="text-muted",
-                         style="display:block;margin-top:4px;font-size:0.82rem;"),
-                ),
-                Div(Button("Salvar", type="submit"), style="margin-top:20px;"),
-                method="post",
-                action="/config/streaming-buffer",
-            ),
-            cls="card",
-        ),
-    )
-
-
-@app.post("/config/streaming-buffer")
-async def config_streaming_buffer_save(req):
-    form = await req.form()
-    if _config:
-        allowed_keys = {
-            "buffer_chunk_size_kb",
-            "buffer_chunk_ttl",
-            "buffer_max_memory_mb",
-            "stream_read_chunk_kb",
-            "channel_shutdown_delay",
-        }
-        data = {k: v for k, v in dict(form).items() if k in allowed_keys}
-        _config.update_many(data)
-    return RedirectResponse("/config/streaming-buffer?saved=1", status_code=303)
-
-
-# ---------------------------------------------------------------------------
 # Rota HTML — /config/filters
 # ---------------------------------------------------------------------------
 
@@ -1394,24 +1280,24 @@ def api_epg():
 # ---------------------------------------------------------------------------
 
 @app.get("/api/proxy/status")
-async def api_proxy_status():
-    return JSONResponse({"streams": await streams_status(), "count": len(_buffers)})
+def api_proxy_status():
+    return JSONResponse({"streams": streams_status(), "count": len(_buffers)})
 
 
 @app.get("/api/proxy/debug/{video_id}")
-async def api_proxy_debug(video_id: str):
+def api_proxy_debug(video_id: str):
     """Retorna informações detalhadas de debug para um stream específico."""
-    info = await get_stream_debug_info(video_id)
+    info = get_stream_debug_info(video_id)
     if info is None:
         return JSONResponse({"error": "stream não encontrado"}, status_code=404)
     return JSONResponse(info)
 
 
 @app.delete("/api/proxy/{video_id}")
-async def api_proxy_stop(video_id: str):
+def api_proxy_stop(video_id: str):
     if not is_stream_active(video_id):
         return JSONResponse({"error": "stream nao encontrado ou ja parado"}, status_code=404)
-    await stop_stream(video_id)
+    stop_stream(video_id)
     return JSONResponse({"ok": True, "video_id": video_id})
 
 
@@ -1464,7 +1350,7 @@ async def api_proxy_stream(request):
             logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
             return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
 
-        await start_stream_reader(video_id, cmd)
+        start_stream_reader(video_id, cmd)
 
         if status not in ("live", "none"):
             register_placeholder(video_id, cmd)
@@ -1476,7 +1362,7 @@ async def api_proxy_stream(request):
             ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
             while time.monotonic() < ff_deadline:
                 buf = _buffers.get(video_id)
-                if buf and buf.head_index > 0:
+                if buf and buf.index > 0:
                     break
                 await asyncio.sleep(0.1)
             else:
@@ -1484,7 +1370,7 @@ async def api_proxy_stream(request):
                     f"[{video_id}] streamlink fast-fail: sem chunk em "
                     f"{STREAMLINK_FAST_FAIL_S}s \u2192 fallback yt-dlp HLS"
                 )
-                await stop_stream(video_id)
+                stop_stream(video_id)
                 hls_url = await resolve_live_hls_url_async(watch_url)
                 if not hls_url:
                     logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
@@ -1493,17 +1379,17 @@ async def api_proxy_stream(request):
                         status_code=503,
                     )
                 cmd = build_live_hls_ffmpeg_cmd(hls_url)
-                await start_stream_reader(video_id, cmd)
+                start_stream_reader(video_id, cmd)
                 logger.info(f"[{video_id}] fallback HLS ativo: {hls_url[:70]}...")
 
         deadline = time.monotonic() + INIT_TIMEOUT_S
         while time.monotonic() < deadline:
             buf = _buffers.get(video_id)
-            if buf and buf.head_index > 0:
+            if buf and buf.index > 0:
                 break
             await asyncio.sleep(0.1)
         else:
-            await stop_stream(video_id)
+            stop_stream(video_id)
             logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
             return Response("Stream timeout na inicializacao", status_code=504)
 
@@ -1512,10 +1398,33 @@ async def api_proxy_stream(request):
     mgr.add_client(client_id, client_ip, user_agent)
 
     async def generate():
+        local_index       = max(0, buf.index - 10)
+        bytes_sent        = 0
+        last_yield_time   = time.monotonic()
+        consecutive_empty = 0
         try:
-            async for chunk in stream_to_client(video_id, client_id, start_from_live=True):
-                await restart_placeholder_if_needed(video_id)
-                yield chunk
+            while True:
+                if not is_stream_active(video_id) and video_id not in _buffers:
+                    break
+                restart_placeholder_if_needed(video_id)
+                chunks, next_index = buf.get_chunks(local_index, count=5)
+                if chunks:
+                    for chunk in chunks:
+                        yield chunk
+                        bytes_sent += len(chunk)
+                    local_index       = next_index
+                    last_yield_time   = time.monotonic()
+                    consecutive_empty = 0
+                    mgr.update_activity(client_id, bytes_sent, local_index)
+                else:
+                    consecutive_empty += 1
+                    await asyncio.sleep(min(0.05 * consecutive_empty, 1.0))
+                    if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
+                        mgr.mark_stall(client_id)
+                        break
+                    if buf.index - local_index > 100:
+                        local_index       = max(0, buf.index - 10)
+                        consecutive_empty = 0
         except asyncio.CancelledError:
             pass
         except Exception as exc:
@@ -1528,7 +1437,7 @@ async def api_proxy_stream(request):
                     mgr2 = _managers.get(video_id)
                     if mgr2 and mgr2.count > 0:
                         return
-                    await stop_stream(video_id)
+                    stop_stream(video_id)
                 asyncio.create_task(_delayed_stop())
 
     return StreamingResponse(
