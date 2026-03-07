@@ -375,6 +375,7 @@ Concluído nesta fase:
 - métricas de buffer live passaram a usar bytes reais, não suposição fixa por read()
 - startup de live passou a exigir serialização por `video_id` para evitar dois processos concorrentes do mesmo canal
 - cliente de live só deve contar como ativo depois do primeiro payload entregue, não na abertura inicial da requisição
+- egress live passou a usar lotes menores por cliente para reduzir microfreeze e contenção quando há vários clientes simultâneos
 
 Hipótese operacional desta fase:
 
@@ -385,6 +386,7 @@ Próxima subfase obrigatória após a calibração base:
 
 - evoluir thresholds fixos de live para política adaptativa, mas só depois de termos sinais mais confiáveis
 - separar melhor o que é global do stream e o que é individual por cliente
+- calibrar justiça de egress com 2+ clientes antes de novas otimizações adaptativas
 - tornar dinâmicos, por cliente, pelo menos:
   - distância inicial do live edge
   - tamanho de lote de entrega
