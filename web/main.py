@@ -7,6 +7,8 @@ import re
 import time
 import random
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from fasthtml.common import *
 from starlette.routing import Route
@@ -16,6 +18,7 @@ from core.config import AppConfig, DEFAULTS
 from core.player_router import (
     build_player_command_async,
     build_live_hls_ffmpeg_cmd,
+    resolve_vod_url_async,
     resolve_live_hls_url_async,
 )
 from core.playlist_builder import M3UGenerator, XMLTVGenerator, _resolve_proxy_base_url
@@ -23,7 +26,7 @@ from core.proxy_manager import (
     start_stream_reader, stop_stream, is_stream_active, streams_status,
     register_placeholder, restart_placeholder_if_needed,
     _buffers, _managers, _processes,
-    INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
+    INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S, CLIENT_JUMP_THRESHOLD,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
 )
 from core.scheduler import Scheduler
@@ -42,6 +45,7 @@ TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 STREAMLINK_FAST_FAIL_S = 8
+VOD_URL_CACHE_TTL_S = 900
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -121,6 +125,7 @@ _thumbnail_manager: Optional[ThumbnailManager] = None
 _m3u_generator: Optional[M3UGenerator] = None
 _xmltv_generator: Optional[XMLTVGenerator] = None
 _categories_db: dict = {}
+_vod_url_cache: dict[str, tuple[str, float]] = {}
 
 _PLAYLIST_ROUTES = {
     "live.m3u":          ("live",     "direct"),
@@ -258,6 +263,26 @@ def _get_base_url(request) -> str:
     client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
     port      = request.url.port or 8888
     return f"http://{client_ip}:{port}"
+
+
+def _get_stream_info(video_id: str) -> tuple[dict | None, str | None, str | None, str]:
+    stream_info = _state.streams.get(video_id) if _state else None
+    status = stream_info.get("status") if stream_info else None
+    thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    return stream_info, status, thumbnail_url, watch_url
+
+
+async def _get_cached_vod_url(video_id: str, watch_url: str, user_agent: str, debug_enabled: bool) -> str:
+    cached = _vod_url_cache.get(video_id)
+    now = time.time()
+    if cached and (now - cached[1]) < VOD_URL_CACHE_TTL_S:
+        return cached[0]
+
+    url = await resolve_vod_url_async(watch_url, user_agent=user_agent, debug_enabled=debug_enabled)
+    if url:
+        _vod_url_cache[video_id] = (url, now)
+    return url
 
 
 def _serve_playlist_onthefly(mode: str, mode_type: str, request=None) -> Response:
@@ -1317,12 +1342,13 @@ async def api_proxy_stream(request):
         if _state is None:
             return Response("Servidor ainda inicializando", status_code=503)
 
-        stream_info   = _state.streams.get(video_id)
+        stream_info, status, thumbnail_url, watch_url = _get_stream_info(video_id)
         if stream_info is None:
             logger.warning(f"[{video_id}] video_id nao encontrado no estado")
-        status        = stream_info.get("status")       if stream_info else None
-        thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
-        watch_url     = f"https://www.youtube.com/watch?v={video_id}"
+
+        if status in ("vod", "none", "ended", "completed"):
+            return RedirectResponse(f"/api/vod/{video_id}", status_code=307)
+
         placeholder   = _config.get_str("placeholder_image_url")
         thumb_for_ph  = thumbnail_url or placeholder
 
@@ -1352,7 +1378,7 @@ async def api_proxy_stream(request):
 
         start_stream_reader(video_id, cmd)
 
-        if status not in ("live", "none"):
+        if status not in ("live", "none", "vod", "ended", "completed"):
             register_placeholder(video_id, cmd)
             logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
 
@@ -1398,7 +1424,7 @@ async def api_proxy_stream(request):
     mgr.add_client(client_id, client_ip, user_agent)
 
     async def generate():
-        local_index       = max(0, buf.index - 10)
+        local_index       = buf.latest_safe_index()
         bytes_sent        = 0
         last_yield_time   = time.monotonic()
         consecutive_empty = 0
@@ -1407,7 +1433,7 @@ async def api_proxy_stream(request):
                 if not is_stream_active(video_id) and video_id not in _buffers:
                     break
                 restart_placeholder_if_needed(video_id)
-                chunks, next_index = buf.get_chunks(local_index, count=5)
+                chunks, next_index = buf.get_optimized_client_data(local_index)
                 if chunks:
                     for chunk in chunks:
                         yield chunk
@@ -1422,8 +1448,8 @@ async def api_proxy_stream(request):
                     if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                         mgr.mark_stall(client_id)
                         break
-                    if buf.index - local_index > 100:
-                        local_index       = max(0, buf.index - 10)
+                    if buf.index - local_index > CLIENT_JUMP_THRESHOLD:
+                        local_index       = buf.latest_safe_index()
                         consecutive_empty = 0
         except asyncio.CancelledError:
             pass
@@ -1450,6 +1476,91 @@ async def api_proxy_stream(request):
 app.routes.append(Route("/api/proxy/{video_id}", endpoint=api_proxy_stream))
 
 
+async def api_vod_stream(request):
+    video_id = request.path_params["video_id"]
+    user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
+    range_header = request.headers.get("range")
+    debug_enabled = _config.get_bool("streaming_debug_enabled") if _config else False
+
+    if _state is None:
+        return Response("Servidor ainda inicializando", status_code=503)
+
+    stream_info, status, _thumbnail_url, watch_url = _get_stream_info(video_id)
+    if stream_info is None:
+        return Response("video_id nao encontrado", status_code=404)
+
+    if status not in ("vod", "none", "ended", "completed"):
+        return RedirectResponse(f"/api/proxy/{video_id}", status_code=307)
+
+    try:
+        upstream_url = await _get_cached_vod_url(video_id, watch_url, user_agent, debug_enabled)
+    except Exception as exc:
+        logger.error(f"[{video_id}] erro ao resolver URL de VOD: {exc}")
+        return Response("Erro ao resolver VOD", status_code=502)
+
+    if not upstream_url:
+        return Response("VOD indisponivel", status_code=503)
+
+    headers = {"User-Agent": user_agent}
+    if range_header:
+        headers["Range"] = range_header
+
+    upstream = None
+    for attempt in (1, 2):
+        req = Request(upstream_url, headers=headers)
+        try:
+            upstream = urlopen(req, timeout=30)
+            break
+        except HTTPError as exc:
+            body = exc.read()
+            if exc.code == 403 and attempt == 1:
+                _vod_url_cache.pop(video_id, None)
+                upstream_url = await _get_cached_vod_url(video_id, watch_url, user_agent, debug_enabled)
+                if upstream_url:
+                    continue
+            return Response(
+                body.decode("utf-8", errors="replace") if body else "Erro no upstream",
+                status_code=exc.code,
+            )
+        except URLError as exc:
+            logger.error(f"[{video_id}] erro de rede no VOD upstream: {exc}")
+            return Response("Erro de rede no upstream", status_code=502)
+
+    if upstream is None:
+        return Response("VOD indisponivel", status_code=503)
+
+    response_headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    content_type = upstream.headers.get("Content-Type", "video/mp4")
+    for header in ("Accept-Ranges", "Content-Length", "Content-Range", "ETag", "Last-Modified"):
+        value = upstream.headers.get(header)
+        if value:
+            response_headers[header] = value
+
+    async def stream_gen():
+        try:
+            while True:
+                chunk = await asyncio.to_thread(upstream.read, 64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            try:
+                upstream.close()
+            except Exception:
+                pass
+
+    status_code = getattr(upstream, "status", None) or 200
+    return StreamingResponse(
+        stream_gen(),
+        status_code=status_code,
+        media_type=content_type,
+        headers=response_headers,
+    )
+
+
+app.routes.append(Route("/api/vod/{video_id}", endpoint=api_vod_stream))
+
+
 # ---------------------------------------------------------------------------
 # API — player streaming (legado)
 # ---------------------------------------------------------------------------
@@ -1457,10 +1568,11 @@ app.routes.append(Route("/api/proxy/{video_id}", endpoint=api_proxy_stream))
 async def api_player_stream(request):
     video_id   = request.path_params["video_id"]
     user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
-    stream_info   = _state.streams.get(video_id)
-    status        = stream_info.get("status")       if stream_info else None
-    thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
-    watch_url     = f"https://www.youtube.com/watch?v={video_id}"
+    stream_info, status, thumbnail_url, watch_url = _get_stream_info(video_id)
+    if status in ("vod", "none", "ended", "completed"):
+        return RedirectResponse(f"/api/vod/{video_id}", status_code=307)
+    if status == "live":
+        return RedirectResponse(f"/api/proxy/{video_id}", status_code=307)
     placeholder   = _config.get_str("placeholder_image_url")
     thumb_for_ph  = thumbnail_url or placeholder
     local_thumb   = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"

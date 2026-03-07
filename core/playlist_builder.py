@@ -271,7 +271,10 @@ class M3UGenerator(ContentGenerator):
             category = self.get_display_category(cat_id, categories_db)
 
             if mode_type == "proxy":
-                url = f"{base_url}/api/proxy/{vid}" if base_url else f"/api/proxy/{vid}"
+                if mode == "vod":
+                    url = f"{base_url}/api/vod/{vid}" if base_url else f"/api/vod/{vid}"
+                else:
+                    url = f"{base_url}/api/proxy/{vid}" if base_url else f"/api/proxy/{vid}"
                 logo = (
                     thumbnail_manager.get_url(vid, base_url)
                     if thumbnail_manager and base_url
