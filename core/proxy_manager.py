@@ -31,13 +31,15 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # ---------------------------------------------------------------------------
 
 CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura
-BUFFER_MAXLEN            = 200     # máximo de chunks no deque (~12 MB)
-INITIAL_BEHIND_CHUNKS    = 10      # novos clientes começam ligeiramente atrás da cabeça
-CLIENT_JUMP_THRESHOLD    = 100     # se cliente atrasar demais, salta para perto do live edge
-MIN_BATCH_CHUNKS         = 3       # lote mínimo por leitura
-MAX_BATCH_CHUNKS         = 20      # evita picos de memória por cliente
-TARGET_BATCH_BYTES       = 1024 * 1024
-MAX_BATCH_BYTES          = 2 * 1024 * 1024
+BUFFER_MAXLEN            = 600     # absorve burst de HLS sem expulsar cliente cedo (~37 MB)
+INITIAL_BEHIND_CHUNKS    = 24      # novos clientes começam com alguma folga atrás da cabeça
+CLIENT_JUMP_THRESHOLD    = 240     # cliente muito atrás salta para perto do live edge
+MIN_BATCH_CHUNKS         = 4       # lote mínimo por leitura
+MAX_BATCH_CHUNKS         = 48      # catch-up mais agressivo quando o cliente fica atrás
+TARGET_BATCH_BYTES       = 1536 * 1024
+MAX_BATCH_BYTES          = 4 * 1024 * 1024
+LIVE_PREROLL_CHUNKS      = 24      # só libera live quando houver gordura inicial no buffer
+LIVE_PREROLL_WAIT_S      = 4       # teto de espera para o pré-buffer inicial
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
 INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
@@ -112,6 +114,10 @@ class StreamBuffer:
         with self.lock:
             return max(0, self.index - behind)
 
+    def ready_for_clients(self, min_chunks: int = LIVE_PREROLL_CHUNKS) -> bool:
+        with self.lock:
+            return len(self.chunks) >= min_chunks or not self.active
+
     def get_chunks(self, start_index: int, count: int = 5) -> Tuple[List[bytes], int]:
         """Retorna até `count` chunks a partir de `start_index`.
 
@@ -159,10 +165,16 @@ class StreamBuffer:
 
             if chunks_behind <= MIN_BATCH_CHUNKS:
                 count = chunks_behind
-            elif chunks_behind <= MAX_BATCH_CHUNKS:
-                count = chunks_behind
+                target_bytes = 512 * 1024
+            elif chunks_behind <= INITIAL_BEHIND_CHUNKS:
+                count = min(chunks_behind, 8)
+                target_bytes = 1024 * 1024
+            elif chunks_behind <= CLIENT_JUMP_THRESHOLD // 2:
+                count = min(chunks_behind, 24)
+                target_bytes = TARGET_BATCH_BYTES
             else:
-                count = MAX_BATCH_CHUNKS
+                count = min(chunks_behind, MAX_BATCH_CHUNKS)
+                target_bytes = MAX_BATCH_BYTES
 
             offset = start_index - buffer_start
             if offset < 0 or offset >= len(self.chunks):
@@ -177,7 +189,7 @@ class StreamBuffer:
                     break
                 selected.append(chunk)
                 total += len(chunk)
-                if len(selected) >= MIN_BATCH_CHUNKS and total >= TARGET_BATCH_BYTES:
+                if len(selected) >= MIN_BATCH_CHUNKS and total >= target_bytes:
                     break
                 if total >= MAX_BATCH_BYTES:
                     break

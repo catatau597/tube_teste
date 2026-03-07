@@ -13,21 +13,19 @@ from starlette.routing import Route
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from core.config import AppConfig, DEFAULTS
-from core.player_router import (
-    build_player_command_async,
-    build_live_hls_ffmpeg_cmd,
-    resolve_live_hls_url_async,
-)
+from core.player_router import build_player_command_async
 from core.playlist_builder import M3UGenerator, XMLTVGenerator, _resolve_proxy_base_url
 from core.proxy_manager import (
     start_stream_reader, stop_stream, is_stream_active, streams_status,
     register_placeholder, restart_placeholder_if_needed,
     _buffers, _managers, _processes,
     INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S, CLIENT_JUMP_THRESHOLD,
+    LIVE_PREROLL_CHUNKS, LIVE_PREROLL_WAIT_S,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
 )
 from core.scheduler import Scheduler
 from core.state_manager import StateManager
+from core.stream_ingress import build_live_fallback_ingress_plan, resolve_proxy_ingress_plan
 from core.thumbnail_manager import ThumbnailManager
 from core.vod_proxy import vod_proxy_manager
 from core.vod_verifier import VodVerifier
@@ -1351,48 +1349,24 @@ async def api_proxy_stream(request):
         debug_enabled = _config.get_bool("streaming_debug_enabled") if _config else False
 
         try:
-            if status == "live":
-                hls_url = await resolve_live_hls_url_async(
-                    watch_url,
-                    user_agent=user_agent,
-                    debug_enabled=debug_enabled,
-                )
-                if hls_url:
-                    cmd = build_live_hls_ffmpeg_cmd(
-                        hls_url,
-                        user_agent=user_agent,
-                        debug_enabled=debug_enabled,
-                    )
-                else:
-                    cmd, _temp = await build_player_command_async(
-                        video_id=video_id,
-                        status=status,
-                        watch_url=watch_url,
-                        thumbnail_url=thumb_for_ph,
-                        user_agent=user_agent,
-                        font_path=FONT_PATH,
-                        texts_cache_path=TEXTS_CACHE_PATH,
-                        debug_enabled=debug_enabled,
-                    )
-            else:
-                cmd, _temp = await build_player_command_async(
-                    video_id=video_id,
-                    status=status,
-                    watch_url=watch_url,
-                    thumbnail_url=thumb_for_ph,
-                    user_agent=user_agent,
-                    font_path=FONT_PATH,
-                    texts_cache_path=TEXTS_CACHE_PATH,
-                    debug_enabled=debug_enabled,
-                )
+            ingress_plan = await resolve_proxy_ingress_plan(
+                video_id=video_id,
+                status=status,
+                watch_url=watch_url,
+                thumbnail_url=thumb_for_ph,
+                user_agent=user_agent,
+                font_path=FONT_PATH,
+                texts_cache_path=TEXTS_CACHE_PATH,
+                debug_enabled=debug_enabled,
+            )
         except Exception as exc:
             logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
             return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
 
-        start_stream_reader(video_id, cmd)
+        start_stream_reader(video_id, ingress_plan.cmd)
 
-        if status not in ("live", "none", "vod", "ended", "completed"):
-            register_placeholder(video_id, cmd)
+        if ingress_plan.is_placeholder:
+            register_placeholder(video_id, ingress_plan.cmd)
             logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
 
         logger.info(f"[{video_id}] stream proxy iniciado")
@@ -1410,16 +1384,19 @@ async def api_proxy_stream(request):
                     f"{STREAMLINK_FAST_FAIL_S}s \u2192 fallback yt-dlp HLS"
                 )
                 stop_stream(video_id)
-                hls_url = await resolve_live_hls_url_async(watch_url)
-                if not hls_url:
+                fallback_plan = await build_live_fallback_ingress_plan(
+                    watch_url=watch_url,
+                    user_agent=user_agent,
+                    debug_enabled=debug_enabled,
+                )
+                if not fallback_plan:
                     logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
                     return Response(
                         "Stream indisponivel (streamlink + yt-dlp falharam)",
                         status_code=503,
                     )
-                cmd = build_live_hls_ffmpeg_cmd(hls_url)
-                start_stream_reader(video_id, cmd)
-                logger.info(f"[{video_id}] fallback HLS ativo: {hls_url[:70]}...")
+                start_stream_reader(video_id, fallback_plan.cmd)
+                logger.info(f"[{video_id}] fallback HLS ativo: {fallback_plan.source_url[:70]}...")
 
         deadline = time.monotonic() + INIT_TIMEOUT_S
         while time.monotonic() < deadline:
@@ -1431,6 +1408,14 @@ async def api_proxy_stream(request):
             stop_stream(video_id)
             logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
             return Response("Stream timeout na inicializacao", status_code=504)
+
+        if status == "live":
+            preroll_deadline = time.monotonic() + LIVE_PREROLL_WAIT_S
+            while time.monotonic() < preroll_deadline:
+                buf = _buffers.get(video_id)
+                if buf is None or buf.ready_for_clients(LIVE_PREROLL_CHUNKS):
+                    break
+                await asyncio.sleep(0.1)
 
     buf = _buffers[video_id]
     mgr = _managers[video_id]
@@ -1448,9 +1433,9 @@ async def api_proxy_stream(request):
                 restart_placeholder_if_needed(video_id)
                 chunks, next_index = buf.get_optimized_client_data(local_index)
                 if chunks:
-                    for chunk in chunks:
-                        yield chunk
-                        bytes_sent += len(chunk)
+                    payload = b"".join(chunks) if len(chunks) > 1 else chunks[0]
+                    yield payload
+                    bytes_sent += len(payload)
                     local_index       = next_index
                     last_yield_time   = time.monotonic()
                     consecutive_empty = 0
