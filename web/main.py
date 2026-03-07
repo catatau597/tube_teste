@@ -846,6 +846,119 @@ async def config_vod_verification_save(req):
 
 
 # ---------------------------------------------------------------------------
+# Rota HTML — /config/streaming-buffer
+# ---------------------------------------------------------------------------
+
+@app.get("/config/streaming-buffer")
+def config_streaming_buffer(saved: str = ""):
+    if not _config:
+        return _page_shell("Streaming Buffer", "config_streaming_buffer",
+                           P("Config não inicializado."))
+
+    cfg = _config
+    alert = Div("✅ Configurações salvas com sucesso.",
+                cls="alert alert-success") if saved == "1" else ""
+
+    chunk_size     = cfg.get_raw("buffer_chunk_size_kb")
+    chunk_ttl      = cfg.get_raw("buffer_chunk_ttl")
+    max_memory     = cfg.get_raw("buffer_max_memory_mb")
+    read_chunk     = cfg.get_raw("stream_read_chunk_kb")
+    shutdown_delay = cfg.get_raw("channel_shutdown_delay")
+
+    return _page_shell(
+        "Streaming Buffer", "config_streaming_buffer",
+        alert,
+        Div(
+            Form(
+                H2("Buffer do Redis"),
+                P("Configuração de chunks e TTL para persistência em Redis",
+                  cls="text-muted",
+                  style="font-size:0.85rem;margin-bottom:16px;"),
+                Label(
+                    Span("Tamanho do chunk (KB)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="buffer_chunk_size_kb", value=chunk_size,
+                          type="number", min="64", max="4096", step="1",
+                          style="max-width:200px;"),
+                    Span("Tamanho de cada chunk armazenado no Redis. "
+                         "Valores maiores reduzem o número de operações.",
+                         cls="text-muted",
+                         style="display:block;margin-top:4px;font-size:0.82rem;"),
+                ),
+                Label(
+                    Span("TTL do chunk (segundos)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="buffer_chunk_ttl", value=chunk_ttl,
+                          type="number", min="30", max="600", step="1",
+                          style="max-width:200px;"),
+                    Span("Tempo até os chunks expirarem no Redis. "
+                         "Evita acúmulo de dados obsoletos.",
+                         cls="text-muted",
+                         style="display:block;margin-top:4px;font-size:0.82rem;"),
+                ),
+                Label(
+                    Span("Limite de memória RAM (MB)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="buffer_max_memory_mb", value=max_memory,
+                          type="number", min="10", max="500", step="1",
+                          style="max-width:200px;"),
+                    Span("Buffer temporário em RAM antes de gravar no Redis. "
+                         "Reduz a frequência de escritas.",
+                         cls="text-muted",
+                         style="display:block;margin-top:4px;font-size:0.82rem;"),
+                ),
+                H2("Performance de Streaming", style="margin-top:24px;"),
+                P("Ajustes de leitura e desligamento de canais",
+                  cls="text-muted",
+                  style="font-size:0.85rem;margin-bottom:16px;"),
+                Label(
+                    Span("Tamanho de leitura do ffmpeg (KB)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="stream_read_chunk_kb", value=read_chunk,
+                          type="number", min="32", max="2048", step="1",
+                          style="max-width:200px;"),
+                    Span("Tamanho de cada leitura do stdout do ffmpeg. "
+                         "Afeta a latência e o uso de CPU.",
+                         cls="text-muted",
+                         style="display:block;margin-top:4px;font-size:0.82rem;"),
+                ),
+                Label(
+                    Span("Delay de encerramento do canal (segundos)",
+                         style="display:block;margin-bottom:4px;"),
+                    Input(name="channel_shutdown_delay", value=shutdown_delay,
+                          type="number", min="5", max="300", step="1",
+                          style="max-width:200px;"),
+                    Span("Segundos sem clientes antes de parar o stream. "
+                         "Valores maiores reduzem reinicializações desnecessárias.",
+                         cls="text-muted",
+                         style="display:block;margin-top:4px;font-size:0.82rem;"),
+                ),
+                Div(Button("Salvar", type="submit"), style="margin-top:20px;"),
+                method="post",
+                action="/config/streaming-buffer",
+            ),
+            cls="card",
+        ),
+    )
+
+
+@app.post("/config/streaming-buffer")
+async def config_streaming_buffer_save(req):
+    form = await req.form()
+    if _config:
+        allowed_keys = {
+            "buffer_chunk_size_kb",
+            "buffer_chunk_ttl",
+            "buffer_max_memory_mb",
+            "stream_read_chunk_kb",
+            "channel_shutdown_delay",
+        }
+        data = {k: v for k, v in dict(form).items() if k in allowed_keys}
+        _config.update_many(data)
+    return RedirectResponse("/config/streaming-buffer?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
 # Rota HTML — /config/filters
 # ---------------------------------------------------------------------------
 
