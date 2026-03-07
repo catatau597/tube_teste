@@ -21,6 +21,7 @@ from core.proxy_manager import (
     _buffers, _managers, _processes,
     INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
     LIVE_PREROLL_BYTES, LIVE_PREROLL_WAIT_S,
+    INITIAL_BEHIND_BYTES, TARGET_BATCH_BYTES, MAX_BATCH_BYTES,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
 )
 from core.scheduler import Scheduler
@@ -120,6 +121,7 @@ _thumbnail_manager: Optional[ThumbnailManager] = None
 _m3u_generator: Optional[M3UGenerator] = None
 _xmltv_generator: Optional[XMLTVGenerator] = None
 _categories_db: dict = {}
+_proxy_start_locks: dict[str, asyncio.Lock] = {}
 
 _PLAYLIST_ROUTES = {
     "live.m3u":          ("live",     "direct"),
@@ -1325,103 +1327,104 @@ async def api_proxy_stream(request):
 
     logger.info(f"[{video_id}] nova conexao proxy  client={client_id}  ip={client_ip}")
 
-    if not is_stream_active(video_id):
-        if _state is None:
-            return Response("Servidor ainda inicializando", status_code=503)
+    start_lock = _proxy_start_locks.setdefault(video_id, asyncio.Lock())
+    async with start_lock:
+        if not is_stream_active(video_id):
+            if _state is None:
+                return Response("Servidor ainda inicializando", status_code=503)
 
-        stream_info, status, thumbnail_url, watch_url = _get_stream_info(video_id)
-        if stream_info is None:
-            logger.warning(f"[{video_id}] video_id nao encontrado no estado")
+            stream_info, status, thumbnail_url, watch_url = _get_stream_info(video_id)
+            if stream_info is None:
+                logger.warning(f"[{video_id}] video_id nao encontrado no estado")
 
-        if status in ("vod", "none", "ended", "completed"):
-            return RedirectResponse(f"/api/vod/{video_id}", status_code=307)
+            if status in ("vod", "none", "ended", "completed"):
+                return RedirectResponse(f"/api/vod/{video_id}", status_code=307)
 
-        placeholder   = _config.get_str("placeholder_image_url")
-        thumb_for_ph  = thumbnail_url or placeholder
+            placeholder   = _config.get_str("placeholder_image_url")
+            thumb_for_ph  = thumbnail_url or placeholder
 
-        logger.info(f"[{video_id}] iniciando stream  status={status!r}  url={watch_url}")
+            logger.info(f"[{video_id}] iniciando stream  status={status!r}  url={watch_url}")
 
-        local_thumb = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
-        if local_thumb.exists():
-            thumb_for_ph = str(local_thumb)
+            local_thumb = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
+            if local_thumb.exists():
+                thumb_for_ph = str(local_thumb)
 
-        # Obter estado de debug e passar para build_player_command_async
-        debug_enabled = _config.get_bool("streaming_debug_enabled") if _config else False
+            debug_enabled = _config.get_bool("streaming_debug_enabled") if _config else False
 
-        try:
-            ingress_plan = await resolve_proxy_ingress_plan(
-                video_id=video_id,
-                status=status,
-                watch_url=watch_url,
-                thumbnail_url=thumb_for_ph,
-                user_agent=user_agent,
-                font_path=FONT_PATH,
-                texts_cache_path=TEXTS_CACHE_PATH,
-                debug_enabled=debug_enabled,
-            )
-        except Exception as exc:
-            logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
-            return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
+            try:
+                ingress_plan = await resolve_proxy_ingress_plan(
+                    video_id=video_id,
+                    status=status,
+                    watch_url=watch_url,
+                    thumbnail_url=thumb_for_ph,
+                    user_agent=user_agent,
+                    font_path=FONT_PATH,
+                    texts_cache_path=TEXTS_CACHE_PATH,
+                    debug_enabled=debug_enabled,
+                )
+            except Exception as exc:
+                logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
+                return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
 
-        start_stream_reader(video_id, ingress_plan.cmd)
+            start_stream_reader(video_id, ingress_plan.cmd)
 
-        if ingress_plan.is_placeholder:
-            register_placeholder(video_id, ingress_plan.cmd)
-            logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
+            if ingress_plan.is_placeholder:
+                register_placeholder(video_id, ingress_plan.cmd)
+                logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
 
-        logger.info(f"[{video_id}] stream proxy iniciado")
+            logger.info(f"[{video_id}] stream proxy iniciado")
 
-        if status == "live":
-            ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
-            while time.monotonic() < ff_deadline:
+            if status == "live":
+                ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
+                while time.monotonic() < ff_deadline:
+                    buf = _buffers.get(video_id)
+                    if buf and buf.index > 0:
+                        break
+                    await asyncio.sleep(0.1)
+                else:
+                    logger.warning(
+                        f"[{video_id}] streamlink fast-fail: sem chunk em "
+                        f"{STREAMLINK_FAST_FAIL_S}s \u2192 fallback yt-dlp HLS"
+                    )
+                    stop_stream(video_id)
+                    fallback_plan = await build_live_fallback_ingress_plan(
+                        watch_url=watch_url,
+                        user_agent=user_agent,
+                        debug_enabled=debug_enabled,
+                    )
+                    if not fallback_plan:
+                        logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
+                        return Response(
+                            "Stream indisponivel (streamlink + yt-dlp falharam)",
+                            status_code=503,
+                        )
+                    start_stream_reader(video_id, fallback_plan.cmd)
+                    logger.info(f"[{video_id}] fallback HLS ativo: {fallback_plan.source_url[:70]}...")
+
+            deadline = time.monotonic() + INIT_TIMEOUT_S
+            while time.monotonic() < deadline:
                 buf = _buffers.get(video_id)
                 if buf and buf.index > 0:
                     break
                 await asyncio.sleep(0.1)
             else:
-                logger.warning(
-                    f"[{video_id}] streamlink fast-fail: sem chunk em "
-                    f"{STREAMLINK_FAST_FAIL_S}s \u2192 fallback yt-dlp HLS"
-                )
                 stop_stream(video_id)
-                fallback_plan = await build_live_fallback_ingress_plan(
-                    watch_url=watch_url,
-                    user_agent=user_agent,
-                    debug_enabled=debug_enabled,
-                )
-                if not fallback_plan:
-                    logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
-                    return Response(
-                        "Stream indisponivel (streamlink + yt-dlp falharam)",
-                        status_code=503,
-                    )
-                start_stream_reader(video_id, fallback_plan.cmd)
-                logger.info(f"[{video_id}] fallback HLS ativo: {fallback_plan.source_url[:70]}...")
+                logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
+                return Response("Stream timeout na inicializacao", status_code=504)
 
-        deadline = time.monotonic() + INIT_TIMEOUT_S
-        while time.monotonic() < deadline:
-            buf = _buffers.get(video_id)
-            if buf and buf.index > 0:
-                break
-            await asyncio.sleep(0.1)
-        else:
-            stop_stream(video_id)
-            logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
-            return Response("Stream timeout na inicializacao", status_code=504)
-
-        if status == "live":
-            preroll_deadline = time.monotonic() + LIVE_PREROLL_WAIT_S
-            while time.monotonic() < preroll_deadline:
-                buf = _buffers.get(video_id)
-                if buf is None or buf.ready_for_clients(LIVE_PREROLL_BYTES):
-                    break
-                await asyncio.sleep(0.1)
+            if status == "live":
+                preroll_deadline = time.monotonic() + LIVE_PREROLL_WAIT_S
+                while time.monotonic() < preroll_deadline:
+                    buf = _buffers.get(video_id)
+                    if buf is None or buf.ready_for_clients(LIVE_PREROLL_BYTES):
+                        break
+                    await asyncio.sleep(0.1)
 
     buf = _buffers[video_id]
     mgr = _managers[video_id]
-    mgr.add_client(client_id, client_ip, user_agent)
 
     async def generate():
+        registered        = False
         local_index       = buf.latest_safe_index(INITIAL_BEHIND_BYTES)
         bytes_sent        = 0
         last_yield_time   = time.monotonic()
@@ -1437,6 +1440,9 @@ async def api_proxy_stream(request):
                     max_batch_bytes_override=MAX_BATCH_BYTES,
                 )
                 if chunks:
+                    if not registered:
+                        mgr.add_client(client_id, client_ip, user_agent)
+                        registered = True
                     payload = b"".join(chunks) if len(chunks) > 1 else chunks[0]
                     yield payload
                     bytes_sent += len(payload)
@@ -1473,7 +1479,7 @@ async def api_proxy_stream(request):
         except Exception as exc:
             logger.error(f"[{video_id}][{client_id}] erro no generator: {exc}")
         finally:
-            remaining = mgr.remove_client(client_id)
+            remaining = mgr.remove_client(client_id) if registered else mgr.count
             if remaining == 0:
                 async def _delayed_stop():
                     await asyncio.sleep(STREAM_IDLE_STOP_S)

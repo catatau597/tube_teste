@@ -373,6 +373,8 @@ Concluído nesta fase:
 - saída live passou a enviar payloads agregados por lote, não chunk por chunk
 - endpoint live agora espera um pré-buffer curto antes de liberar o cliente
 - métricas de buffer live passaram a usar bytes reais, não suposição fixa por read()
+- startup de live passou a exigir serialização por `video_id` para evitar dois processos concorrentes do mesmo canal
+- cliente de live só deve contar como ativo depois do primeiro payload entregue, não na abertura inicial da requisição
 
 Hipótese operacional desta fase:
 
