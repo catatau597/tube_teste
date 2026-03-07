@@ -13,6 +13,7 @@ from starlette.routing import Route
 from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 
 from core.config import AppConfig, DEFAULTS
+from core.live_proxy import LiveProxyManager
 from core.player_router import build_player_command_async
 from core.playlist_builder import M3UGenerator, XMLTVGenerator, _resolve_proxy_base_url
 from core.proxy_manager import (
@@ -123,6 +124,7 @@ _m3u_generator: Optional[M3UGenerator] = None
 _xmltv_generator: Optional[XMLTVGenerator] = None
 _categories_db: dict = {}
 _proxy_start_locks: dict[str, asyncio.Lock] = {}
+_live_proxy_manager: Optional[LiveProxyManager] = None
 
 _PLAYLIST_ROUTES = {
     "live.m3u":          ("live",     "direct"),
@@ -149,7 +151,7 @@ _LEGACY_REDIRECTS = {
 @asynccontextmanager
 async def lifespan(app):
     global _config, _state, _scheduler, _thumbnail_manager
-    global _m3u_generator, _xmltv_generator, _categories_db
+    global _m3u_generator, _xmltv_generator, _categories_db, _live_proxy_manager
 
     _config = AppConfig()
     hide_access = _config.get_bool("hide_access_logs")
@@ -204,6 +206,7 @@ async def lifespan(app):
 
     vod_verifier = VodVerifier(scraper, _state, _config)
     _scheduler.set_vod_verifier(vod_verifier)
+    _live_proxy_manager = LiveProxyManager()
 
     task = asyncio.create_task(_scheduler.run())
     health_check_task = asyncio.create_task(vod_verifier.run_health_check_loop())
@@ -222,6 +225,8 @@ async def lifespan(app):
             await health_check_task
         except asyncio.CancelledError:
             pass
+        if _live_proxy_manager is not None:
+            _live_proxy_manager.shutdown()
         for vid in list(_processes.keys()):
             stop_stream(vid)
         _state.save_to_disk()
@@ -1291,7 +1296,16 @@ def api_epg():
 
 @app.get("/api/proxy/status")
 def api_proxy_status():
-    live_streams = streams_status()
+    live_streams = []
+    if _live_proxy_manager is not None:
+        snap = _live_proxy_manager.snapshot()
+        live_streams = snap if isinstance(snap, list) else []
+    # Mantem fallback legada visivel enquanto a migracao nao fecha.
+    legacy_streams = streams_status()
+    known_ids = {s.get("video_id") for s in live_streams}
+    for legacy in legacy_streams:
+        if legacy.get("video_id") not in known_ids:
+            live_streams.append(legacy)
     vod_sessions = vod_proxy_manager.snapshot()
     return JSONResponse({
         "streams": live_streams + vod_sessions,
@@ -1302,7 +1316,9 @@ def api_proxy_status():
 @app.get("/api/proxy/debug/{video_id}")
 def api_proxy_debug(video_id: str):
     """Retorna informações detalhadas de debug para um stream específico."""
-    info = get_stream_debug_info(video_id)
+    info = _live_proxy_manager.debug_snapshot(video_id) if _live_proxy_manager else None
+    if info is None:
+        info = get_stream_debug_info(video_id)
     if info is None:
         return JSONResponse({"error": "stream não encontrado"}, status_code=404)
     return JSONResponse(info)
@@ -1310,17 +1326,21 @@ def api_proxy_debug(video_id: str):
 
 @app.delete("/api/proxy/{video_id}")
 def api_proxy_stop(video_id: str):
-    if not is_stream_active(video_id):
+    stopped_new = _live_proxy_manager.stop_stream(video_id) if _live_proxy_manager else False
+    stopped_old = False
+    if is_stream_active(video_id):
+        stop_stream(video_id)
+        stopped_old = True
+    if not stopped_new and not stopped_old:
         return JSONResponse({"error": "stream nao encontrado ou ja parado"}, status_code=404)
-    stop_stream(video_id)
-    return JSONResponse({"ok": True, "video_id": video_id})
+    return JSONResponse({"ok": True, "video_id": video_id, "new_core": stopped_new, "legacy": stopped_old})
 
 
 # ---------------------------------------------------------------------------
 # API — proxy streaming
 # ---------------------------------------------------------------------------
 
-async def api_proxy_stream(request):
+async def _api_proxy_stream_legacy(request):
     video_id   = request.path_params["video_id"]
     user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
     client_id  = f"{int(time.time()*1000)}_{random.randint(1000,9999)}"
@@ -1492,6 +1512,95 @@ async def api_proxy_stream(request):
 
     return StreamingResponse(
         generate(),
+        media_type="video/mp2t",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def api_proxy_stream(request):
+    video_id = request.path_params["video_id"]
+    user_agent = request.query_params.get("user_agent", "Mozilla/5.0")
+    client_id = f"{int(time.time()*1000)}_{random.randint(1000,9999)}"
+    client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0].strip()
+
+    if _live_proxy_manager is None:
+        return await _api_proxy_stream_legacy(request)
+
+    start_lock = _proxy_start_locks.setdefault(video_id, asyncio.Lock())
+    async with start_lock:
+        if not _live_proxy_manager.is_stream_active(video_id):
+            if _state is None:
+                return Response("Servidor ainda inicializando", status_code=503)
+
+            stream_info, status, thumbnail_url, watch_url = _get_stream_info(video_id)
+            if stream_info is None:
+                logger.warning(f"[{video_id}] video_id nao encontrado no estado")
+
+            if status in ("vod", "none", "ended", "completed"):
+                return RedirectResponse(f"/api/vod/{video_id}", status_code=307)
+
+            placeholder = _config.get_str("placeholder_image_url")
+            thumb_for_ph = thumbnail_url or placeholder
+            local_thumb = Path(_thumbnail_manager._cache_dir) / f"{video_id}.jpg"
+            if local_thumb.exists():
+                thumb_for_ph = str(local_thumb)
+            debug_enabled = _config.get_bool("streaming_debug_enabled") if _config else False
+
+            try:
+                ingress_plan = await resolve_proxy_ingress_plan(
+                    video_id=video_id,
+                    status=status,
+                    watch_url=watch_url,
+                    thumbnail_url=thumb_for_ph,
+                    user_agent=user_agent,
+                    font_path=FONT_PATH,
+                    texts_cache_path=TEXTS_CACHE_PATH,
+                    debug_enabled=debug_enabled,
+                )
+                await _live_proxy_manager.ensure_stream(
+                    video_id=video_id,
+                    ingress_plan=ingress_plan,
+                    metadata={"status": status, "watch_url": watch_url, "client_ip": client_ip},
+                )
+            except Exception as exc:
+                if status == "live":
+                    logger.warning(f"[{video_id}] core v2 falhou no stream primario: {exc}; tentando fallback HLS")
+                    try:
+                        fallback_plan = await build_live_fallback_ingress_plan(
+                            watch_url=watch_url,
+                            user_agent=user_agent,
+                            debug_enabled=debug_enabled,
+                        )
+                        if fallback_plan is None:
+                            raise RuntimeError("fallback HLS indisponivel")
+                        await _live_proxy_manager.ensure_stream(
+                            video_id=video_id,
+                            ingress_plan=fallback_plan,
+                            metadata={"status": status, "watch_url": watch_url, "fallback": True},
+                        )
+                    except Exception as fallback_exc:
+                        logger.error(f"[{video_id}] core v2 falhou (primario+fallback): {fallback_exc}")
+                        logger.warning(f"[{video_id}] acionando fallback para proxy legado")
+                        return await _api_proxy_stream_legacy(request)
+                else:
+                    logger.error(f"[{video_id}] core v2 erro ao iniciar stream: {exc}")
+                    logger.warning(f"[{video_id}] acionando fallback para proxy legado")
+                    return await _api_proxy_stream_legacy(request)
+
+    try:
+        stream_iter = _live_proxy_manager.attach_client(
+            video_id=video_id,
+            client_id=client_id,
+            ip=client_ip,
+            user_agent=user_agent,
+        )
+    except Exception as exc:
+        logger.error(f"[{video_id}] core v2 erro ao anexar cliente: {exc}")
+        logger.warning(f"[{video_id}] acionando fallback para proxy legado")
+        return await _api_proxy_stream_legacy(request)
+
+    return StreamingResponse(
+        stream_iter,
         media_type="video/mp2t",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
