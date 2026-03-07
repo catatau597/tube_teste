@@ -25,6 +25,7 @@ from core.proxy_manager import (
     _buffers, _managers, _processes,
     INIT_TIMEOUT_S, CLIENT_TIMEOUT_S, STREAM_IDLE_STOP_S,
     set_debug_mode, get_debug_mode, get_stream_debug_info,
+    stream_to_client,
 )
 from core.scheduler import Scheduler
 from core.state_manager import StateManager
@@ -221,7 +222,7 @@ async def lifespan(app):
         except asyncio.CancelledError:
             pass
         for vid in list(_processes.keys()):
-            stop_stream(vid)
+            await stop_stream(vid)
         _state.save_to_disk()
         logger.info("=== TubeWrangler encerrado ===")
 
@@ -1280,24 +1281,24 @@ def api_epg():
 # ---------------------------------------------------------------------------
 
 @app.get("/api/proxy/status")
-def api_proxy_status():
-    return JSONResponse({"streams": streams_status(), "count": len(_buffers)})
+async def api_proxy_status():
+    return JSONResponse({"streams": await streams_status(), "count": len(_buffers)})
 
 
 @app.get("/api/proxy/debug/{video_id}")
-def api_proxy_debug(video_id: str):
+async def api_proxy_debug(video_id: str):
     """Retorna informações detalhadas de debug para um stream específico."""
-    info = get_stream_debug_info(video_id)
+    info = await get_stream_debug_info(video_id)
     if info is None:
         return JSONResponse({"error": "stream não encontrado"}, status_code=404)
     return JSONResponse(info)
 
 
 @app.delete("/api/proxy/{video_id}")
-def api_proxy_stop(video_id: str):
+async def api_proxy_stop(video_id: str):
     if not is_stream_active(video_id):
         return JSONResponse({"error": "stream nao encontrado ou ja parado"}, status_code=404)
-    stop_stream(video_id)
+    await stop_stream(video_id)
     return JSONResponse({"ok": True, "video_id": video_id})
 
 
@@ -1350,7 +1351,7 @@ async def api_proxy_stream(request):
             logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
             return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
 
-        start_stream_reader(video_id, cmd)
+        await start_stream_reader(video_id, cmd)
 
         if status not in ("live", "none"):
             register_placeholder(video_id, cmd)
@@ -1362,7 +1363,7 @@ async def api_proxy_stream(request):
             ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
             while time.monotonic() < ff_deadline:
                 buf = _buffers.get(video_id)
-                if buf and buf.index > 0:
+                if buf and buf.head_index > 0:
                     break
                 await asyncio.sleep(0.1)
             else:
@@ -1370,7 +1371,7 @@ async def api_proxy_stream(request):
                     f"[{video_id}] streamlink fast-fail: sem chunk em "
                     f"{STREAMLINK_FAST_FAIL_S}s \u2192 fallback yt-dlp HLS"
                 )
-                stop_stream(video_id)
+                await stop_stream(video_id)
                 hls_url = await resolve_live_hls_url_async(watch_url)
                 if not hls_url:
                     logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
@@ -1379,17 +1380,17 @@ async def api_proxy_stream(request):
                         status_code=503,
                     )
                 cmd = build_live_hls_ffmpeg_cmd(hls_url)
-                start_stream_reader(video_id, cmd)
+                await start_stream_reader(video_id, cmd)
                 logger.info(f"[{video_id}] fallback HLS ativo: {hls_url[:70]}...")
 
         deadline = time.monotonic() + INIT_TIMEOUT_S
         while time.monotonic() < deadline:
             buf = _buffers.get(video_id)
-            if buf and buf.index > 0:
+            if buf and buf.head_index > 0:
                 break
             await asyncio.sleep(0.1)
         else:
-            stop_stream(video_id)
+            await stop_stream(video_id)
             logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
             return Response("Stream timeout na inicializacao", status_code=504)
 
@@ -1398,33 +1399,10 @@ async def api_proxy_stream(request):
     mgr.add_client(client_id, client_ip, user_agent)
 
     async def generate():
-        local_index       = max(0, buf.index - 10)
-        bytes_sent        = 0
-        last_yield_time   = time.monotonic()
-        consecutive_empty = 0
         try:
-            while True:
-                if not is_stream_active(video_id) and video_id not in _buffers:
-                    break
-                restart_placeholder_if_needed(video_id)
-                chunks, next_index = buf.get_chunks(local_index, count=5)
-                if chunks:
-                    for chunk in chunks:
-                        yield chunk
-                        bytes_sent += len(chunk)
-                    local_index       = next_index
-                    last_yield_time   = time.monotonic()
-                    consecutive_empty = 0
-                    mgr.update_activity(client_id, bytes_sent, local_index)
-                else:
-                    consecutive_empty += 1
-                    await asyncio.sleep(min(0.05 * consecutive_empty, 1.0))
-                    if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
-                        mgr.mark_stall(client_id)
-                        break
-                    if buf.index - local_index > 100:
-                        local_index       = max(0, buf.index - 10)
-                        consecutive_empty = 0
+            async for chunk in stream_to_client(video_id, client_id, start_from_live=True):
+                await restart_placeholder_if_needed(video_id)
+                yield chunk
         except asyncio.CancelledError:
             pass
         except Exception as exc:
@@ -1437,7 +1415,7 @@ async def api_proxy_stream(request):
                     mgr2 = _managers.get(video_id)
                     if mgr2 and mgr2.count > 0:
                         return
-                    stop_stream(video_id)
+                    await stop_stream(video_id)
                 asyncio.create_task(_delayed_stop())
 
     return StreamingResponse(
