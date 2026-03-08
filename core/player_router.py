@@ -7,8 +7,8 @@ Regras:
 - Nenhum subprocess sincrono que envolva rede (subprocess.run bloquearia o event loop).
 - resolve_vod_url_async() e build_vod_cmd() sao a unica fonte de verdade para
   status in ("none", "vod", "ended").
-- resolve_live_hls_url_async() e build_live_hls_ffmpeg_cmd() sao o fallback para status="live"
-  quando o streamlink falha (fast-fail).
+- resolve_live_hls_url_async() e build_live_hls_ffmpeg_cmd() sao o caminho primario para
+  status="live"; streamlink fica como fallback de compatibilidade.
 - build_player_command() e build_player_command_async() sao os pontos de entrada publicos.
 """
 import asyncio
@@ -158,9 +158,10 @@ def build_live_hls_ffmpeg_cmd(
     Returns:
         Lista de strings pronta para asyncio.create_subprocess_exec(*cmd).
     """
-    loglevel = "info" if debug_enabled else "error"
+    loglevel = "warning" if debug_enabled else "error"
     return [
         "ffmpeg", "-loglevel", loglevel,
+        "-nostats",
         "-re",                           # lê HLS a 1x — impede buffer overflow no live
         "-user_agent", user_agent,
         "-reconnect", "1",
@@ -584,6 +585,19 @@ async def build_player_command_async(
             debug_enabled=_config.get_bool("streaming_debug_enabled"),
         )
     """
+    if status == "live":
+        logger.debug(f"[{video_id}] modo LIVE -> resolve_live_hls_url_async")
+        hls_url = await resolve_live_hls_url_async(
+            watch_url, user_agent=user_agent, debug_enabled=debug_enabled
+        )
+        if hls_url:
+            logger.info(f"[{video_id}] live via HLS (yt-dlp + ffmpeg)")
+            return build_live_hls_ffmpeg_cmd(
+                hls_url, user_agent=user_agent, debug_enabled=debug_enabled
+            ), []
+        logger.warning(f"[{video_id}] live HLS indisponivel, fallback streamlink")
+        return build_streamlink_cmd(watch_url, debug_enabled=debug_enabled), []
+
     if status in _VOD_STATUSES:
         logger.debug(f"[{video_id}] modo VOD (status={status!r}) -> resolve_vod_url_async")
         cdn_url = await resolve_vod_url_async(watch_url, user_agent, debug_enabled=debug_enabled)

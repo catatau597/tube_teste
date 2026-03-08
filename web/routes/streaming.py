@@ -106,7 +106,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
 
                     deps.logger.info(f"[{video_id}] stream proxy iniciado")
 
-                    if status == "live":
+                    if status == "live" and cmd and cmd[0] == "streamlink":
                         ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
                         while time.monotonic() < ff_deadline:
                             buf = _buffers.get(video_id)
@@ -118,11 +118,15 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                                 f"[{video_id}] streamlink fast-fail: sem chunk em {STREAMLINK_FAST_FAIL_S}s → fallback yt-dlp HLS"
                             )
                             stop_stream(video_id)
-                            hls_url = await resolve_live_hls_url_async(watch_url)
+                            hls_url = await resolve_live_hls_url_async(
+                                watch_url, user_agent=user_agent, debug_enabled=debug_enabled
+                            )
                             if not hls_url:
                                 deps.logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
                                 return Response("Stream indisponivel (streamlink + yt-dlp falharam)", status_code=503)
-                            cmd = build_live_hls_ffmpeg_cmd(hls_url)
+                            cmd = build_live_hls_ffmpeg_cmd(
+                                hls_url, user_agent=user_agent, debug_enabled=debug_enabled
+                            )
                             start_stream_reader(video_id, cmd)
                             deps.logger.info(f"[{video_id}] fallback HLS ativo: {hls_url[:70]}...")
 
