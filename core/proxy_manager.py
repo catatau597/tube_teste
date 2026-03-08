@@ -33,7 +33,7 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # Configuracao
 # ---------------------------------------------------------------------------
 
-CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura
+CHUNK_SIZE               = 65424   # 348 pacotes TS (188 bytes) por chunk alinhado
 BUFFER_MAXLEN            = 400     # máximo de chunks no deque (~25 MB)
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
@@ -325,14 +325,50 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     def _read_stdout() -> None:
         buf = _buffers[video_id]
         chunk_count = 0
+        pending = bytearray()
+        ts_synced = False
+
+        def _find_ts_sync_offset(data: bytes) -> Optional[int]:
+            # Procura offset em que o padrão 0x47 repete a cada 188 bytes.
+            # Usa algumas amostras para evitar falso positivo.
+            max_probe_packets = 8
+            for off in range(188):
+                ok = True
+                for i in range(max_probe_packets):
+                    pos = off + i * 188
+                    if pos >= len(data):
+                        break
+                    if data[pos] != 0x47:
+                        ok = False
+                        break
+                if ok:
+                    return off
+            return None
+
         try:
             while True:
-                chunk = process.stdout.read(CHUNK_SIZE)
-                if not chunk:
+                raw = process.stdout.read(65536)
+                if not raw:
                     break
-                buf.add_chunk(chunk)
-                chunk_count += 1
-                
+                pending.extend(raw)
+
+                if not ts_synced and len(pending) >= 188 * 8:
+                    off = _find_ts_sync_offset(pending)
+                    if off is None:
+                        # Mantém somente cauda para continuar tentando sync.
+                        keep = min(len(pending), 188 * 16)
+                        del pending[:-keep]
+                        continue
+                    if off > 0:
+                        del pending[:off]
+                    ts_synced = True
+
+                while ts_synced and len(pending) >= CHUNK_SIZE:
+                    chunk = bytes(pending[:CHUNK_SIZE])
+                    del pending[:CHUNK_SIZE]
+                    buf.add_chunk(chunk)
+                    chunk_count += 1
+
                 # Debug: log a cada 400 chunks lidos
                 log_every = 4000 if video_id in _placeholder_cmds else 400
                 if _debug_enabled and chunk_count % log_every == 0:
