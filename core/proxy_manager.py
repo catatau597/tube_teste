@@ -33,7 +33,7 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # ---------------------------------------------------------------------------
 
 CHUNK_SIZE               = 65536   # 64 KB por chunk de leitura
-BUFFER_MAXLEN            = 200     # máximo de chunks no deque (~12 MB)
+BUFFER_MAXLEN            = 400     # máximo de chunks no deque (~25 MB)
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
 INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
@@ -89,8 +89,8 @@ class StreamBuffer:
             self.index += 1
             self.last_chunk_at = time.time()
             
-            # Debug: log periódico de buffer state (a cada 50 chunks)
-            if _debug_enabled and self.index % 50 == 0:
+            # Debug: log periódico de buffer state (a cada 200 chunks)
+            if _debug_enabled and self.index % 200 == 0:
                 mb = len(self.chunks) * CHUNK_SIZE / 1024 / 1024
                 elapsed = time.time() - self.created_at
                 rate = self.index / elapsed if elapsed > 0 else 0
@@ -316,8 +316,8 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
                 buf.add_chunk(chunk)
                 chunk_count += 1
                 
-                # Debug: log a cada 100 chunks lidos
-                if _debug_enabled and chunk_count % 100 == 0:
+                # Debug: log a cada 400 chunks lidos
+                if _debug_enabled and chunk_count % 400 == 0:
                     mb = chunk_count * CHUNK_SIZE / 1024 / 1024
                     logger.info(
                         f"[{video_id}] 💾 stdout thread: {chunk_count} chunks lidos "
@@ -337,10 +337,17 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
                 if not line:
                     continue
                 low = line.lower()
+                # Linhas de progresso do ffmpeg (frame=...) são muito verbosas e
+                # degradam throughput quando há vários streams/clientes.
+                if "frame=" in low and "time=" in low and not _debug_enabled:
+                    continue
                 if any(kw in low for kw in ("error", "fail", "fatal", "invalid", "no playable", "unable")):
                     logger.warning(f"[{video_id}] stderr: {line}")
                 else:
-                    logger.info(f"[{video_id}] stderr: {line}")
+                    if _debug_enabled:
+                        logger.info(f"[{video_id}] stderr: {line}")
+                    else:
+                        logger.debug(f"[{video_id}] stderr: {line}")
         except Exception as exc:
             logger.debug(f"[{video_id}] stderr thread encerrada: {exc}")
 

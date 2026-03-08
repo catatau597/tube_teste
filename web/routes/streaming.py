@@ -35,6 +35,7 @@ from web.app_deps import AppDeps
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 STREAMLINK_FAST_FAIL_S = 8
+STREAM_CHUNK_BATCH = 16
 _start_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -150,7 +151,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                     if not is_stream_active(video_id) and video_id not in _buffers:
                         break
                     restart_placeholder_if_needed(video_id)
-                    chunks, next_index = buf.get_chunks(local_index, count=5)
+                    chunks, next_index = buf.get_chunks(local_index, count=STREAM_CHUNK_BATCH)
                     if chunks:
                         for chunk in chunks:
                             yield chunk

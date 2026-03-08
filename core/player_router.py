@@ -194,13 +194,18 @@ def build_vod_cmd(
     Returns:
         Lista de strings pronta para asyncio.create_subprocess_exec(*cmd).
     """
-    loglevel = "info" if debug_enabled else "error"
+    loglevel = "warning" if debug_enabled else "error"
     
     if cdn_url:
         logger.debug(f"VOD via ffmpeg CDN direto: {cdn_url[:80]}...")
         return [
             "ffmpeg", "-loglevel", loglevel,
+            "-nostats",
+            "-re",
             "-headers", f"User-Agent: {user_agent}\r\n",
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
             "-i", cdn_url,
             "-c", "copy",
             "-f", "mpegts",
@@ -213,9 +218,9 @@ def build_vod_cmd(
     yt_dlp_verbose = "--verbose" if debug_enabled else ""
     fallback = (
         "set -o pipefail; "
-        f"yt-dlp {yt_dlp_verbose} -f 'bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best' "
+        f"yt-dlp {yt_dlp_verbose} -f 'best[ext=mp4][acodec!=none]/best[acodec!=none]/best' "
         f"--js-runtimes node --no-playlist -o - --user-agent {q_ua} {q_url} "
-        f"| ffmpeg -loglevel {loglevel} -i pipe:0 -c copy -f mpegts pipe:1"
+        f"| ffmpeg -loglevel {loglevel} -nostats -re -i pipe:0 -c copy -f mpegts pipe:1"
     )
     logger.info(f"VOD via fallback yt-dlp|ffmpeg: {watch_url}")
     return ["bash", "-lc", fallback]
@@ -422,7 +427,7 @@ async def resolve_vod_url_async(
     try:
         yt_dlp_args = [
             "yt-dlp",
-            "-f", "bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "-f", "best[ext=mp4][acodec!=none]/best[acodec!=none]/best",
             "--get-url",
             "--no-playlist",
             "--js-runtimes", "node",
