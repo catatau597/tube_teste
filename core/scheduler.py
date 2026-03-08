@@ -248,16 +248,18 @@ class Scheduler:
                     try:
                         use_playlists = self._config.get_bool("use_playlist_items")
                         if use_playlists:
-                            new_streams = self._scraper.fetch_all_streams_for_channels_using_playlists(
+                            new_streams = await asyncio.to_thread(
+                                self._scraper.fetch_all_streams_for_channels_using_playlists,
                                 all_target_channels,
                                 published_after=published_after,
                                 stale_hours=self._config.get_int("stale_hours"),
                                 max_schedule_hours=self._config.get_int("max_schedule_hours"),
                             )
                         else:
-                            new_streams = self._scraper.fetch_all_streams_for_channels(
+                            new_streams = await asyncio.to_thread(
+                                self._scraper.fetch_all_streams_for_channels,
                                 all_target_channels,
-                                published_after=published_after
+                                published_after=published_after,
                             )
                         self._state.update_streams(new_streams)
 
@@ -279,13 +281,14 @@ class Scheduler:
                     self._state.meta["lastfullsync"] = now_utc
 
                 self.log_current_state("Verificação Principal")
-                _save_files(
+                await asyncio.to_thread(
+                    _save_files,
                     self._state,
                     self._config,
                     self._categories_db,
-                    thumbnail_manager=self._thumbnail_manager,
+                    self._thumbnail_manager,
                 )
-                self._state.save_to_disk()
+                await asyncio.to_thread(self._state.save_to_disk)
 
             elif time_for_main_run and not is_active_time:
                 start_h = self._config.get_int("scheduler_active_start_hour")
@@ -350,7 +353,11 @@ class Scheduler:
                         vid for vid, s in self._state.streams.items()
                         if s.get("status") == "live"
                     }
-                    updated = self._scraper.fetch_streams_by_ids(list(ids_to_check), current_channels)
+                    updated = await asyncio.to_thread(
+                        self._scraper.fetch_streams_by_ids,
+                        list(ids_to_check),
+                        current_channels,
+                    )
                     if updated:
                         self._state.update_streams(updated)
                     returned_ids = {s["videoid"] for s in updated if "videoid" in s}
@@ -372,13 +379,14 @@ class Scheduler:
                                 self._vod_verifier.schedule_post_live_check(vid)
 
                     self.log_current_state("Verificação Alta Frequência")
-                    _save_files(
+                    await asyncio.to_thread(
+                        _save_files,
                         self._state,
                         self._config,
                         self._categories_db,
-                        thumbnail_manager=self._thumbnail_manager,
+                        self._thumbnail_manager,
                     )
-                    self._state.save_to_disk()
+                    await asyncio.to_thread(self._state.save_to_disk)
                 except Exception as e:
                     logger.error(f"Scheduler: erro na verificação alta frequência: {e}", exc_info=True)
 
