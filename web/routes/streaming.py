@@ -37,6 +37,7 @@ TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 STREAMLINK_FAST_FAIL_S = 8
 STREAM_CHUNK_BATCH = 64
+TS_KEEPALIVE_PACKET = bytes([0x47, 0x1F, 0xFF, 0x10]) + (b"\x00" * 184)
 _start_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -151,7 +152,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
 
         async def generate():
             # Para live, começa mais perto do fim para reduzir atraso acumulado.
-            initial_back = 3 if stream_status == "live" else 50
+            initial_back = 10 if stream_status == "live" else 50
             local_index = max(0, buf.index - initial_back)
             bytes_sent = 0
             last_yield_time = time.monotonic()
@@ -192,8 +193,15 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                     else:
                         consecutive_empty += 1
                         if is_live:
-                            # Polling curto para live: evita inserir pacotes sintéticos no TS.
-                            await asyncio.sleep(min(0.005 * consecutive_empty, 0.08))
+                            # Espera event-driven por novo chunk (menos polling concorrente).
+                            timeout_wait = min(0.05 * consecutive_empty, 0.25)
+                            got_new = await asyncio.to_thread(
+                                buf.wait_for_index_advance, local_index, timeout_wait
+                            )
+                            # Keepalive leve em gaps curtos: mantém socket ativo no player.
+                            if not got_new and consecutive_empty % 5 == 0:
+                                yield TS_KEEPALIVE_PACKET
+                                bytes_sent += len(TS_KEEPALIVE_PACKET)
                         else:
                             await asyncio.sleep(min(0.01 * consecutive_empty, 0.2))
                         if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
@@ -203,14 +211,11 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         if is_placeholder:
                             lag_limit = 30
                         elif is_live:
-                            lag_limit = 120
+                            lag_limit = 10_000  # praticamente desabilitado para live
                         else:
                             lag_limit = 300
                         if buf.index - local_index > lag_limit:
-                            if is_live:
-                                local_index = max(0, buf.index - 6)
-                            else:
-                                local_index = max(0, buf.index - 50)
+                            local_index = max(0, buf.index - 50)
                             consecutive_empty = 0
             except asyncio.CancelledError:
                 pass
