@@ -162,10 +162,13 @@ def build_live_hls_ffmpeg_cmd(
     return [
         "ffmpeg", "-loglevel", loglevel,
         "-nostats",
-        # Gera PTS quando a entrada vier com lacunas de timestamp.
-        "-fflags", "+genpts",
+        # Gera PTS e descarta pacotes corrompidos da entrada HLS.
+        "-fflags", "+genpts+discardcorrupt",
         "-re",                           # lê HLS a 1x — impede buffer overflow no live
         "-user_agent", user_agent,
+        # Em live HLS do YouTube, segmentos podem alternar host CDN. Desativar
+        # conexão persistente evita falhas recorrentes de keepalive entre hosts.
+        "-http_persistent", "0",
         "-reconnect", "1",
         "-reconnect_streamed", "1",
         "-reconnect_delay_max", "5",

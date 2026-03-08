@@ -392,12 +392,31 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
 
     # Thread: loga TODO o stderr em INFO (não só erros)
     def _read_stderr() -> None:
+        last_hls_transient_log = 0.0
         try:
             for raw in process.stderr:
                 line = raw.decode("utf-8", errors="replace").rstrip()
                 if not line:
                     continue
                 low = line.lower()
+                if (
+                    "cannot reuse http connection for different host" in low
+                    or "keepalive request failed" in low
+                ):
+                    # Ruído frequente do ffmpeg/HLS em troca de host CDN.
+                    # Em alta concorrência, spammar warning aqui derruba throughput.
+                    now = time.time()
+                    if now - last_hls_transient_log >= 30:
+                        last_hls_transient_log = now
+                        logger.info(
+                            f"[{video_id}] stderr(hls-transient): "
+                            "keepalive/reuse entre hosts CDN; reconectando automaticamente"
+                        )
+                    elif _debug_enabled:
+                        logger.info(f"[{video_id}] stderr: {line}")
+                    else:
+                        logger.debug(f"[{video_id}] stderr: {line}")
+                    continue
                 # Linhas de progresso do ffmpeg (frame=...) são muito verbosas e
                 # degradam throughput quando há vários streams/clientes.
                 if "frame=" in low and "time=" in low and not _debug_enabled:
