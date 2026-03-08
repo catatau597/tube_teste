@@ -91,7 +91,8 @@ class StreamBuffer:
             self.last_chunk_at = time.time()
             
             # Debug: log periódico de buffer state (a cada 200 chunks)
-            if _debug_enabled and self.index % 200 == 0:
+            log_every = 2000 if self.video_id in _placeholder_cmds else 200
+            if _debug_enabled and self.index % log_every == 0:
                 mb = len(self.chunks) * CHUNK_SIZE / 1024 / 1024
                 elapsed = time.time() - self.created_at
                 rate = self.index / elapsed if elapsed > 0 else 0
@@ -266,10 +267,19 @@ _buffers:   Dict[str, StreamBuffer]  = {}
 _managers:  Dict[str, ClientManager] = {}
 _processes: Dict[str, subprocess.Popen] = {}
 _process_start_times: Dict[str, float] = {}  # video_id → timestamp de start
+_stream_locks: Dict[str, threading.RLock] = {}
 
 # Registra comandos de placeholder para permitir restart automático.
 # video_id → List[str] cmd (somente para streams do tipo placeholder)
 _placeholder_cmds: Dict[str, List[str]] = {}
+
+
+def _get_stream_lock(video_id: str) -> threading.RLock:
+    lock = _stream_locks.get(video_id)
+    if lock is None:
+        lock = threading.RLock()
+        _stream_locks[video_id] = lock
+    return lock
 
 
 # ---------------------------------------------------------------------------
@@ -283,27 +293,33 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
 
     Cria BufferStream e ClientManager se ainda não existirem.
     """
-    if video_id not in _buffers:
-        _buffers[video_id]  = StreamBuffer(video_id=video_id)
-        _managers[video_id] = ClientManager(video_id=video_id)
-    else:
-        # Reativa o buffer para um novo segmento de placeholder
-        _buffers[video_id].active = True
-        _buffers[video_id].created_at = time.time()
+    with _get_stream_lock(video_id):
+        current = _processes.get(video_id)
+        if current is not None and current.poll() is None:
+            logger.warning(f"[{video_id}] start ignorado: processo já ativo PID={current.pid}")
+            return current
 
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        bufsize=0,
-        start_new_session=True,
-    )
-    _processes[video_id] = process
-    _process_start_times[video_id] = time.time()
+        if video_id not in _buffers:
+            _buffers[video_id]  = StreamBuffer(video_id=video_id)
+            _managers[video_id] = ClientManager(video_id=video_id)
+        else:
+            # Reativa o buffer para um novo segmento de placeholder
+            _buffers[video_id].active = True
+            _buffers[video_id].created_at = time.time()
 
-    cmd_str = " ".join(cmd)
-    logger.info(f"[{video_id}] processo iniciado  PID={process.pid}")
-    logger.debug(f"[{video_id}] cmd completo: {cmd_str}")
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+            start_new_session=True,
+        )
+        _processes[video_id] = process
+        _process_start_times[video_id] = time.time()
+
+        cmd_str = " ".join(cmd)
+        logger.info(f"[{video_id}] processo iniciado  PID={process.pid}")
+        logger.debug(f"[{video_id}] cmd completo: {cmd_str}")
 
     # Thread: lê stdout → buffer
     def _read_stdout() -> None:
@@ -318,7 +334,8 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
                 chunk_count += 1
                 
                 # Debug: log a cada 400 chunks lidos
-                if _debug_enabled and chunk_count % 400 == 0:
+                log_every = 4000 if video_id in _placeholder_cmds else 400
+                if _debug_enabled and chunk_count % log_every == 0:
                     mb = chunk_count * CHUNK_SIZE / 1024 / 1024
                     logger.info(
                         f"[{video_id}] 💾 stdout thread: {chunk_count} chunks lidos "
@@ -392,26 +409,27 @@ def restart_placeholder_if_needed(video_id: str) -> bool:
     - Não há clientes conectados (evita iniciar sem audiência).
     - O stream foi removido (stop_stream chamado).
     """
-    if video_id not in _placeholder_cmds:
-        return False
+    with _get_stream_lock(video_id):
+        if video_id not in _placeholder_cmds:
+            return False
 
-    mgr = _managers.get(video_id)
-    if mgr is None or mgr.count == 0:
-        # Sem clientes — não reinicia; stop_stream cuidará da limpeza
-        return False
+        mgr = _managers.get(video_id)
+        if mgr is None or mgr.count == 0:
+            # Sem clientes — não reinicia; stop_stream cuidará da limpeza
+            return False
 
-    proc = _processes.get(video_id)
-    if proc is not None and proc.poll() is None:
-        # Processo ainda vivo — nenhuma ação necessária
-        return False
+        proc = _processes.get(video_id)
+        if proc is not None and proc.poll() is None:
+            # Processo ainda vivo — nenhuma ação necessária
+            return False
 
-    cmd = _placeholder_cmds[video_id]
-    logger.info(
-        f"[{video_id}] placeholder encerrou naturalmente, reiniciando "
-        f"(clientes={mgr.count})  cmd={cmd[0]}"
-    )
-    start_stream_reader(video_id, cmd)
-    return True
+        cmd = _placeholder_cmds[video_id]
+        logger.info(
+            f"[{video_id}] placeholder encerrou naturalmente, reiniciando "
+            f"(clientes={mgr.count})  cmd={cmd[0]}"
+        )
+        start_stream_reader(video_id, cmd)
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -420,33 +438,35 @@ def restart_placeholder_if_needed(video_id: str) -> bool:
 
 def stop_stream(video_id: str) -> None:
     """Para o processo e remove os recursos do stream."""
-    # Remove registro de placeholder antes de qualquer outra coisa
-    _placeholder_cmds.pop(video_id, None)
+    with _get_stream_lock(video_id):
+        # Remove registro de placeholder antes de qualquer outra coisa
+        _placeholder_cmds.pop(video_id, None)
 
-    proc = _processes.pop(video_id, None)
-    if proc:
-        try:
-            if proc.poll() is None:
-                # start_new_session=True cria novo grupo; encerra grupo inteiro
-                # (evita filhos órfãos em pipelines bash -> yt-dlp | ffmpeg).
-                os.killpg(proc.pid, signal.SIGTERM)
-                proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
+        proc = _processes.pop(video_id, None)
+        if proc:
             try:
                 if proc.poll() is None:
-                    logger.warning(f"[{video_id}] SIGTERM timeout; enviando SIGKILL no grupo")
-                    os.killpg(proc.pid, signal.SIGKILL)
-                    proc.wait(timeout=3)
+                    # start_new_session=True cria novo grupo; encerra grupo inteiro
+                    # (evita filhos órfãos em pipelines bash -> yt-dlp | ffmpeg).
+                    os.killpg(proc.pid, signal.SIGTERM)
+                    proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    if proc.poll() is None:
+                        logger.warning(f"[{video_id}] SIGTERM timeout; enviando SIGKILL no grupo")
+                        os.killpg(proc.pid, signal.SIGKILL)
+                        proc.wait(timeout=3)
+                except Exception as exc:
+                    logger.warning(f"[{video_id}] erro ao forçar kill do grupo: {exc}")
             except Exception as exc:
-                logger.warning(f"[{video_id}] erro ao forçar kill do grupo: {exc}")
-        except Exception as exc:
-            logger.warning(f"[{video_id}] erro ao terminar processo: {exc}")
-        logger.info(f"[{video_id}] processo encerrado  PID={proc.pid} rc={proc.returncode}")
+                logger.warning(f"[{video_id}] erro ao terminar processo: {exc}")
+            logger.info(f"[{video_id}] processo encerrado  PID={proc.pid} rc={proc.returncode}")
 
-    _buffers.pop(video_id, None)
-    _managers.pop(video_id, None)
-    _process_start_times.pop(video_id, None)
-    logger.info(f"[{video_id}] recursos liberados")
+        _buffers.pop(video_id, None)
+        _managers.pop(video_id, None)
+        _process_start_times.pop(video_id, None)
+        _stream_locks.pop(video_id, None)
+        logger.info(f"[{video_id}] recursos liberados")
 
 
 # ---------------------------------------------------------------------------
