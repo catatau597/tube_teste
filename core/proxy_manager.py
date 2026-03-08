@@ -34,7 +34,7 @@ logger = logging.getLogger("TubeWrangler.proxy")
 # ---------------------------------------------------------------------------
 
 CHUNK_SIZE               = 65424   # 348 pacotes TS (188 bytes) por chunk alinhado
-BUFFER_MAXLEN            = 400     # máximo de chunks no deque (~25 MB)
+BUFFER_MAXLEN            = 800     # máximo de chunks no deque (~50 MB)
 CLIENT_TIMEOUT_S         = 30      # segundos sem receber dado → desconecta cliente
 STREAM_IDLE_STOP_S       = 30      # segundos sem clientes → para o processo
 INIT_TIMEOUT_S           = 15      # segundos aguardando primeiro chunk
@@ -325,6 +325,7 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
     def _read_stdout() -> None:
         buf = _buffers[video_id]
         chunk_count = 0
+        last_log_chunk_count = -1
         pending = bytearray()
         ts_synced = False
 
@@ -371,7 +372,13 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
 
                 # Debug: log a cada 400 chunks lidos
                 log_every = 4000 if video_id in _placeholder_cmds else 400
-                if _debug_enabled and chunk_count % log_every == 0:
+                if (
+                    _debug_enabled
+                    and chunk_count > 0
+                    and chunk_count % log_every == 0
+                    and chunk_count != last_log_chunk_count
+                ):
+                    last_log_chunk_count = chunk_count
                     mb = chunk_count * CHUNK_SIZE / 1024 / 1024
                     logger.info(
                         f"[{video_id}] 💾 stdout thread: {chunk_count} chunks lidos "

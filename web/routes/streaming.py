@@ -147,8 +147,9 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
         mgr.add_client(client_id, client_ip, user_agent)
 
         async def generate():
-            # Janela inicial maior melhora join tardio (upcoming/live) no VLC.
-            local_index = max(0, buf.index - 50)
+            # Para live, começa mais perto do fim para reduzir atraso acumulado.
+            initial_back = 10 if status == "live" else 50
+            local_index = max(0, buf.index - initial_back)
             bytes_sent = 0
             last_yield_time = time.monotonic()
             consecutive_empty = 0
@@ -158,7 +159,13 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         break
                     restart_placeholder_if_needed(video_id)
                     is_placeholder = video_id in _placeholder_cmds
-                    batch = 8 if is_placeholder else STREAM_CHUNK_BATCH
+                    is_live = status == "live"
+                    if is_placeholder:
+                        batch = 8
+                    elif is_live:
+                        batch = 16
+                    else:
+                        batch = STREAM_CHUNK_BATCH
                     chunks, next_index = buf.get_chunks(local_index, count=batch)
                     if chunks:
                         for chunk in chunks:
@@ -175,7 +182,13 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                             mgr.mark_stall(client_id)
                             break
-                        lag_limit = 30 if is_placeholder else 100
+                        # Evita saltos agressivos em live: deixar o ring-buffer resolver atraso real.
+                        if is_placeholder:
+                            lag_limit = 30
+                        elif is_live:
+                            lag_limit = 10_000  # praticamente desabilitado para live
+                        else:
+                            lag_limit = 300
                         if buf.index - local_index > lag_limit:
                             local_index = max(0, buf.index - 50)
                             consecutive_empty = 0
