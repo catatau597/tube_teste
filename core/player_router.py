@@ -366,7 +366,6 @@ async def resolve_live_hls_url_async(
             "yt-dlp",
             "-g",
             "--no-playlist",
-            "-f", "best[protocol=m3u8]/best",
             "--js-runtimes", "node",
             "--user-agent", user_agent,
         ]
@@ -387,22 +386,9 @@ async def resolve_live_hls_url_async(
             )
             return ""
         text = out.decode("utf-8", errors="replace").strip()
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        if not lines:
-            return ""
-
-        hls_candidates = [
-            ln for ln in lines
-            if (".m3u8" in ln or "manifest/hls" in ln or "hls_playlist" in ln)
-        ]
-        if hls_candidates:
-            url = hls_candidates[0]
+        url = text.splitlines()[0] if text else ""
+        if url:
             logger.info(f"[resolve_live_hls] HLS URL resolvida: {url[:80]}...")
-            return url
-
-        # Fallback: mantém comportamento anterior, mas reporta que não veio HLS.
-        url = lines[0]
-        logger.warning(f"[resolve_live_hls] fallback sem HLS explícito: {url[:80]}...")
         return url
 
     except asyncio.TimeoutError:
