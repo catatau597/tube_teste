@@ -37,8 +37,6 @@ TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 STREAMLINK_FAST_FAIL_S = 8
 STREAM_CHUNK_BATCH = 64
-LIVE_CATCHUP_MAX_LAG_CHUNKS = 220
-LIVE_CATCHUP_BACK_CHUNKS = 12
 _start_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -165,17 +163,6 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                     restart_placeholder_if_needed(video_id)
                     is_placeholder = video_id in _placeholder_cmds
                     is_live = stream_status == "live"
-                    if is_live:
-                        lag_chunks = buf.index - local_index
-                        if lag_chunks > LIVE_CATCHUP_MAX_LAG_CHUNKS:
-                            old_index = local_index
-                            local_index = max(0, buf.index - LIVE_CATCHUP_BACK_CHUNKS)
-                            skipped = local_index - old_index
-                            if skipped > 0:
-                                deps.logger.warning(
-                                    f"[{video_id}] [{client_id}] live atrasado: pulando {skipped} chunks "
-                                    f"(lag={lag_chunks} -> alvo={LIVE_CATCHUP_BACK_CHUNKS})"
-                                )
                     if is_placeholder:
                         batch = 8
                     elif is_live:
@@ -184,13 +171,9 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         batch = STREAM_CHUNK_BATCH
                     chunks, next_index = buf.get_chunks(local_index, count=batch)
                     if chunks:
-                        # Entrega em bloco reduz custo de escrita por cliente em live.
-                        payload = b"".join(chunks)
-                        if payload:
-                            yield payload
-                            bytes_sent += len(payload)
-                        if is_live:
-                            await asyncio.sleep(0)
+                        for chunk in chunks:
+                            yield chunk
+                            bytes_sent += len(chunk)
                         local_index = next_index
                         last_yield_time = time.monotonic()
                         consecutive_empty = 0
