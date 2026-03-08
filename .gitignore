@@ -5,5 +5,7 @@ data/
 __pycache__/
 **/__pycache__/
 *.pyc
+.venv/
+docker-compose.override.tmpdata.yml
 .env
 .sesskey

@@ -201,7 +201,7 @@ async def lifespan(app):
         logger.info("=== TubeWrangler encerrado ===")
 
 
-app, rt = fast_app(
+app, _ = fast_app(
     lifespan=lifespan,
     hdrs=[],
 )
