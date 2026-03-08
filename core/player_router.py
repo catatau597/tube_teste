@@ -211,6 +211,8 @@ def build_vod_cmd(
             "-reconnect_delay_max", "5",
             "-i", cdn_url,
             "-c", "copy",
+            "-mpegts_flags", "+resend_headers",
+            "-flush_packets", "1",
             "-f", "mpegts",
             "pipe:1",
         ]
@@ -223,7 +225,8 @@ def build_vod_cmd(
         "set -o pipefail; "
         f"yt-dlp {yt_dlp_verbose} -f 'best[ext=mp4][acodec!=none]/best[acodec!=none]/best' "
         f"--js-runtimes node --no-playlist -o - --user-agent {q_ua} {q_url} "
-        f"| ffmpeg -loglevel {loglevel} -nostats -re -i pipe:0 -c copy -f mpegts pipe:1"
+        f"| ffmpeg -loglevel {loglevel} -nostats -re -i pipe:0 -c copy "
+        "-mpegts_flags +resend_headers -flush_packets 1 -f mpegts pipe:1"
     )
     logger.info(f"VOD via fallback yt-dlp|ffmpeg: {watch_url}")
     return ["bash", "-lc", fallback]
@@ -310,6 +313,8 @@ def build_ffmpeg_placeholder_cmd(
         "-r", "1", "-g", "1",
         "-c:a", "aac", "-b:a", "32k",
         "-tune", "stillimage",
+        "-mpegts_flags", "+resend_headers",
+        "-flush_packets", "1",
         "-f", "mpegts", "pipe:1",
     ]
     return cmd, temp_files

@@ -146,7 +146,8 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
         mgr.add_client(client_id, client_ip, user_agent)
 
         async def generate():
-            local_index = max(0, buf.index - 10)
+            # Janela inicial maior melhora join tardio (upcoming/live) no VLC.
+            local_index = max(0, buf.index - 50)
             bytes_sent = 0
             last_yield_time = time.monotonic()
             consecutive_empty = 0
@@ -172,7 +173,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                             mgr.mark_stall(client_id)
                             break
                         if buf.index - local_index > 100:
-                            local_index = max(0, buf.index - 10)
+                            local_index = max(0, buf.index - 50)
                             consecutive_empty = 0
             except asyncio.CancelledError:
                 pass
