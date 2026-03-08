@@ -162,26 +162,19 @@ def build_live_hls_ffmpeg_cmd(
     return [
         "ffmpeg", "-loglevel", loglevel,
         "-nostats",
-        # Gera PTS e descarta pacotes corrompidos vindos do HLS upstream.
-        "-fflags", "+genpts+discardcorrupt",
+        # Gera PTS quando a entrada vier com lacunas de timestamp.
+        "-fflags", "+genpts",
         "-re",                           # lê HLS a 1x — impede buffer overflow no live
         "-user_agent", user_agent,
         "-reconnect", "1",
         "-reconnect_streamed", "1",
         "-reconnect_delay_max", "5",
         "-i", hls_url,
-        "-map", "0:v:0",
-        "-map", "0:a:0?",
-        # Mantém vídeo em copy e regera clock de áudio para reduzir drift/PCR late.
-        "-c:v", "copy",
-        "-c:a", "aac",
-        "-af", "aresample=async=1:first_pts=0",
-        "-ar", "48000",
-        "-ac", "2",
-        "-b:a", "128k",
-        # Mux menos agressivo para priorizar estabilidade de timestamps.
-        "-muxpreload", "0.25",
-        "-muxdelay", "0.25",
+        "-c", "copy",
+        # Reduz latência de mux e melhora regularidade do PCR/PTS no TS de saída.
+        "-max_interleave_delta", "0",
+        "-muxpreload", "0",
+        "-muxdelay", "0",
         "-pcr_period", "20",
         "-pat_period", "0.1",
         "-sdt_period", "0.25",
