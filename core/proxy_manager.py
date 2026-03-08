@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import signal
 import subprocess
 import threading
 import time
@@ -293,6 +295,7 @@ def start_stream_reader(video_id: str, cmd: List[str]) -> subprocess.Popen:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         bufsize=0,
+        start_new_session=True,
     )
     _processes[video_id] = process
     _process_start_times[video_id] = time.time()
@@ -416,11 +419,21 @@ def stop_stream(video_id: str) -> None:
     if proc:
         try:
             if proc.poll() is None:
-                proc.terminate()
+                # start_new_session=True cria novo grupo; encerra grupo inteiro
+                # (evita filhos órfãos em pipelines bash -> yt-dlp | ffmpeg).
+                os.killpg(proc.pid, signal.SIGTERM)
                 proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                if proc.poll() is None:
+                    logger.warning(f"[{video_id}] SIGTERM timeout; enviando SIGKILL no grupo")
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    proc.wait(timeout=3)
+            except Exception as exc:
+                logger.warning(f"[{video_id}] erro ao forçar kill do grupo: {exc}")
         except Exception as exc:
             logger.warning(f"[{video_id}] erro ao terminar processo: {exc}")
-        logger.info(f"[{video_id}] processo encerrado  PID={proc.pid}")
+        logger.info(f"[{video_id}] processo encerrado  PID={proc.pid} rc={proc.returncode}")
 
     _buffers.pop(video_id, None)
     _managers.pop(video_id, None)

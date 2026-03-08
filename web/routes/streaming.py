@@ -35,6 +35,15 @@ from web.app_deps import AppDeps
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 STREAMLINK_FAST_FAIL_S = 8
+_start_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_start_lock(video_id: str) -> asyncio.Lock:
+    lock = _start_locks.get(video_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _start_locks[video_id] = lock
+    return lock
 
 
 def register_streaming_routes(app, deps: AppDeps) -> None:
@@ -47,80 +56,85 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
         deps.logger.info(f"[{video_id}] nova conexao proxy  client={client_id}  ip={client_ip}")
 
         if not is_stream_active(video_id):
-            if deps.state is None:
-                return Response("Servidor ainda inicializando", status_code=503)
+            async with _get_start_lock(video_id):
+                # Recheck após lock: evita corrida de dupla inicialização.
+                if not is_stream_active(video_id):
+                    if deps.state is None:
+                        return Response("Servidor ainda inicializando", status_code=503)
 
-            stream_info = deps.state.streams.get(video_id)
-            if stream_info is None:
-                deps.logger.warning(f"[{video_id}] video_id nao encontrado no estado")
-            status = stream_info.get("status") if stream_info else None
-            thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
-            watch_url = f"https://www.youtube.com/watch?v={video_id}"
-            placeholder = deps.config.get_str("placeholder_image_url") if deps.config else ""
-            thumb_for_ph = thumbnail_url or placeholder
+                    stream_info = deps.state.streams.get(video_id)
+                    if stream_info is None:
+                        deps.logger.warning(f"[{video_id}] video_id nao encontrado no estado")
+                    status = stream_info.get("status") if stream_info else None
+                    thumbnail_url = stream_info.get("thumbnailurl") if stream_info else None
+                    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+                    placeholder = deps.config.get_str("placeholder_image_url") if deps.config else ""
+                    thumb_for_ph = thumbnail_url or placeholder
 
-            deps.logger.info(f"[{video_id}] iniciando stream  status={status!r}  url={watch_url}")
+                    deps.logger.info(f"[{video_id}] iniciando stream  status={status!r}  url={watch_url}")
 
-            if deps.thumbnail_manager:
-                local_thumb = Path(deps.thumbnail_manager._cache_dir) / f"{video_id}.jpg"
-                if local_thumb.exists():
-                    thumb_for_ph = str(local_thumb)
+                    if deps.thumbnail_manager:
+                        local_thumb = Path(deps.thumbnail_manager._cache_dir) / f"{video_id}.jpg"
+                        if local_thumb.exists():
+                            thumb_for_ph = str(local_thumb)
 
-            debug_enabled = deps.config.get_bool("streaming_debug_enabled") if deps.config else False
+                    debug_enabled = deps.config.get_bool("streaming_debug_enabled") if deps.config else False
 
-            try:
-                cmd, _temp = await build_player_command_async(
-                    video_id=video_id,
-                    status=status,
-                    watch_url=watch_url,
-                    thumbnail_url=thumb_for_ph,
-                    user_agent=user_agent,
-                    font_path=FONT_PATH,
-                    texts_cache_path=TEXTS_CACHE_PATH,
-                    debug_enabled=debug_enabled,
-                )
-            except Exception as exc:
-                deps.logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
-                return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
+                    try:
+                        cmd, _temp = await build_player_command_async(
+                            video_id=video_id,
+                            status=status,
+                            watch_url=watch_url,
+                            thumbnail_url=thumb_for_ph,
+                            user_agent=user_agent,
+                            font_path=FONT_PATH,
+                            texts_cache_path=TEXTS_CACHE_PATH,
+                            debug_enabled=debug_enabled,
+                        )
+                    except Exception as exc:
+                        deps.logger.error(f"[{video_id}] erro ao montar comando proxy: {exc}")
+                        return Response(f"Erro ao inicializar stream: {exc}", status_code=500)
 
-            start_stream_reader(video_id, cmd)
-
-            if status not in ("live", "none"):
-                register_placeholder(video_id, cmd)
-                deps.logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
-
-            deps.logger.info(f"[{video_id}] stream proxy iniciado")
-
-            if status == "live":
-                ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
-                while time.monotonic() < ff_deadline:
-                    buf = _buffers.get(video_id)
-                    if buf and buf.index > 0:
-                        break
-                    await asyncio.sleep(0.1)
-                else:
-                    deps.logger.warning(
-                        f"[{video_id}] streamlink fast-fail: sem chunk em {STREAMLINK_FAST_FAIL_S}s → fallback yt-dlp HLS"
-                    )
-                    stop_stream(video_id)
-                    hls_url = await resolve_live_hls_url_async(watch_url)
-                    if not hls_url:
-                        deps.logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
-                        return Response("Stream indisponivel (streamlink + yt-dlp falharam)", status_code=503)
-                    cmd = build_live_hls_ffmpeg_cmd(hls_url)
                     start_stream_reader(video_id, cmd)
-                    deps.logger.info(f"[{video_id}] fallback HLS ativo: {hls_url[:70]}...")
 
-            deadline = time.monotonic() + INIT_TIMEOUT_S
-            while time.monotonic() < deadline:
-                buf = _buffers.get(video_id)
-                if buf and buf.index > 0:
-                    break
-                await asyncio.sleep(0.1)
-            else:
-                stop_stream(video_id)
-                deps.logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
-                return Response("Stream timeout na inicializacao", status_code=504)
+                    # Placeholder apenas para upcoming/indisponível.
+                    # VOD (none/vod/ended/recorded) não deve reiniciar em loop.
+                    if status not in ("live", "none", "vod", "ended", "recorded"):
+                        register_placeholder(video_id, cmd)
+                        deps.logger.debug(f"[{video_id}] placeholder registrado (status={status!r})")
+
+                    deps.logger.info(f"[{video_id}] stream proxy iniciado")
+
+                    if status == "live":
+                        ff_deadline = time.monotonic() + STREAMLINK_FAST_FAIL_S
+                        while time.monotonic() < ff_deadline:
+                            buf = _buffers.get(video_id)
+                            if buf and buf.index > 0:
+                                break
+                            await asyncio.sleep(0.1)
+                        else:
+                            deps.logger.warning(
+                                f"[{video_id}] streamlink fast-fail: sem chunk em {STREAMLINK_FAST_FAIL_S}s → fallback yt-dlp HLS"
+                            )
+                            stop_stream(video_id)
+                            hls_url = await resolve_live_hls_url_async(watch_url)
+                            if not hls_url:
+                                deps.logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
+                                return Response("Stream indisponivel (streamlink + yt-dlp falharam)", status_code=503)
+                            cmd = build_live_hls_ffmpeg_cmd(hls_url)
+                            start_stream_reader(video_id, cmd)
+                            deps.logger.info(f"[{video_id}] fallback HLS ativo: {hls_url[:70]}...")
+
+                    deadline = time.monotonic() + INIT_TIMEOUT_S
+                    while time.monotonic() < deadline:
+                        buf = _buffers.get(video_id)
+                        if buf and buf.index > 0:
+                            break
+                        await asyncio.sleep(0.1)
+                    else:
+                        stop_stream(video_id)
+                        deps.logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
+                        return Response("Stream timeout na inicializacao", status_code=504)
 
         buf = _buffers[video_id]
         mgr = _managers[video_id]
