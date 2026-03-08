@@ -80,15 +80,21 @@ class StreamBuffer:
     chunks:   deque = field(default_factory=lambda: deque(maxlen=BUFFER_MAXLEN))
     index:    int   = 0           # índice global (monotônico)
     lock:     threading.Lock = field(default_factory=threading.Lock)
+    data_available: threading.Condition = field(init=False, repr=False)
     active:   bool  = True        # False quando o processo encerrou
     created_at: float = field(default_factory=time.time)  # timestamp de criação
     last_chunk_at: float = field(default_factory=time.time)  # timestamp do último chunk
+
+    def __post_init__(self) -> None:
+        # Condition compartilhada com o mesmo lock do buffer para waits eficientes.
+        self.data_available = threading.Condition(self.lock)
 
     def add_chunk(self, data: bytes) -> None:
         with self.lock:
             self.chunks.append(data)
             self.index += 1
             self.last_chunk_at = time.time()
+            self.data_available.notify_all()
             
             # Debug: log periódico de buffer state (a cada 200 chunks)
             log_every = 2000 if self.video_id in _placeholder_cmds else 200
@@ -131,6 +137,19 @@ class StreamBuffer:
             # Evita copiar o deque inteiro (~25MB) a cada leitura de cliente.
             result = list(islice(self.chunks, offset, end))
             return result, start_index + len(result)
+
+    def wait_for_index_advance(self, current_index: int, timeout_s: float) -> bool:
+        """Bloqueia até o buffer avançar além de current_index ou expirar timeout."""
+        with self.data_available:
+            if self.index > current_index:
+                return True
+            self.data_available.wait(timeout=max(0.0, timeout_s))
+            return self.index > current_index
+
+    def lag_from(self, client_index: int) -> int:
+        """Retorna quantos chunks o cliente está atrás do índice atual."""
+        with self.lock:
+            return max(0, self.index - client_index)
 
 
 # ---------------------------------------------------------------------------
