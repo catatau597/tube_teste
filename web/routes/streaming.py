@@ -142,13 +142,16 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         deps.logger.error(f"[{video_id}] timeout aguardando primeiro chunk")
                         return Response("Stream timeout na inicializacao", status_code=504)
 
+        stream_info = deps.state.streams.get(video_id) if deps.state else None
+        stream_status = stream_info.get("status") if stream_info else None
+
         buf = _buffers[video_id]
         mgr = _managers[video_id]
         mgr.add_client(client_id, client_ip, user_agent)
 
         async def generate():
             # Para live, começa mais perto do fim para reduzir atraso acumulado.
-            initial_back = 10 if status == "live" else 50
+            initial_back = 10 if stream_status == "live" else 50
             local_index = max(0, buf.index - initial_back)
             bytes_sent = 0
             last_yield_time = time.monotonic()
@@ -159,7 +162,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         break
                     restart_placeholder_if_needed(video_id)
                     is_placeholder = video_id in _placeholder_cmds
-                    is_live = status == "live"
+                    is_live = stream_status == "live"
                     if is_placeholder:
                         batch = 8
                     elif is_live:
