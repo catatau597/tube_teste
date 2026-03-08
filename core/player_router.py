@@ -178,9 +178,7 @@ def build_live_hls_ffmpeg_cmd(
         "-pcr_period", "20",
         "-pat_period", "0.1",
         "-sdt_period", "0.25",
-        # Reenvia PSI (PAT/PMT) com alta frequência para clientes que entram
-        # no meio do stream e evita "no reference clock" no VLC.
-        "-mpegts_flags", "+resend_headers+pat_pmt_at_frames",
+        "-mpegts_flags", "+resend_headers",
         "-flush_packets", "1",
         "-f", "mpegts",
         "pipe:1",
