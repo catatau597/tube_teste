@@ -35,7 +35,7 @@ from web.app_deps import AppDeps
 TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 STREAMLINK_FAST_FAIL_S = 8
-STREAM_CHUNK_BATCH = 16
+STREAM_CHUNK_BATCH = 64
 _start_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -166,7 +166,8 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         mgr.update_activity(client_id, bytes_sent, local_index)
                     else:
                         consecutive_empty += 1
-                        await asyncio.sleep(min(0.05 * consecutive_empty, 1.0))
+                        # Backoff curto para live: evita "buracos" longos de entrega no VLC.
+                        await asyncio.sleep(min(0.01 * consecutive_empty, 0.2))
                         if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                             mgr.mark_stall(client_id)
                             break

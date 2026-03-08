@@ -169,6 +169,8 @@ def build_live_hls_ffmpeg_cmd(
         "-reconnect_delay_max", "5",
         "-i", hls_url,
         "-c", "copy",
+        "-mpegts_flags", "+resend_headers",
+        "-flush_packets", "1",
         "-f", "mpegts",
         "pipe:1",
     ]
