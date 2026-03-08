@@ -24,6 +24,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from itertools import islice
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("TubeWrangler.proxy")
@@ -125,9 +126,9 @@ class StreamBuffer:
             if offset < 0 or offset >= len(self.chunks):
                 return [], start_index
 
-            chunks_list = list(self.chunks)
-            end    = min(offset + count, len(chunks_list))
-            result = chunks_list[offset:end]
+            end = min(offset + count, len(self.chunks))
+            # Evita copiar o deque inteiro (~25MB) a cada leitura de cliente.
+            result = list(islice(self.chunks, offset, end))
             return result, start_index + len(result)
 
 
