@@ -37,7 +37,6 @@ TEXTS_CACHE_PATH = Path("/data/textosepg.json")
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 STREAMLINK_FAST_FAIL_S = 8
 STREAM_CHUNK_BATCH = 64
-TS_KEEPALIVE_PACKET = bytes([0x47, 0x1F, 0xFF, 0x10]) + (b"\x00" * 184)
 _start_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -167,43 +166,22 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                     if is_placeholder:
                         batch = 8
                     elif is_live:
-                        lag = buf.lag_from(local_index)
-                        if lag <= 2:
-                            batch = 2
-                        elif lag <= 8:
-                            batch = 4
-                        elif lag <= 20:
-                            batch = 8
-                        else:
-                            batch = 12
+                        batch = 16
                     else:
                         batch = STREAM_CHUNK_BATCH
                     chunks, next_index = buf.get_chunks(local_index, count=batch)
                     if chunks:
-                        for i, chunk in enumerate(chunks, start=1):
+                        for chunk in chunks:
                             yield chunk
                             bytes_sent += len(chunk)
-                            # Fairness: evita um cliente monopolizar o event loop em live.
-                            if is_live and i % 4 == 0:
-                                await asyncio.sleep(0)
                         local_index = next_index
                         last_yield_time = time.monotonic()
                         consecutive_empty = 0
                         mgr.update_activity(client_id, bytes_sent, local_index)
                     else:
                         consecutive_empty += 1
-                        if is_live:
-                            # Espera event-driven por novo chunk (menos polling concorrente).
-                            timeout_wait = min(0.05 * consecutive_empty, 0.25)
-                            got_new = await asyncio.to_thread(
-                                buf.wait_for_index_advance, local_index, timeout_wait
-                            )
-                            # Keepalive leve em gaps curtos: mantém socket ativo no player.
-                            if not got_new and consecutive_empty % 5 == 0:
-                                yield TS_KEEPALIVE_PACKET
-                                bytes_sent += len(TS_KEEPALIVE_PACKET)
-                        else:
-                            await asyncio.sleep(min(0.01 * consecutive_empty, 0.2))
+                        # Backoff curto para live: evita "buracos" longos de entrega no VLC.
+                        await asyncio.sleep(min(0.01 * consecutive_empty, 0.2))
                         if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                             mgr.mark_stall(client_id)
                             break
