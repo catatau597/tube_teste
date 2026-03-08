@@ -24,6 +24,7 @@ from core.proxy_manager import (
     STREAM_IDLE_STOP_S,
     _buffers,
     _managers,
+    _placeholder_cmds,
     is_stream_active,
     register_placeholder,
     restart_placeholder_if_needed,
@@ -156,7 +157,9 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                     if not is_stream_active(video_id) and video_id not in _buffers:
                         break
                     restart_placeholder_if_needed(video_id)
-                    chunks, next_index = buf.get_chunks(local_index, count=STREAM_CHUNK_BATCH)
+                    is_placeholder = video_id in _placeholder_cmds
+                    batch = 8 if is_placeholder else STREAM_CHUNK_BATCH
+                    chunks, next_index = buf.get_chunks(local_index, count=batch)
                     if chunks:
                         for chunk in chunks:
                             yield chunk
@@ -172,7 +175,8 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         if time.monotonic() - last_yield_time > CLIENT_TIMEOUT_S:
                             mgr.mark_stall(client_id)
                             break
-                        if buf.index - local_index > 100:
+                        lag_limit = 30 if is_placeholder else 100
+                        if buf.index - local_index > lag_limit:
                             local_index = max(0, buf.index - 50)
                             consecutive_empty = 0
             except asyncio.CancelledError:

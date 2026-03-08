@@ -115,7 +115,7 @@ class StreamBuffer:
 
             # cliente muito atrasado → pula para início do buffer
             if start_index < buffer_start:
-                if _debug_enabled:
+                if _debug_enabled and self.video_id not in _placeholder_cmds:
                     lag = buffer_start - start_index
                     logger.warning(
                         f"[{self.video_id}] ⚠️ Cliente atrasado: pulando {lag} chunks "

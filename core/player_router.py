@@ -286,8 +286,10 @@ def build_ffmpeg_placeholder_cmd(
 
     filter_chain = ",".join(drawtext_filters) if drawtext_filters else ""
     # fps=1: imagem estatica nao precisa de 25fps — reduz CPU ~96%
+    # O loop no filtro de vídeo pode desregular PTS e acelerar indevidamente a saída.
+    # O -loop 1 no input já é suficiente para placeholder estático.
     video_filter = (
-        f"[0:v]fps=1,scale=1280:720,loop=1:1:0"
+        f"[0:v]fps=1,scale=1280:720"
         f"{(',' + filter_chain) if filter_chain else ''}[v]"
     )
 
@@ -308,7 +310,8 @@ def build_ffmpeg_placeholder_cmd(
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-filter_complex", video_filter,
         "-map", "[v]", "-map", "1:a",
-        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
+        "-maxrate", "800k", "-bufsize", "1200k",
         # 1fps saida + todo frame keyframe -> seek instantaneo no player
         "-r", "1", "-g", "1",
         "-c:a", "aac", "-b:a", "32k",
