@@ -47,11 +47,6 @@ PLACEHOLDER_SEGMENT_DURATION = 30
 # Lives retornam rapido (~2-5s); timeout generoso para redes lentas.
 LIVE_HLS_RESOLVE_TIMEOUT_S = 15
 
-# Seletor de formato para live via yt-dlp.
-# Prioriza stream único (video+audio) HLS em até 720p para reduzir bitrate
-# por cliente e melhorar fanout multi-cliente no proxy.
-LIVE_HLS_FORMAT_SELECTOR = "b[protocol*=m3u8][height<=720]/b[height<=720]/b"
-
 # Timeout para yt-dlp resolver URL de VOD.
 VOD_RESOLVE_TIMEOUT_S = 20
 
@@ -361,7 +356,6 @@ async def resolve_live_hls_url_async(
         yt_dlp_args = [
             "yt-dlp",
             "-g",
-            "-f", LIVE_HLS_FORMAT_SELECTOR,
             "--no-playlist",
             "--js-runtimes", "node",
             "--user-agent", user_agent,
