@@ -179,14 +179,12 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         batch = STREAM_CHUNK_BATCH
                     chunks, next_index = buf.get_chunks(local_index, count=batch)
                     if chunks:
-                        # Entrega em bloco reduz custo de syscalls/context-switch por cliente.
-                        payload = b"".join(chunks)
-                        if payload:
-                            yield payload
-                            bytes_sent += len(payload)
-                        # Fairness entre conexões concorrentes.
-                        if is_live:
-                            await asyncio.sleep(0)
+                        for i, chunk in enumerate(chunks, start=1):
+                            yield chunk
+                            bytes_sent += len(chunk)
+                            # Fairness: evita um cliente monopolizar o event loop em live.
+                            if is_live and i % 4 == 0:
+                                await asyncio.sleep(0)
                         local_index = next_index
                         last_yield_time = time.monotonic()
                         consecutive_empty = 0
@@ -205,8 +203,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                         if is_placeholder:
                             lag_limit = 30
                         elif is_live:
-                            # Para live, evitar salto interno agressivo que pode quebrar clock/PCR no player.
-                            lag_limit = 10_000
+                            lag_limit = 120
                         else:
                             lag_limit = 300
                         if buf.index - local_index > lag_limit:
