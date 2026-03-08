@@ -96,6 +96,12 @@ DEFAULTS: dict = {
     "state_cache_filename":          ("state_cache.json", "technical", "Nome do arquivo JSON de estado", "str"),
     "stale_hours":                   ("6",                "technical", "Horas para considerar stream stale", "int"),
     "proxy_base_url":                ("", "technical", "URL base para playlists proxy", "str"),
+    "live_hls_format_selector":      (
+        "best[protocol=m3u8][vcodec!=none][acodec!=none]/best[protocol=m3u8]/best",
+        "technical",
+        "Seletor de formato yt-dlp para live HLS (prioriza estabilidade multi-fluxo)",
+        "str",
+    ),
 
     # --- Logs ---
     "log_level":                     ("DEBUG", "logging", "Nível de log do core (DEBUG/INFO/WARNING/ERROR)", "str"),

@@ -81,6 +81,10 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                             thumb_for_ph = str(local_thumb)
 
                     debug_enabled = deps.config.get_bool("streaming_debug_enabled") if deps.config else False
+                    live_hls_format_selector = (
+                        deps.config.get_str("live_hls_format_selector")
+                        if deps.config else ""
+                    )
 
                     try:
                         cmd, _temp = await build_player_command_async(
@@ -89,6 +93,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                             watch_url=watch_url,
                             thumbnail_url=thumb_for_ph,
                             user_agent=user_agent,
+                            live_hls_format_selector=live_hls_format_selector,
                             font_path=FONT_PATH,
                             texts_cache_path=TEXTS_CACHE_PATH,
                             debug_enabled=debug_enabled,
@@ -120,7 +125,10 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                             )
                             stop_stream(video_id)
                             hls_url = await resolve_live_hls_url_async(
-                                watch_url, user_agent=user_agent, debug_enabled=debug_enabled
+                                watch_url,
+                                user_agent=user_agent,
+                                format_selector=live_hls_format_selector,
+                                debug_enabled=debug_enabled,
                             )
                             if not hls_url:
                                 deps.logger.error(f"[{video_id}] yt-dlp nao resolveu HLS URL")
@@ -238,6 +246,10 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                 thumb_for_ph = str(local_thumb)
 
         debug_enabled = deps.config.get_bool("streaming_debug_enabled") if deps.config else False
+        live_hls_format_selector = (
+            deps.config.get_str("live_hls_format_selector")
+            if deps.config else ""
+        )
 
         async def stream_gen():
             proc_logger = logging.getLogger("TubeWrangler.player")
@@ -249,6 +261,7 @@ def register_streaming_routes(app, deps: AppDeps) -> None:
                     watch_url=watch_url,
                     thumbnail_url=thumb_for_ph,
                     user_agent=user_agent,
+                    live_hls_format_selector=live_hls_format_selector,
                     font_path=FONT_PATH,
                     texts_cache_path=TEXTS_CACHE_PATH,
                     debug_enabled=debug_enabled,

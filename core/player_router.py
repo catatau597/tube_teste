@@ -50,6 +50,14 @@ LIVE_HLS_RESOLVE_TIMEOUT_S = 15
 # Timeout para yt-dlp resolver URL de VOD.
 VOD_RESOLVE_TIMEOUT_S = 20
 
+# Formato padrão para live:
+# - força HLS (m3u8) muxado (audio+video)
+# - sem limite de resolução
+LIVE_HLS_FORMAT_DEFAULT = (
+    "best[protocol=m3u8][vcodec!=none][acodec!=none]/"
+    "best[protocol=m3u8]/best"
+)
+
 # Conjunto de status que representam conteudo VOD (live encerrada ou status legado).
 _VOD_STATUSES = frozenset({"none", "vod", "ended"})
 
@@ -342,6 +350,7 @@ def build_ffmpeg_placeholder_cmd(
 async def resolve_live_hls_url_async(
     watch_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
+    format_selector: str = LIVE_HLS_FORMAT_DEFAULT,
     timeout: int = LIVE_HLS_RESOLVE_TIMEOUT_S,
     debug_enabled: bool = False,
 ) -> str:
@@ -365,8 +374,10 @@ async def resolve_live_hls_url_async(
     """
     proc = None
     try:
+        fmt = (format_selector or "").strip() or LIVE_HLS_FORMAT_DEFAULT
         yt_dlp_args = [
             "yt-dlp",
+            "-f", fmt,
             "-g",
             "--no-playlist",
             "--js-runtimes", "node",
@@ -571,6 +582,7 @@ async def build_player_command_async(
     watch_url: str,
     thumbnail_url: str,
     user_agent: str = DEFAULT_USER_AGENT,
+    live_hls_format_selector: str = LIVE_HLS_FORMAT_DEFAULT,
     font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     texts_cache_path: Optional[Path] = None,
     debug_enabled: bool = False,
@@ -610,7 +622,10 @@ async def build_player_command_async(
     if status == "live":
         logger.debug(f"[{video_id}] modo LIVE -> resolve_live_hls_url_async")
         hls_url = await resolve_live_hls_url_async(
-            watch_url, user_agent=user_agent, debug_enabled=debug_enabled
+            watch_url,
+            user_agent=user_agent,
+            format_selector=live_hls_format_selector,
+            debug_enabled=debug_enabled,
         )
         if hls_url:
             logger.info(f"[{video_id}] live via HLS (yt-dlp + ffmpeg)")
